@@ -1,7 +1,8 @@
 import { ParsedIntent, IntentResult, OrchestratorContext } from '../core/adts.js';
-import { listEvents, cancelEvent } from '../db/events.js';
-import { cancelEventWithSync } from '../services/calendar_api.js';
+import { listEvents } from '../db/events.js';
+import { cancelEventWithSync, deleteEventByTitle } from '../services/calendar_api.js';
 import { parseRelativeTime } from '../core/date-utils.js';
+import { enrichFlushParams, extractEventReference, isDeleteUtterance } from '../core/param-extract.js';
 import { calendar_v3 } from 'googleapis';
 
 export async function handleFlushRange(
@@ -9,8 +10,34 @@ export async function handleFlushRange(
   ctx: OrchestratorContext,
   cal: calendar_v3.Calendar | null,
 ): Promise<IntentResult> {
-  let rangeStart = parsed.params.rangeStart as string | undefined;
-  let rangeEnd = parsed.params.rangeEnd as string | undefined;
+  const params = enrichFlushParams(parsed.params, parsed.rawUtterance);
+  const eventTitle = (params.eventTitle as string | undefined) ?? extractEventReference(parsed.rawUtterance);
+  const singleDelete = Boolean(eventTitle) && isDeleteUtterance(parsed.rawUtterance);
+
+  if (singleDelete && eventTitle) {
+    if (!cal) {
+      return {
+        intent: 'FLUSH_RANGE',
+        success: false,
+        requiresConfirmation: false,
+        messageToUser: 'Your Google Calendar is not connected. Sign out and sign in again to reconnect.',
+        schemaVersion: 1,
+      };
+    }
+
+    const { deleted, message } = await deleteEventByTitle(cal, ctx.userId, eventTitle, parsed.rawUtterance);
+    return {
+      intent: 'FLUSH_RANGE',
+      success: deleted,
+      requiresConfirmation: false,
+      messageToUser: message,
+      eventsAffected: deleted ? 1 : 0,
+      schemaVersion: 1,
+    };
+  }
+
+  let rangeStart = params.rangeStart as string | undefined;
+  let rangeEnd = params.rangeEnd as string | undefined;
 
   if (!rangeStart || !rangeEnd) {
     const rel = parseRelativeTime(parsed.rawUtterance);

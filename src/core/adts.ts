@@ -82,6 +82,7 @@ export const ParsedIntentSchema = z.object({
   rawUtterance: z.string().min(1).max(1000),
   _destructivePreFilter: z.boolean().optional(),
   _warmRedirect: z.boolean().optional(),
+  _offTopic: z.boolean().optional(),
 });
 
 export type ParsedIntent = z.infer<typeof ParsedIntentSchema>;
@@ -125,7 +126,7 @@ export const CLASSIFY_INTENT_TOOL = {
       confidence: { type: 'number', minimum: 0, maximum: 1 },
       params: {
         type: 'object',
-        description: 'Intent-specific fields. CREATE_EVENT: title, start, end (ISO 8601). MODIFY_EVENT: eventTitle?, newTitle?, newStart?, newEnd?. QUERY_CALENDAR: rangeStart?, rangeEnd?. FLUSH_RANGE: rangeStart, rangeEnd.',
+        description: 'Intent-specific fields. CREATE_EVENT: title, start, end (ISO 8601). MODIFY_EVENT: eventTitle?, newTitle?, newStart?, newEnd?. QUERY_CALENDAR: rangeStart?, rangeEnd?. FLUSH_RANGE: rangeStart?, rangeEnd?, eventTitle? (delete one event by title).',
         properties: {
           title: { type: 'string', description: 'Event title for CREATE_EVENT' },
           start: { type: 'string', description: 'ISO 8601 start datetime' },
@@ -151,12 +152,18 @@ export const DESTRUCTIVE_VERB_RE = /\b(delete|cancel|remove|clear|drop|erase|wip
 
 export const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
-export const CALENDAR_TOPIC_RE = /\b(calendar|meetings?|schedule|block|free|busy|appointments?|tomorrow|today|monday|tuesday|wednesday|thursday|friday|saturday|sunday|am|pm|mornings?|afternoons?|events?|calls?|slots?|times?|undo|decline|move|cancel|protect|lunch|standup|deep work|haircut|dentist|investor)\b/i;
+export const CALENDAR_TOPIC_RE = /\b(calendar|meetings?|schedule|block|free|busy|appointments?|tomorrow|today|monday|tuesday|wednesday|thursday|friday|saturday|sunday|am|pm|mornings?|afternoons?|events?|calls?|slots?|times?|undo|decline|move|cancel|protect|lunch|standup|deep work|haircut|dentist|investor|starting|ending|hour|update|change|rename|central)\b/i;
 
-export const OFF_TOPIC_RE = /\b(weather|sports|recipe|joke|movie|stock price)\b/i;
+export const OFF_TOPIC_RE = /\b(weather|sports|recipe|joke|movie|stock price|president|politics|election|capital of|tell me a story|homework|write code|python|javascript|news headlines?)\b/i;
 
-export const WARM_REDIRECT_MESSAGE =
-  'Good to know! Anything I can help you with? Your calendar? Setting up a time with a friend?';
+/** WH-questions and general knowledge — off-domain unless calendar words present */
+export const GENERAL_KNOWLEDGE_RE = /\b(who is|who was|what is the|what's the|when did|where is|why did|how old|how tall|explain|define|capital of|population of)\b/i;
+
+/** Caladdin only handles calendar/scheduling — never general chat or trivia */
+export const CALENDAR_ONLY_MESSAGE =
+  'I only help with your calendar — scheduling, events, availability, and protecting your time. I can\'t answer general questions. Try: "What\'s on my calendar today?" or "Block tomorrow morning for focus."';
+
+export const WARM_REDIRECT_MESSAGE = CALENDAR_ONLY_MESSAGE;
 
 export const RESOLVE_MANUAL_MESSAGE =
   'I want to help — could you be more specific? For example: "What\'s on my calendar today?", "Block Tuesday mornings", or "Find time for Alex next week".';

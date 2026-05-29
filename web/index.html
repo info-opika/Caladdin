@@ -40,7 +40,10 @@
       <div id="messages" class="messages"></div>
       <div id="confirm-card" class="confirm-card hidden">
         <p id="confirm-text"></p>
-        <p class="hint">Check your notification to approve or reject.</p>
+        <div class="confirm-actions">
+          <button type="button" id="confirm-approve" class="btn primary">Approve</button>
+          <button type="button" id="confirm-reject" class="btn ghost">Reject</button>
+        </div>
       </div>
       <form id="chat-form" class="chat-form">
         <input id="utterance" type="text" placeholder="What's on my calendar today?" autocomplete="off" />

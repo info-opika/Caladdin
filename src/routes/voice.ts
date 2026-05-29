@@ -8,6 +8,7 @@ import { getRequestId } from '../middleware/requestId.js';
 import { getPolicy, getUserById } from '../db/users.js';
 import { config } from '../config.js';
 import { getOAuthClientForUser } from '../services/auth_service.js';
+import { approvePendingConfirmation, rejectPendingConfirmation } from '../core/confirmation-actions.js';
 
 export const voiceRouter = Router();
 
@@ -64,4 +65,16 @@ voiceRouter.post('/', requireSession, async (req: Request, res: Response) => {
       error: 'Caladdin is temporarily unavailable. Try again in 30 seconds.',
     });
   }
+});
+
+voiceRouter.post('/confirm/:token/approve', requireSession, async (req: Request, res: Response) => {
+  const session = (req as Request & { session: { userId: string } }).session;
+  const { status, body } = await approvePendingConfirmation(req.params.token, session.userId);
+  res.status(status).json(body);
+});
+
+voiceRouter.post('/confirm/:token/reject', requireSession, async (req: Request, res: Response) => {
+  const session = (req as Request & { session: { userId: string } }).session;
+  const { status, body } = await rejectPendingConfirmation(req.params.token, session.userId);
+  res.status(status).json(body);
 });

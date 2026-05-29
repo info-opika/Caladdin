@@ -34,7 +34,7 @@ authRouter.get('/callback', async (req: Request, res: Response) => {
     await ensureDefaultPolicy(user.id);
     const sessionToken = createSession(user.id, user.email);
     setSessionCookie(res, sessionToken);
-    res.redirect('/');
+    res.redirect('/?welcome=1');
   } catch (err) {
     logger.error('OAuth callback failed', {
       error: err instanceof Error ? err.message : String(err),

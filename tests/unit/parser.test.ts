@@ -1,16 +1,23 @@
 import { describe, it, expect } from 'vitest';
-import { isOffTopic, warmRedirectResult } from '../../src/core/parser.js';
-import { WARM_REDIRECT_MESSAGE } from '../../src/core/adts.js';
+import { isOffTopic, warmRedirectResult, offTopicResult } from '../../src/core/parser.js';
 
 describe('parser pre-LLM', () => {
   it('detects off-topic', () => {
     expect(isOffTopic('The weather is great today')).toBe(true);
     expect(isOffTopic('What is on my calendar today')).toBe(false);
+    expect(isOffTopic('Who is the president of the USA')).toBe(true);
+    expect(isOffTopic('Tell me a joke')).toBe(true);
   });
 
-  it('warm redirect result flagged', () => {
-    const r = warmRedirectResult('nice day');
+  it('off-topic result flagged and uses calendar-only message path', () => {
+    const r = offTopicResult('who is the president');
     expect(r._warmRedirect).toBe(true);
+    expect(r._offTopic).toBe(true);
+  });
+
+  it('warm redirect delegates to off-topic', () => {
+    const r = warmRedirectResult('nice day');
+    expect(r._offTopic).toBe(true);
   });
 });
 

@@ -1,8 +1,8 @@
 import { calendar_v3 } from 'googleapis';
 import { enqueueCompensation } from '../db/compensation_queue.js';
-import { insertEvent, updateEvent, cancelEvent as dbCancelEvent } from '../db/events.js';
+import { insertEvent, updateEvent, listEvents, cancelEvent as dbCancelEvent } from '../db/events.js';
 import { CalendarEvent } from '../core/adts.js';
-import { gcalErrorMessage } from '../core/date-utils.js';
+import { gcalErrorMessage, normalizeGCalRange } from '../core/date-utils.js';
 import { logger } from '../logger.js';
 
 export async function syncEventToGCal(
@@ -76,6 +76,69 @@ export async function cancelEventWithSync(
   if (cal && event.gcalEventId) {
     await syncEventToGCal(cal, userId, { ...event, status: 'cancelled' }, 'delete');
   }
+}
+
+export async function deleteEventByTitle(
+  cal: calendar_v3.Calendar,
+  userId: string,
+  titleNeedle: string,
+  utterance?: string,
+): Promise<{ deleted: boolean; title?: string; message: string }> {
+  const { timeMin, timeMax } = normalizeGCalRange(undefined, undefined, 90);
+  const { events, error } = await listEventsFromGCalSafe(cal, timeMin, timeMax);
+
+  if (error) {
+    return {
+      deleted: false,
+      message: 'I could not read your Google Calendar. Try signing out and signing in again.',
+    };
+  }
+
+  const needle = titleNeedle.toLowerCase().trim();
+  let match = events.find((e) => e.title.toLowerCase().includes(needle));
+  if (!match && utterance) {
+    match = events.find((e) => utterance.toLowerCase().includes(e.title.toLowerCase()));
+  }
+  if (!match && needle) {
+    const words = needle.split(/\s+/).filter((w) => w.length > 2);
+    if (words.length > 0) {
+      match = events.find((e) => {
+        const title = e.title.toLowerCase();
+        return words.every((w) => title.includes(w));
+      });
+    }
+  }
+
+  if (!match) {
+    return {
+      deleted: false,
+      message: `I couldn't find "${titleNeedle}" on your Google Calendar.`,
+    };
+  }
+
+  try {
+    await cal.events.delete({ calendarId: 'primary', eventId: match.gcalEventId });
+  } catch (e) {
+    logger.warn('GCal delete failed', { error: String(e), gcalEventId: match.gcalEventId });
+    return {
+      deleted: false,
+      message: gcalErrorMessage(e),
+    };
+  }
+
+  const dbEvents = await listEvents(userId);
+  const dbMatch = dbEvents.find(
+    (e) => e.gcalEventId === match!.gcalEventId || e.title.toLowerCase().includes(needle),
+  );
+  if (dbMatch) {
+    await dbCancelEvent(dbMatch.id);
+  }
+
+  return {
+    deleted: true,
+    title: match.title,
+    message: `Removed "${match.title}" from your calendar.`,
+  };
 }
 
 export async function listBusyFromGCal(

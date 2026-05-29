@@ -6,7 +6,12 @@ const form = document.getElementById('chat-form');
 const utteranceInput = document.getElementById('utterance');
 const confirmCard = document.getElementById('confirm-card');
 const confirmText = document.getElementById('confirm-text');
+const confirmApprove = document.getElementById('confirm-approve');
+const confirmReject = document.getElementById('confirm-reject');
 let lastIntent = null;
+let pendingConfirmationToken = null;
+
+const DEFAULT_CALENDAR_QUERY = "What's on my calendar?";
 
 function show(el) {
   [landing, onboarding, chat].forEach((s) => s.classList.add('hidden'));
@@ -30,30 +35,16 @@ async function api(path, options = {}) {
   return { res, data: res.headers.get('content-type')?.includes('json') ? await res.json() : null };
 }
 
-async function init() {
-  const { res, data } = await api('/auth/me');
-  if (res.ok) {
-    const onboarded = localStorage.getItem('caladdin_onboarded');
-    if (!onboarded) show(onboarding);
-    else show(chat);
-  } else {
-    show(landing);
+function clearWelcomeParam() {
+  if (new URLSearchParams(window.location.search).has('welcome')) {
+    window.history.replaceState({}, '', '/');
   }
 }
 
-document.getElementById('finish-onboarding')?.addEventListener('click', () => {
-  localStorage.setItem('caladdin_onboarded', '1');
-  show(chat);
-  addMessage('Try: "What\'s on my calendar today?" or "Block tomorrow morning for focus."', 'bot');
-});
-
-form?.addEventListener('submit', async (e) => {
-  e.preventDefault();
-  const utterance = utteranceInput.value.trim();
-  if (!utterance) return;
-  addMessage(utterance, 'user');
-  utteranceInput.value = '';
+async function sendVoiceMessage(utterance, { showUserMessage = true } = {}) {
+  if (showUserMessage) addMessage(utterance, 'user');
   confirmCard.classList.add('hidden');
+  pendingConfirmationToken = null;
 
   const { res, data } = await api('/voice', {
     method: 'POST',
@@ -62,21 +53,100 @@ form?.addEventListener('submit', async (e) => {
 
   if (res.status === 401) {
     show(landing);
-    return;
+    return false;
   }
   if (res.status === 503) {
     addMessage(data?.error ?? 'Caladdin is temporarily unavailable. Try again in 30 seconds.', 'bot');
-    return;
+    return false;
   }
 
   lastIntent = data?.intent;
   addMessage(data?.messageToUser ?? 'Done.', 'bot');
 
   if (data?.requiresConfirmation) {
+    pendingConfirmationToken = data.confirmationToken ?? null;
     confirmText.textContent = data.messageToUser;
     confirmCard.classList.remove('hidden');
   }
+
+  return true;
+}
+
+async function loadDefaultCalendar() {
+  await sendVoiceMessage(DEFAULT_CALENDAR_QUERY, { showUserMessage: false });
+}
+
+async function openChat({ loadCalendar = true } = {}) {
+  show(chat);
+  clearWelcomeParam();
+  if (loadCalendar) {
+    await loadDefaultCalendar();
+  }
+}
+
+async function init() {
+  const { res } = await api('/auth/me');
+  if (res.ok) {
+    const onboarded = localStorage.getItem('caladdin_onboarded');
+    if (!onboarded) {
+      show(onboarding);
+      clearWelcomeParam();
+    } else {
+      await openChat();
+    }
+  } else {
+    show(landing);
+  }
+}
+
+document.getElementById('finish-onboarding')?.addEventListener('click', async () => {
+  localStorage.setItem('caladdin_onboarded', '1');
+  await openChat();
 });
+
+form?.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const utterance = utteranceInput.value.trim();
+  if (!utterance) return;
+  utteranceInput.value = '';
+  await sendVoiceMessage(utterance);
+});
+
+async function handleConfirmation(action) {
+  if (!pendingConfirmationToken) return;
+  confirmApprove.disabled = true;
+  confirmReject.disabled = true;
+
+  const { res, data } = await api(`/voice/confirm/${pendingConfirmationToken}/${action}`, {
+    method: 'POST',
+  });
+
+  confirmApprove.disabled = false;
+  confirmReject.disabled = false;
+  confirmCard.classList.add('hidden');
+  pendingConfirmationToken = null;
+
+  if (res.status === 403 || res.status === 404 || res.status === 409 || res.status === 410 || !res.ok) {
+    addMessage(data?.error ?? data?.messageToUser ?? data?.reason ?? `Request failed (${res.status}).`, 'bot');
+    return;
+  }
+
+  if (action === 'reject') {
+    addMessage('Action cancelled.', 'bot');
+    return;
+  }
+
+  const result = data?.result;
+  const message = data?.messageToUser ?? result?.messageToUser ?? data?.reason;
+  if (data?.executionStatus === 'failed' || result?.success === false) {
+    addMessage(message ?? 'That action could not be completed.', 'bot');
+    return;
+  }
+  addMessage(message ?? 'Something went wrong — no result from server.', 'bot');
+}
+
+confirmApprove?.addEventListener('click', () => handleConfirmation('approve'));
+confirmReject?.addEventListener('click', () => handleConfirmation('reject'));
 
 document.getElementById('logout')?.addEventListener('click', async () => {
   await api('/auth/session', { method: 'DELETE' });
