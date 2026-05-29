@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Caladdin</title>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;600&family=Fraunces:wght@600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <div id="app">
+    <section id="landing" class="screen">
+      <h1>Talk to your calendar like you talk to a smart friend.</h1>
+      <p class="subtitle">Caladdin protects your time and makes scheduling effortless.</p>
+      <a href="/auth/start" class="btn primary">Sign in with Google</a>
+      <p class="hint">We recommend using a test Google account for your first try.</p>
+    </section>
+
+    <section id="onboarding" class="screen hidden">
+      <h2>You're connected</h2>
+      <label>Timezone <input id="timezone" type="text" value="America/Chicago" /></label>
+      <fieldset>
+        <legend>Privacy</legend>
+        <label><input type="radio" name="privacy" value="private" checked /> Private</label>
+        <label><input type="radio" name="privacy" value="trusted" /> Trusted</label>
+        <label><input type="radio" name="privacy" value="open" /> Open</label>
+      </fieldset>
+      <button id="finish-onboarding" class="btn primary">Get started</button>
+    </section>
+
+    <section id="chat" class="screen hidden">
+      <header>
+        <h2>Caladdin</h2>
+        <button id="logout" class="btn ghost">Sign out</button>
+      </header>
+      <div id="reconnect-banner" class="banner hidden">
+        Your calendar connection needs to be refreshed.
+        <a href="/auth/start">Reconnect</a>
+      </div>
+      <div id="messages" class="messages"></div>
+      <div id="confirm-card" class="confirm-card hidden">
+        <p id="confirm-text"></p>
+        <p class="hint">Check your notification to approve or reject.</p>
+      </div>
+      <form id="chat-form" class="chat-form">
+        <input id="utterance" type="text" placeholder="What's on my calendar today?" autocomplete="off" />
+        <button type="submit" class="btn primary">Send</button>
+      </form>
+      <div class="feedback-row">
+        <button type="button" id="thumbs-up" class="btn ghost" title="Good">👍</button>
+        <button type="button" id="thumbs-down" class="btn ghost" title="Bad">👎</button>
+      </div>
+    </section>
+  </div>
+  <script type="module" src="/main.js"></script>
+</body>
+</html>

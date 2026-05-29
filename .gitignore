@@ -1,0 +1,10 @@
+node_modules/
+dist/
+web/dist/
+.env
+*.log
+coverage/
+.DS_Store
+IMPROVEMENT_REPORT.md
+supabase/.temp/
+supabase/.branches/

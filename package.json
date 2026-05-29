@@ -1,0 +1,48 @@
+{
+  "name": "caladdin",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc && npm run build:web",
+    "build:web": "vite build --config web/vite.config.ts",
+    "start": "node dist/index.js",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "log-decision": "tsx scripts/log-decision.ts",
+    "db:link": "supabase link --project-ref fkikgtxhndkricywkirw",
+    "db:push": "supabase db push",
+    "db:status": "supabase migration list",
+    "db:pull": "supabase db pull",
+    "db:reset": "supabase db reset",
+    "db:apply": "node scripts/apply-migrations.mjs"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.39.0",
+    "@supabase/supabase-js": "^2.49.1",
+    "cookie-parser": "^1.4.7",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "googleapis": "^144.0.0",
+    "uuid": "^11.1.0",
+    "zod": "^3.24.2"
+  },
+  "devDependencies": {
+    "@types/cookie-parser": "^1.4.8",
+    "@types/express": "^5.0.0",
+    "@types/node": "^22.13.10",
+    "@types/uuid": "^10.0.0",
+    "@vitest/coverage-v8": "^3.0.8",
+    "fast-check": "^3.23.2",
+    "supertest": "^7.0.0",
+    "@types/supertest": "^6.0.2",
+    "tsx": "^4.19.3",
+    "typescript": "^5.8.2",
+    "vite": "^6.2.2",
+    "vitest": "^3.0.8",
+    "supabase": "^2.102.0",
+    "pg": "^8.14.1"
+  }
+}

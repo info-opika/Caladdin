@@ -1,0 +1,117 @@
+:root {
+  --stone: #78716c;
+  --amber: #d97706;
+  --bg: #fafaf9;
+  --text: #1c1917;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  font-family: 'DM Sans', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  margin: 0;
+  min-height: 100vh;
+}
+
+h1, h2 {
+  font-family: 'Fraunces', serif;
+}
+
+.screen {
+  max-width: 480px;
+  margin: 0 auto;
+  padding: 2rem 1.25rem;
+}
+
+.hidden { display: none !important; }
+
+.subtitle { color: var(--stone); line-height: 1.5; }
+
+.btn {
+  display: inline-block;
+  padding: 0.75rem 1.25rem;
+  border-radius: 10px;
+  border: none;
+  font-size: 1rem;
+  cursor: pointer;
+  text-decoration: none;
+  text-align: center;
+}
+
+.btn.primary {
+  background: var(--amber);
+  color: white;
+  width: 100%;
+  margin-top: 1rem;
+}
+
+.btn.ghost {
+  background: transparent;
+  color: var(--stone);
+  border: 1px solid #e7e5e4;
+}
+
+.hint { font-size: 0.85rem; color: var(--stone); margin-top: 1rem; }
+
+header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.messages {
+  min-height: 280px;
+  max-height: 50vh;
+  overflow-y: auto;
+  margin-bottom: 1rem;
+}
+
+.msg {
+  padding: 0.75rem 1rem;
+  border-radius: 12px;
+  margin-bottom: 0.5rem;
+  line-height: 1.4;
+  white-space: pre-wrap;
+}
+
+.msg.user { background: #fef3c7; margin-left: 2rem; }
+.msg.bot { background: white; border: 1px solid #e7e5e4; margin-right: 1rem; }
+
+.chat-form {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.chat-form input {
+  flex: 1;
+  padding: 0.75rem;
+  border: 1px solid #e7e5e4;
+  border-radius: 10px;
+  font-size: 1rem;
+}
+
+.confirm-card {
+  background: #fffbeb;
+  border: 1px solid #fcd34d;
+  padding: 1rem;
+  border-radius: 10px;
+  margin-bottom: 1rem;
+}
+
+.banner {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  padding: 0.75rem;
+  border-radius: 8px;
+  margin-bottom: 1rem;
+  font-size: 0.9rem;
+}
+
+.feedback-row { margin-top: 0.75rem; display: flex; gap: 0.5rem; }
+
+label { display: block; margin: 0.75rem 0; }
+
+fieldset { border: none; padding: 0; margin: 1rem 0; }
