@@ -5,6 +5,7 @@ import {
   extractEmails,
   isInviteUtterance,
   isReferentialUtterance,
+  isRenameUtterance,
 } from './param-extract.js';
 
 /** Merge session memory into parsed intent for follow-up commands. */
@@ -46,7 +47,7 @@ export function applyConversationContext(
       { eventTitle: context.lastEvent.title, _useSessionEvent: true },
       utterance,
     );
-    if (isInviteUtterance(utterance) || enriched.newStart || enriched.newTitle) {
+    if (isInviteUtterance(utterance) || enriched.newStart || enriched.newTitle || isRenameUtterance(utterance)) {
       return ParsedIntentSchema.parse({
         ...parsed,
         intent: 'MODIFY_EVENT',

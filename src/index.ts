@@ -33,10 +33,11 @@ app.use('/api', apiRouter);
 app.use('/feedback', feedbackRouter);
 app.use('/jobs', jobsRouter);
 
-const webDist = join(__dirname, '../web/dist');
-app.use(express.static(webDist));
+// In development serve web/ source so UI changes apply without running build:web.
+const webRoot = join(__dirname, '..', config.isProd ? 'web/dist' : 'web');
+app.use(express.static(webRoot));
 app.get('/', (_req, res) => {
-  res.sendFile(join(webDist, 'index.html'), (err) => {
+  res.sendFile(join(webRoot, 'index.html'), (err) => {
     if (err) res.redirect('/auth/start');
   });
 });

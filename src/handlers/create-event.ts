@@ -1,7 +1,7 @@
 import { ParsedIntent, IntentResult, OrchestratorContext } from '../core/adts.js';
 import { createEventWithSync } from '../services/calendar_api.js';
 import { addDays, formatISO } from '../core/date-utils.js';
-import { enrichCreateParams } from '../core/param-extract.js';
+import { enrichCreateParams, sanitizeTitle } from '../core/param-extract.js';
 import { recordLastEvent } from '../db/conversation-context.js';
 import { calendar_v3 } from 'googleapis';
 
@@ -11,10 +11,11 @@ export async function handleCreateEvent(
   cal: calendar_v3.Calendar | null,
 ): Promise<IntentResult> {
   const params = enrichCreateParams(parsed.params, parsed.rawUtterance);
-  const title = (params.title as string) ?? 'New event';
+  const title = sanitizeTitle(params.title as string | undefined) ?? 'New event';
   let start = params.start as string | undefined;
   let end = params.end as string | undefined;
   const participants = (params.participants as string[] | undefined) ?? [];
+  const description = (params.description as string | undefined)?.trim() || null;
 
   if (!start) {
     const tomorrow = addDays(new Date(), 1);
@@ -33,6 +34,7 @@ export async function handleCreateEvent(
     tier: 2,
     status: 'confirmed',
     participants,
+    description,
   });
 
   await recordLastEvent(ctx.userId, 'CREATE_EVENT', parsed.rawUtterance, {
@@ -47,12 +49,15 @@ export async function handleCreateEvent(
   const inviteNote = participants.length
     ? ` Invited ${participants.join(', ')}.`
     : '';
+  const descriptionNote = description
+    ? ' Added an event description.'
+    : '';
 
   return {
     intent: 'CREATE_EVENT',
     success: true,
     requiresConfirmation: false,
-    messageToUser: `Created "${event.title}" on your calendar.${inviteNote}`,
+    messageToUser: `Created "${event.title}" on your calendar.${inviteNote}${descriptionNote}`,
     eventsAffected: 1,
     schemaVersion: 1,
   };

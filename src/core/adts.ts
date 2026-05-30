@@ -71,6 +71,7 @@ export const CalendarEventSchema = z.object({
   status: z.enum(['confirmed', 'cancelled', 'proposed']).default('confirmed'),
   gcalEventId: z.string().optional().nullable(),
   proposedForSession: z.string().uuid().optional().nullable(),
+  description: z.string().optional().nullable(),
 });
 
 export type CalendarEvent = z.infer<typeof CalendarEventSchema>;
@@ -128,11 +129,13 @@ export const CLASSIFY_INTENT_TOOL = {
       confidence: { type: 'number', minimum: 0, maximum: 1 },
       params: {
         type: 'object',
-        description: 'Intent-specific fields. CREATE_EVENT: title, start, end, participants? (emails). MODIFY_EVENT: eventTitle?, newTitle?, newStart?, newEnd?, addInvitees? (emails). QUERY_CALENDAR: rangeStart?, rangeEnd?. FLUSH_RANGE: rangeStart?, rangeEnd?, eventTitle? (delete one event by title).',
+        description: 'Intent-specific fields. CREATE_EVENT: title, start, end, participants? (emails), description? (event notes). MODIFY_EVENT: eventTitle?, newTitle?, newStart?, newEnd?, addInvitees? (emails), newDescription?. QUERY_CALENDAR: rangeStart?, rangeEnd?. FLUSH_RANGE: rangeStart?, rangeEnd?, eventTitle? (delete one event by title).',
         properties: {
           title: { type: 'string', description: 'Event title for CREATE_EVENT' },
           start: { type: 'string', description: 'ISO 8601 start datetime' },
           end: { type: 'string', description: 'ISO 8601 end datetime' },
+          description: { type: 'string', description: 'Event description/notes for CREATE_EVENT or MODIFY_EVENT' },
+          newDescription: { type: 'string', description: 'New description when updating an event' },
           participants: { type: 'array', items: { type: 'string' }, description: 'Guest emails for CREATE_EVENT' },
           eventTitle: { type: 'string', description: 'Existing event title to match for MODIFY_EVENT' },
           newTitle: { type: 'string', description: 'New title when renaming an event' },

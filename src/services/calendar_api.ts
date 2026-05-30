@@ -14,6 +14,7 @@ function eventRequestBody(event: CalendarEvent) {
     summary: event.title,
     start: { dateTime: event.start },
     end: { dateTime: event.end },
+    ...(event.description ? { description: event.description } : {}),
     ...(event.participants?.length ? { attendees: gcalAttendees(event.participants) } : {}),
   };
 }

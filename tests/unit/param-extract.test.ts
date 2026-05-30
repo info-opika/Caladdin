@@ -37,12 +37,34 @@ describe('param-extract', () => {
 
   it('extracts rename target', () => {
     expect(extractNewTitle("Rename it to 'Test for Caladdin'")).toBe('Test for Caladdin');
+    expect(extractNewTitle('Modify it and rename the event to Testing Caladdin')).toBe('Testing Caladdin');
     expect(isRenameUtterance('Rename the event')).toBe(true);
+    expect(isRenameUtterance('Can you modify the event name and name it Testing Caladdin')).toBe(true);
   });
 
   it('enriches modify params for rename', () => {
     const p = enrichModifyParams({}, "Rename it to 'Test for Caladdin'");
     expect(p.newTitle).toBe('Test for Caladdin');
+    const p2 = enrichModifyParams({}, 'Modify it and rename the event to Testing Caladdin');
+    expect(p2.newTitle).toBe('Testing Caladdin');
+    expect(p2.eventTitle).toBeUndefined();
+    const p3 = enrichModifyParams({}, 'Can you modify the event name and name it Testing Caladdin');
+    expect(p3.newTitle).toBe('Testing Caladdin');
+  });
+
+  it('strips LLM placeholder titles', () => {
+    const p = enrichCreateParams({ title: '<UNKNOWN>' }, 'create an event tomorrow at 8 AM');
+    expect(p.title).toBeUndefined();
+    const p2 = enrichCreateParams({ title: '<UNKNOWN>' }, 'create an event tomorrow at 8 AM. Name it Testing Caladdin');
+    expect(p2.title).toBe('Testing Caladdin');
+  });
+
+  it('extracts event description from create utterance', () => {
+    const utterance = "Create an event tomorrow 7 AM and name it as 'Caladdin Invite Test' and invite a@b.com. Add an event description that the event is a test to see if the script is running properly";
+    const p = enrichCreateParams({}, utterance);
+    expect(p.title).toBe('Caladdin Invite Test');
+    expect(p.description).toBe('the event is a test to see if the script is running properly');
+    expect(p.participants).toContain('a@b.com');
   });
 
   it('parses starting/ending time corrections', () => {

@@ -79,6 +79,25 @@ header {
 
 .msg.user { background: #fef3c7; margin-left: 2rem; }
 .msg.bot { background: white; border: 1px solid #e7e5e4; margin-right: 1rem; }
+.msg.thinking {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  color: #92400e;
+  background: #fffbeb;
+  border-color: #fde68a;
+  font-style: italic;
+}
+
+.thinking-spinner {
+  width: 0.875rem;
+  height: 0.875rem;
+  border: 2px solid #fcd34d;
+  border-top-color: var(--amber);
+  border-radius: 50%;
+  flex-shrink: 0;
+  animation: spin 0.8s linear infinite;
+}
 
 .chat-form {
   display: flex;
@@ -127,6 +146,44 @@ header {
 }
 
 .feedback-row { margin-top: 0.75rem; display: flex; gap: 0.5rem; }
+
+.status-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  padding: 0.75rem 1rem;
+  margin-bottom: 0.75rem;
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  border-radius: 10px;
+  font-size: 0.95rem;
+  color: #92400e;
+}
+
+.status-spinner {
+  width: 1rem;
+  height: 1rem;
+  border: 2px solid #fcd34d;
+  border-top-color: var(--amber);
+  border-radius: 50%;
+  flex-shrink: 0;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.chat-form input:disabled,
+.btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+#chat.is-busy .confirm-actions .btn {
+  pointer-events: none;
+  opacity: 0.55;
+}
 
 label { display: block; margin: 0.75rem 0; }
 

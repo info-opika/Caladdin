@@ -4,12 +4,20 @@ const chat = document.getElementById('chat');
 const messages = document.getElementById('messages');
 const form = document.getElementById('chat-form');
 const utteranceInput = document.getElementById('utterance');
+const sendBtn = document.getElementById('send-btn');
 const confirmCard = document.getElementById('confirm-card');
 const confirmText = document.getElementById('confirm-text');
 const confirmApprove = document.getElementById('confirm-approve');
 const confirmReject = document.getElementById('confirm-reject');
+const statusBar = document.getElementById('status-bar');
+const statusText = document.getElementById('status-text');
+const thumbsUp = document.getElementById('thumbs-up');
+const thumbsDown = document.getElementById('thumbs-down');
+
 let lastIntent = null;
 let pendingConfirmationToken = null;
+let busy = false;
+let thinkingEl = null;
 
 const DEFAULT_CALENDAR_QUERY = "What's on my calendar?";
 
@@ -24,6 +32,52 @@ function addMessage(text, role) {
   div.textContent = text;
   messages.appendChild(div);
   messages.scrollTop = messages.scrollHeight;
+}
+
+function showThinkingMessage(message) {
+  clearThinkingMessage();
+  thinkingEl = document.createElement('div');
+  thinkingEl.className = 'msg bot thinking';
+  thinkingEl.setAttribute('role', 'status');
+  thinkingEl.setAttribute('aria-live', 'polite');
+  thinkingEl.innerHTML = `<span class="thinking-spinner" aria-hidden="true"></span><span>${message}</span>`;
+  messages.appendChild(thinkingEl);
+  messages.scrollTop = messages.scrollHeight;
+}
+
+function clearThinkingMessage() {
+  thinkingEl?.remove();
+  thinkingEl = null;
+}
+
+function setBusy(message) {
+  busy = true;
+  chat?.classList.add('is-busy');
+  chat?.setAttribute('aria-busy', 'true');
+  showThinkingMessage(message);
+  if (statusText) statusText.textContent = message;
+  statusBar?.classList.remove('hidden');
+  if (utteranceInput) utteranceInput.disabled = true;
+  if (sendBtn) sendBtn.disabled = true;
+  if (thumbsUp) thumbsUp.disabled = true;
+  if (thumbsDown) thumbsDown.disabled = true;
+  if (confirmApprove) confirmApprove.disabled = true;
+  if (confirmReject) confirmReject.disabled = true;
+}
+
+function clearBusy() {
+  busy = false;
+  chat?.classList.remove('is-busy');
+  chat?.removeAttribute('aria-busy');
+  clearThinkingMessage();
+  statusBar?.classList.add('hidden');
+  if (statusText) statusText.textContent = '';
+  if (utteranceInput) utteranceInput.disabled = false;
+  if (sendBtn) sendBtn.disabled = false;
+  if (thumbsUp) thumbsUp.disabled = false;
+  if (thumbsDown) thumbsDown.disabled = false;
+  if (confirmApprove) confirmApprove.disabled = false;
+  if (confirmReject) confirmReject.disabled = false;
 }
 
 async function api(path, options = {}) {
@@ -41,39 +95,47 @@ function clearWelcomeParam() {
   }
 }
 
-async function sendVoiceMessage(utterance, { showUserMessage = true } = {}) {
+async function sendVoiceMessage(utterance, { showUserMessage = true, busyMessage = 'Working on it…' } = {}) {
   if (showUserMessage) addMessage(utterance, 'user');
-  confirmCard.classList.add('hidden');
+  confirmCard?.classList.add('hidden');
   pendingConfirmationToken = null;
 
-  const { res, data } = await api('/voice', {
-    method: 'POST',
-    body: JSON.stringify({ utterance }),
-  });
+  setBusy(busyMessage);
+  try {
+    const { res, data } = await api('/voice', {
+      method: 'POST',
+      body: JSON.stringify({ utterance }),
+    });
 
-  if (res.status === 401) {
-    show(landing);
-    return false;
+    if (res.status === 401) {
+      show(landing);
+      return false;
+    }
+    if (res.status === 503) {
+      addMessage(data?.error ?? 'Caladdin is temporarily unavailable. Try again in 30 seconds.', 'bot');
+      return false;
+    }
+
+    lastIntent = data?.intent;
+    addMessage(data?.messageToUser ?? 'Done.', 'bot');
+
+    if (data?.requiresConfirmation) {
+      pendingConfirmationToken = data.confirmationToken ?? null;
+      if (confirmText) confirmText.textContent = data.messageToUser;
+      confirmCard?.classList.remove('hidden');
+    }
+
+    return true;
+  } finally {
+    clearBusy();
   }
-  if (res.status === 503) {
-    addMessage(data?.error ?? 'Caladdin is temporarily unavailable. Try again in 30 seconds.', 'bot');
-    return false;
-  }
-
-  lastIntent = data?.intent;
-  addMessage(data?.messageToUser ?? 'Done.', 'bot');
-
-  if (data?.requiresConfirmation) {
-    pendingConfirmationToken = data.confirmationToken ?? null;
-    confirmText.textContent = data.messageToUser;
-    confirmCard.classList.remove('hidden');
-  }
-
-  return true;
 }
 
 async function loadDefaultCalendar() {
-  await sendVoiceMessage(DEFAULT_CALENDAR_QUERY, { showUserMessage: false });
+  await sendVoiceMessage(DEFAULT_CALENDAR_QUERY, {
+    showUserMessage: false,
+    busyMessage: 'Fetching calendar data…',
+  });
 }
 
 async function openChat({ loadCalendar = true } = {}) {
@@ -106,49 +168,54 @@ document.getElementById('finish-onboarding')?.addEventListener('click', async ()
 
 form?.addEventListener('submit', async (e) => {
   e.preventDefault();
+  if (busy) return;
   const utterance = utteranceInput.value.trim();
   if (!utterance) return;
   utteranceInput.value = '';
-  await sendVoiceMessage(utterance);
+  await sendVoiceMessage(utterance, { busyMessage: 'Thinking…' });
 });
 
 async function handleConfirmation(action) {
-  if (!pendingConfirmationToken) return;
-  confirmApprove.disabled = true;
-  confirmReject.disabled = true;
+  if (!pendingConfirmationToken || busy) return;
 
-  const { res, data } = await api(`/voice/confirm/${pendingConfirmationToken}/${action}`, {
-    method: 'POST',
-  });
+  const busyMessage = action === 'approve' ? 'Applying changes…' : 'Cancelling…';
+  setBusy(busyMessage);
 
-  confirmApprove.disabled = false;
-  confirmReject.disabled = false;
-  confirmCard.classList.add('hidden');
-  pendingConfirmationToken = null;
+  try {
+    const { res, data } = await api(`/voice/confirm/${pendingConfirmationToken}/${action}`, {
+      method: 'POST',
+    });
 
-  if (res.status === 403 || res.status === 404 || res.status === 409 || res.status === 410 || !res.ok) {
-    addMessage(data?.error ?? data?.messageToUser ?? data?.reason ?? `Request failed (${res.status}).`, 'bot');
-    return;
+    confirmCard?.classList.add('hidden');
+    pendingConfirmationToken = null;
+
+    if (res.status === 403 || res.status === 404 || res.status === 409 || res.status === 410 || !res.ok) {
+      addMessage(data?.error ?? data?.messageToUser ?? data?.reason ?? `Request failed (${res.status}).`, 'bot');
+      return;
+    }
+
+    if (action === 'reject') {
+      addMessage('Action cancelled.', 'bot');
+      return;
+    }
+
+    const result = data?.result;
+    const message = data?.messageToUser ?? result?.messageToUser ?? data?.reason;
+    if (data?.executionStatus === 'failed' || result?.success === false) {
+      addMessage(message ?? 'That action could not be completed.', 'bot');
+      return;
+    }
+    addMessage(message ?? 'Something went wrong — no result from server.', 'bot');
+  } finally {
+    clearBusy();
   }
-
-  if (action === 'reject') {
-    addMessage('Action cancelled.', 'bot');
-    return;
-  }
-
-  const result = data?.result;
-  const message = data?.messageToUser ?? result?.messageToUser ?? data?.reason;
-  if (data?.executionStatus === 'failed' || result?.success === false) {
-    addMessage(message ?? 'That action could not be completed.', 'bot');
-    return;
-  }
-  addMessage(message ?? 'Something went wrong — no result from server.', 'bot');
 }
 
 confirmApprove?.addEventListener('click', () => handleConfirmation('approve'));
 confirmReject?.addEventListener('click', () => handleConfirmation('reject'));
 
 document.getElementById('logout')?.addEventListener('click', async () => {
+  if (busy) return;
   await api('/auth/session', { method: 'DELETE' });
   localStorage.removeItem('caladdin_onboarded');
   messages.innerHTML = '';
@@ -156,14 +223,14 @@ document.getElementById('logout')?.addEventListener('click', async () => {
 });
 
 async function sendFeedback(rating) {
-  if (!lastIntent) return;
+  if (!lastIntent || busy) return;
   await api('/feedback', {
     method: 'POST',
     body: JSON.stringify({ rating, intent: lastIntent }),
   });
 }
 
-document.getElementById('thumbs-up')?.addEventListener('click', () => sendFeedback('up'));
-document.getElementById('thumbs-down')?.addEventListener('click', () => sendFeedback('down'));
+thumbsUp?.addEventListener('click', () => sendFeedback('up'));
+thumbsDown?.addEventListener('click', () => sendFeedback('down'));
 
 init();

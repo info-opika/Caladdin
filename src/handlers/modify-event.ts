@@ -172,11 +172,15 @@ export async function handleModifyEvent(
   let newTitle = params.newTitle as string | undefined;
   let newStart = params.newStart as string | undefined;
   let newEnd = params.newEnd as string | undefined;
+  const newDescription = params.newDescription as string | undefined;
   const renaming = Boolean(newTitle) || isRenameUtterance(parsed.rawUtterance);
 
-  let target = findTargetEvent(events, titleMatch, parsed.rawUtterance);
-  if (!target && params._useSessionEvent) {
-    target = (await resolveTargetForModify(ctx, params, parsed.rawUtterance)) ?? undefined;
+  let target: Awaited<ReturnType<typeof listEvents>>[number] | null | undefined;
+  if (params._useSessionEvent) {
+    target = await resolveTargetForModify(ctx, params, parsed.rawUtterance);
+  }
+  if (!target) {
+    target = findTargetEvent(events, titleMatch, parsed.rawUtterance);
   }
   if (!target && renaming) {
     target = findTargetEvent(events, 'New event');
@@ -227,6 +231,27 @@ export async function handleModifyEvent(
       success: true,
       requiresConfirmation: false,
       messageToUser: `Renamed "${target.title}" to "${title}".`,
+      eventsAffected: 1,
+      schemaVersion: 1,
+    };
+  }
+
+  if (newDescription) {
+    const updated = await updateEvent(target.id, { description: newDescription });
+    if (cal) await syncEventToGCal(cal, ctx.userId, updated, 'update');
+    await recordLastEvent(ctx.userId, 'MODIFY_EVENT', parsed.rawUtterance, {
+      id: updated.id,
+      title: updated.title,
+      gcalEventId: updated.gcalEventId,
+      start: updated.start,
+      end: updated.end,
+      participants: updated.participants,
+    });
+    return {
+      intent: 'MODIFY_EVENT',
+      success: true,
+      requiresConfirmation: false,
+      messageToUser: `Updated the description on "${updated.title}".`,
       eventsAffected: 1,
       schemaVersion: 1,
     };

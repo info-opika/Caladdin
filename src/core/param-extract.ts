@@ -2,6 +2,15 @@ import { addDays, addMinutes, formatISO, startOfDay } from './date-utils.js';
 import { ParsedIntent, ParsedIntentSchema } from './adts.js';
 
 const EMAIL_RE = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
+const PLACEHOLDER_TITLE_RE = /^(?:<unknown>|unknown)$/i;
+
+/** LLMs sometimes emit placeholder titles; treat them as missing. */
+export function sanitizeTitle(title: string | undefined): string | undefined {
+  if (!title?.trim()) return undefined;
+  const t = title.trim();
+  if (PLACEHOLDER_TITLE_RE.test(t)) return undefined;
+  return t;
+}
 
 export function extractEmails(utterance: string): string[] {
   return [...new Set((utterance.match(EMAIL_RE) ?? []).map((e) => e.toLowerCase()))];
@@ -25,9 +34,22 @@ export function isCalendarInviteUtterance(utterance: string): boolean {
 /** Pull event title from natural language (Name it X, called "X", etc.) */
 export function extractTitle(utterance: string): string | undefined {
   const patterns = [
-    /(?:name(?:\s+it)?|named|call(?:\s+it)?|title(?:\s+is)?)\s+['"]([^'"]+)['"]/i,
-    /(?:name(?:\s+it)?|named|call(?:\s+it)?|title(?:\s+is)?)\s+(.+?)\.?\s*$/i,
+    /(?:name(?:\s+it)?(?:\s+as)?|named|call(?:\s+it)?(?:\s+as)?|title(?:\s+is)?)\s+['"]([^'"]+)['"]/i,
+    /(?:name(?:\s+it)?(?:\s+as)?|named|call(?:\s+it)?(?:\s+as)?|title(?:\s+is)?)\s+(.+?)(?:\s+and\s+(?:then\s+)?(?:invite|add|with|description)|\.?\s*$)/i,
     /['"]([^'"]+)['"]/,
+  ];
+  for (const re of patterns) {
+    const m = utterance.match(re);
+    if (m?.[1]?.trim()) return sanitizeTitle(m[1].trim());
+  }
+  return undefined;
+}
+
+/** Pull event description/notes from natural language */
+export function extractDescription(utterance: string): string | undefined {
+  const patterns = [
+    /(?:add (?:an? )?event description(?: that|:)?|with (?:an? )?(?:event )?description(?: that|:)?|description(?: is|:))\s+(.+?)\.?\s*$/i,
+    /(?:set (?:the )?description(?: to|:)?|notes(?: that|:)?)\s+(.+?)\.?\s*$/i,
   ];
   for (const re of patterns) {
     const m = utterance.match(re);
@@ -39,25 +61,32 @@ export function extractTitle(utterance: string): string | undefined {
 /** Pull target new title for rename utterances */
 export function extractNewTitle(utterance: string): string | undefined {
   const patterns = [
-    /(?:rename(?:\s+it)?(?:\s+to)?|retitle(?:\s+to)?|change (?:the )?name to|call it)\s+['"]([^'"]+)['"]/i,
-    /(?:rename(?:\s+it)?(?:\s+to)?|retitle(?:\s+to)?|change (?:the )?name to|call it)\s+(.+?)\.?\s*$/i,
+    /(?:rename(?:\s+(?:it|the event))?|retitle(?:\s+the event)?)\s+to\s+['"]([^'"]+)['"]/i,
+    /(?:rename(?:\s+(?:it|the event))?|retitle(?:\s+the event)?)\s+to\s+(.+?)\.?\s*$/i,
+    /(?:change (?:the )?(?:event )?name to|call it|name it)\s+['"]([^'"]+)['"]/i,
+    /(?:change (?:the )?(?:event )?name to|call it|name it)\s+(.+?)\.?\s*$/i,
   ];
   for (const re of patterns) {
     const m = utterance.match(re);
-    if (m?.[1]?.trim()) return m[1].trim();
+    if (m?.[1]?.trim()) return sanitizeTitle(m[1].trim());
   }
-  return extractTitle(utterance);
+  return sanitizeTitle(extractTitle(utterance));
 }
 
 /** Which existing event the user refers to (by title fragment) */
 export function extractEventReference(utterance: string): string | undefined {
+  // "rename the event to X" — the phrase after "the event" is the new title, not a lookup key.
+  if (/\brename\b.*\bto\b/i.test(utterance) || /\bname it\b/i.test(utterance)) {
+    return undefined;
+  }
+
   const quoted = utterance.match(/['"]([^'"]+)['"]/);
   if (quoted?.[1]?.trim()) return quoted[1].trim();
 
   const removeMatch = utterance.match(/\b(?:remove|delete|cancel)\s+(?:the\s+)?(.+?)\s+event\b/i);
   if (removeMatch?.[1]?.trim()) return removeMatch[1].trim();
 
-  const m = utterance.match(/(?:the event|event)\s+['"]?([^'".\n]+?)['"]?/i);
+  const m = utterance.match(/(?:the event|event)\s+['"]([^'"]+)['"]/i);
   if (m?.[1]?.trim()) return m[1].trim();
   return undefined;
 }
@@ -105,7 +134,7 @@ export function prepareParsedForExecution(parsed: ParsedIntent): ParsedIntent {
 }
 
 export function isRenameUtterance(utterance: string): boolean {
-  return /\b(rename|retitle|change the name|call it)\b/i.test(utterance);
+  return /\b(rename|retitle|change the name|change the event name|call it|name it)\b/i.test(utterance);
 }
 
 export function isModifyUtterance(utterance: string): boolean {
@@ -212,10 +241,8 @@ export function enrichCreateParams(
   utterance: string,
 ): Record<string, unknown> {
   const out = { ...params };
-  if (!out.title) {
-    const t = extractTitle(utterance);
-    if (t) out.title = t;
-  }
+  out.title = sanitizeTitle(out.title as string | undefined)
+    ?? sanitizeTitle(extractTitle(utterance));
   if (!out.start || !out.end) {
     const range = parseStartEndFromUtterance(utterance);
     if (range) {
@@ -226,6 +253,12 @@ export function enrichCreateParams(
   const emails = extractEmails(utterance);
   if (emails.length && (/\b(invite|with|add|include|guest|attendee)\b/i.test(utterance) || isInviteUtterance(utterance))) {
     out.participants = [...new Set([...(out.participants as string[] | undefined ?? []), ...emails])];
+  }
+  if (!out.description) {
+    const d = extractDescription(utterance);
+    if (d) out.description = d;
+  } else if (typeof out.description === 'string') {
+    out.description = out.description.trim();
   }
   return out;
 }
@@ -247,6 +280,8 @@ export function enrichModifyParams(
   utterance: string,
 ): Record<string, unknown> {
   const out = { ...params };
+  out.newTitle = sanitizeTitle(out.newTitle as string | undefined);
+  out.eventTitle = sanitizeTitle(out.eventTitle as string | undefined);
   if (!out.newTitle && isRenameUtterance(utterance)) {
     const t = extractNewTitle(utterance);
     if (t) out.newTitle = t;
@@ -264,6 +299,12 @@ export function enrichModifyParams(
     const emails = (out.addInvitees as string[] | undefined) ?? extractEmails(utterance);
     if (emails.length) out.addInvitees = emails;
   }
+  if (!out.newDescription) {
+    const d = extractDescription(utterance);
+    if (d) out.newDescription = d;
+  } else if (typeof out.newDescription === 'string') {
+    out.newDescription = out.newDescription.trim();
+  }
   return out;
 }
 
@@ -273,7 +314,7 @@ export function hasActionableParams(intent: string, params: Record<string, unkno
       return Boolean(params.title || params.start);
     case 'MODIFY_EVENT':
       return Boolean(
-        params.newTitle || params.newStart || params.newEnd || params.eventTitle || params.addInvitees,
+        params.newTitle || params.newStart || params.newEnd || params.eventTitle || params.addInvitees || params.newDescription,
       );
     case 'QUERY_CALENDAR':
     case 'PROTECT_BLOCK':

@@ -168,13 +168,14 @@ BOUNDARY (critical):
 Today is ${new Date().toISOString().split('T')[0]} (use local-style ISO datetimes for the user's timezone).
 
 Rules:
-- CREATE_EVENT: always set params.title, params.start, params.end. Parse times like "tomorrow at 8 AM" into ISO strings.
+- CREATE_EVENT: always set params.title, params.start, params.end. Parse times like "tomorrow at 8 AM" into ISO strings. If the user did not give a title, omit params.title (do NOT use placeholders like "<UNKNOWN>"). Set params.description when the user asks for event notes/description.
+- CREATE_EVENT with guests: set params.participants to email array when user says invite/include/add with emails.
 - MODIFY_EVENT for rename: set params.newTitle and params.eventTitle (existing name if mentioned). Do NOT set newStart/newEnd for renames.
+- MODIFY_EVENT for description: set params.newDescription when user adds or changes event notes/description.
 - MODIFY_EVENT for move/reschedule/correction: set params.newStart, params.newEnd, and params.eventTitle when the user names the event. Examples: "starting at 8 AM ending at 9 AM", "make it 1 hour starting at 8 AM Central".
 - FLUSH_RANGE for remove/delete/cancel ONE named event: set params.eventTitle to the event name (e.g. "Remove the Test event" → eventTitle: "Test"). Do NOT use MODIFY_EVENT for deletions.
 - FLUSH_RANGE for bulk cancel (tomorrow, clear my afternoon): set params.rangeStart and params.rangeEnd.
 - MODIFY_EVENT to add invitees: set params.addInvitees (email strings) and params.eventTitle when named. Examples: "invite kanthatbww@gmail.com", "add john@example.com to the meeting".
-- CREATE_EVENT with guests: set params.participants to email array when user says invite/include/add with emails.
 - Descriptive corrections ("The event is 1 hour starting at 8 AM...") are MODIFY_EVENT, not RESOLVE_MANUAL.
 - QUERY_CALENDAR: read-only; optional rangeStart/rangeEnd.
 - Use confidence >= 0.85 when intent and params are clear. Never below 0.7 if you extracted times or a title.

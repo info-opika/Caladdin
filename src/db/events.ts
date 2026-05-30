@@ -14,6 +14,7 @@ function rowToEvent(row: Record<string, unknown>): CalendarEvent {
     status: row.status as 'confirmed' | 'cancelled' | 'proposed',
     gcalEventId: row.gcal_event_id as string | null,
     proposedForSession: row.proposed_for_session as string | null,
+    description: (row.description as string | null) ?? null,
   };
 }
 
@@ -46,6 +47,7 @@ export async function insertEvent(userId: string, event: Partial<CalendarEvent>)
       is_recurring: event.isRecurring ?? false,
       gcal_event_id: event.gcalEventId,
       proposed_for_session: event.proposedForSession,
+      description: event.description ?? null,
     })
     .select()
     .single();
@@ -62,6 +64,7 @@ export async function updateEvent(id: string, patch: Partial<CalendarEvent>): Pr
   if (patch.status !== undefined) row.status = patch.status;
   if (patch.gcalEventId !== undefined) row.gcal_event_id = patch.gcalEventId;
   if (patch.participants !== undefined) row.participants = patch.participants;
+  if (patch.description !== undefined) row.description = patch.description;
   const { data, error } = await getSupabase().from('events').update(row).eq('id', id).select().single();
   if (error) throw error;
   return rowToEvent(data);
