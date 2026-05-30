@@ -1,4 +1,4 @@
-import { UUID_RE, ParsedIntent, Intent, MUTATION_INTENTS } from './adts.js';
+import { UUID_RE, ParsedIntent, Intent, MUTATION_INTENTS, CalendarEvent, UserPolicyProfile } from './adts.js';
 import { globalRateLimiter } from './rate-limiter.js';
 import { listEvents } from '../db/events.js';
 
@@ -7,6 +7,58 @@ export function validateUserId(userId: string): { valid: boolean; error?: string
     return { valid: false, error: 'Invalid user ID' };
   }
   return { valid: true };
+}
+
+/**
+ * Strict user-id guard used at the boundary before any DB access.
+ * Throws on missing/blank/non-UUID input; returns the id otherwise.
+ */
+export function validateUser(userId: string | null | undefined): string {
+  if (!userId || !userId.trim() || !UUID_RE.test(userId)) {
+    throw new Error('Invalid user ID format');
+  }
+  return userId;
+}
+
+const DESTRUCTIVE_MUTATION_INTENTS: readonly Intent[] = ['FLUSH_RANGE', 'MODIFY_EVENT'];
+
+export interface MutationCheckResult {
+  allowed: boolean;
+  requiresConfirmation: boolean;
+  blockedReason?: string;
+}
+
+/**
+ * Tier-based mutation gate.
+ * - Tier 0: never mutated without explicit confirmation (blocked).
+ * - Tier 1 + destructive intent: requires confirmation (blocked).
+ * - Otherwise: allowed.
+ */
+export function checkMutation(
+  intent: Intent,
+  event: CalendarEvent,
+  _profile: UserPolicyProfile,
+): MutationCheckResult {
+  const destructive = DESTRUCTIVE_MUTATION_INTENTS.includes(intent);
+  const tier = event.tier ?? 0;
+
+  if (tier === 0) {
+    return {
+      allowed: false,
+      requiresConfirmation: true,
+      blockedReason: 'Tier 0 event cannot be mutated without confirmation',
+    };
+  }
+
+  if (tier === 1 && destructive) {
+    return {
+      allowed: false,
+      requiresConfirmation: true,
+      blockedReason: 'Tier 1 destructive mutation requires confirmation',
+    };
+  }
+
+  return { allowed: true, requiresConfirmation: false };
 }
 
 export function validateUtterance(utterance: string, maxLength: number): { valid: boolean; error?: string } {

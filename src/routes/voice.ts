@@ -9,6 +9,8 @@ import { getPolicy, getUserById } from '../db/users.js';
 import { config } from '../config.js';
 import { getOAuthClientForUser } from '../services/auth_service.js';
 import { approvePendingConfirmation, rejectPendingConfirmation } from '../core/confirmation-actions.js';
+import { getConversationContext } from '../db/conversation-context.js';
+import { applyConversationContext } from '../core/conversation-context.js';
 
 export const voiceRouter = Router();
 
@@ -42,7 +44,8 @@ voiceRouter.post('/', requireSession, async (req: Request, res: Response) => {
       return;
     }
 
-    const parsed = await parseIntent(utterance, userId, requestId);
+    const conversationContext = await getConversationContext(userId);
+    let parsed = await parseIntent(utterance, userId, requestId);
 
     if (parsed._warmRedirect) {
       res.setHeader('x-request-id', requestId);
@@ -56,8 +59,15 @@ voiceRouter.post('/', requireSession, async (req: Request, res: Response) => {
       return;
     }
 
+    parsed = applyConversationContext(parsed, conversationContext);
+
     const oauthClient = await getOAuthClientForUser(userId);
-    const result = await orchestrate(parsed, { userId, requestId, oauthClient: oauthClient ?? undefined });
+    const result = await orchestrate(parsed, {
+      userId,
+      requestId,
+      oauthClient: oauthClient ?? undefined,
+      conversationContext,
+    });
     res.setHeader('x-request-id', requestId);
     res.json(result);
   } catch {

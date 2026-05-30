@@ -61,9 +61,22 @@ export async function updateEvent(id: string, patch: Partial<CalendarEvent>): Pr
   if (patch.tier !== undefined) row.tier = patch.tier;
   if (patch.status !== undefined) row.status = patch.status;
   if (patch.gcalEventId !== undefined) row.gcal_event_id = patch.gcalEventId;
+  if (patch.participants !== undefined) row.participants = patch.participants;
   const { data, error } = await getSupabase().from('events').update(row).eq('id', id).select().single();
   if (error) throw error;
   return rowToEvent(data);
+}
+
+export async function getEventByGcalId(userId: string, gcalEventId: string): Promise<CalendarEvent | null> {
+  const { data, error } = await getSupabase()
+    .from('events')
+    .select('*')
+    .eq('user_id', userId)
+    .eq('gcal_event_id', gcalEventId)
+    .neq('status', 'cancelled')
+    .maybeSingle();
+  if (error) throw error;
+  return data ? rowToEvent(data) : null;
 }
 
 export async function cancelEvent(id: string): Promise<void> {

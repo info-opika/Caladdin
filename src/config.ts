@@ -31,6 +31,7 @@ export const config = {
   ntfyUserTopic: process.env.NTFY_USER_TOPIC ?? 'caladdin-user',
   utteranceMaxLength: 1000,
   confirmExpiryMinutes: 10,
+  conversationSessionMinutes: 10,
   schedulingSessionHours: 72,
   undoWindowMinutes: 10,
   llmTimeoutMs: 10000,

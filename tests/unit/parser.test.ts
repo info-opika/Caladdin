@@ -19,6 +19,11 @@ describe('parser pre-LLM', () => {
     const r = warmRedirectResult('nice day');
     expect(r._offTopic).toBe(true);
   });
+
+  it('allows calendar invite utterances with email', () => {
+    expect(isOffTopic('invite kanthatbww@gmail.com')).toBe(false);
+    expect(isOffTopic('add kanthatbww@gmail.com to the meeting')).toBe(false);
+  });
 });
 
 describe('golden utterance mapping (degraded)', () => {

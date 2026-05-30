@@ -13,7 +13,7 @@ import {
 } from './adts.js';
 import { insertFailureLog } from '../db/failures.js';
 import { logger } from '../logger.js';
-import { enrichCreateParams, enrichModifyParams, enrichFlushParams, hasActionableParams } from './param-extract.js';
+import { enrichCreateParams, enrichModifyParams, enrichFlushParams, hasActionableParams, isCalendarInviteUtterance } from './param-extract.js';
 
 const client = new Anthropic({ apiKey: config.anthropicApiKey || 'sk-placeholder' });
 
@@ -23,6 +23,7 @@ const KEYWORD_INTENTS: Array<{ re: RegExp; intent: string; params?: Record<strin
   { re: /\bblock\b/i, intent: 'PROTECT_BLOCK' },
   { re: /\bfind (time|slot)|schedule (time|with)\b/i, intent: 'OFFER_SPECIFIC' },
   { re: /\bput |add |create |schedule an event|dinner at\b/i, intent: 'CREATE_EVENT' },
+  { re: /\binvite|invitee|guest|attendee|add .+@/i, intent: 'MODIFY_EVENT' },
   { re: /\brename|retitle|change the name\b/i, intent: 'MODIFY_EVENT' },
   { re: /\bmove |push |update|correct|fix|starting at|ending at|\d+\s*hour|make it|should be\b/i, intent: 'MODIFY_EVENT' },
   { re: /\b(remove|delete)\s+(?:the\s+)?/i, intent: 'FLUSH_RANGE' },
@@ -110,13 +111,14 @@ export function warmRedirectResult(utterance: string): ParsedIntent {
   return offTopicResult(utterance);
 }
 
-const STRONG_CALENDAR_RE = /\b(calendar|meetings?|schedule|block|free|busy|appointments?|cancel|move|protect|undo|decline|slots?|standup|deep work|book|reschedule|availability)\b/i;
+const STRONG_CALENDAR_RE = /\b(calendar|meetings?|schedule|block|free|busy|appointments?|cancel|move|protect|undo|decline|slots?|standup|deep work|book|reschedule|availability|invite|invitee|guest|attendee)\b/i;
 
 export function isCalendarRelated(utterance: string): boolean {
   return STRONG_CALENDAR_RE.test(utterance) || CALENDAR_TOPIC_RE.test(utterance);
 }
 
 export function isOffTopic(utterance: string): boolean {
+  if (isCalendarInviteUtterance(utterance)) return false;
   const strongCalendar = STRONG_CALENDAR_RE.test(utterance);
   if (OFF_TOPIC_RE.test(utterance) && !strongCalendar) return true;
   if (GENERAL_KNOWLEDGE_RE.test(utterance) && !strongCalendar) return true;
@@ -171,6 +173,8 @@ Rules:
 - MODIFY_EVENT for move/reschedule/correction: set params.newStart, params.newEnd, and params.eventTitle when the user names the event. Examples: "starting at 8 AM ending at 9 AM", "make it 1 hour starting at 8 AM Central".
 - FLUSH_RANGE for remove/delete/cancel ONE named event: set params.eventTitle to the event name (e.g. "Remove the Test event" → eventTitle: "Test"). Do NOT use MODIFY_EVENT for deletions.
 - FLUSH_RANGE for bulk cancel (tomorrow, clear my afternoon): set params.rangeStart and params.rangeEnd.
+- MODIFY_EVENT to add invitees: set params.addInvitees (email strings) and params.eventTitle when named. Examples: "invite kanthatbww@gmail.com", "add john@example.com to the meeting".
+- CREATE_EVENT with guests: set params.participants to email array when user says invite/include/add with emails.
 - Descriptive corrections ("The event is 1 hour starting at 8 AM...") are MODIFY_EVENT, not RESOLVE_MANUAL.
 - QUERY_CALENDAR: read-only; optional rangeStart/rangeEnd.
 - Use confidence >= 0.85 when intent and params are clear. Never below 0.7 if you extracted times or a title.

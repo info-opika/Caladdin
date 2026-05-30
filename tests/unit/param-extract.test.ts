@@ -3,12 +3,14 @@ import {
   extractTitle,
   extractNewTitle,
   extractEventReference,
+  extractEmails,
   parseStartEndFromUtterance,
   enrichCreateParams,
   enrichModifyParams,
   enrichFlushParams,
   isRenameUtterance,
   isDeleteUtterance,
+  isInviteUtterance,
   prepareParsedForExecution,
 } from '../../src/core/param-extract.js';
 
@@ -64,6 +66,13 @@ describe('param-extract', () => {
   it('enriches flush params for single delete', () => {
     const p = enrichFlushParams({}, 'Remove the Test for Caladdin event please');
     expect(p.eventTitle).toBe('Test for Caladdin');
+  });
+
+  it('extracts invite emails', () => {
+    expect(extractEmails('invite kanthatbww@gmail.com')).toEqual(['kanthatbww@gmail.com']);
+    expect(isInviteUtterance('invite kanthatbww@gmail.com')).toBe(true);
+    const p = enrichModifyParams({}, 'invite kanthatbww@gmail.com');
+    expect(p.addInvitees).toEqual(['kanthatbww@gmail.com']);
   });
 
   it('prepares delete utterance as FLUSH_RANGE for execution', () => {

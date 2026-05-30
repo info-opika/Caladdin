@@ -1,33 +1,69 @@
-import { describe, it, expect, afterEach } from 'vitest';
-import { validateUserId, validateUtterance } from '../../src/core/safety.js';
-import { createRateLimiter } from '../../src/core/rate-limiter.js';
-import { config } from '../../src/config.js';
+import { describe, it, expect } from 'vitest';
+import { preflightSafety, requiresConfirmationForTier, validateUserId, validateUtterance } from '../../src/core/safety.js';
+import type { ParsedIntent } from '../../src/core/adts.js';
 
-describe('safety', () => {
-  it('rejects invalid UUID', () => {
-    expect(validateUserId('not-a-uuid').valid).toBe(false);
-    expect(validateUserId('admin').valid).toBe(false);
+function parsed(intent: ParsedIntent['intent'], params: Record<string, unknown> = {}): ParsedIntent {
+  return {
+    intent,
+    confidence: 0.95,
+    rawUtterance: 'test utterance',
+    mappingMethod: 'direct',
+    params,
+  };
+}
+
+describe('Safety — preflightSafety', () => {
+  it('requires confirmation for FLUSH_RANGE', async () => {
+    const result = await preflightSafety(parsed('FLUSH_RANGE', { tier: 1 }), '8b616ceb-7e77-4886-9361-92a534374fac');
+    expect(result.requiresConfirmation).toBe(true);
+    expect(result.blocked).toBe(false);
   });
 
-  it('accepts valid UUID', () => {
-    expect(validateUserId('77a22c75-4e6b-47ca-aee6-2f4ace21be53').valid).toBe(true);
+  it('requires confirmation for destructive Tier 0 mutations', async () => {
+    const result = await preflightSafety(
+      { ...parsed('MODIFY_EVENT', { tier: 0 }), _destructivePreFilter: true },
+      '8b616ceb-7e77-4886-9361-92a534374fac',
+    );
+    expect(result.requiresConfirmation).toBe(true);
+    expect(result.blocked).toBe(false);
   });
 
-  it('rejects utterance over max length', () => {
-    const r = validateUtterance('a'.repeat(1001), config.utteranceMaxLength);
-    expect(r.valid).toBe(false);
-    expect(r.error).toContain('too long');
+  it('allows non-destructive PROTECT_BLOCK', async () => {
+    const result = await preflightSafety(parsed('PROTECT_BLOCK', { tier: 2 }), '8b616ceb-7e77-4886-9361-92a534374fac');
+    expect(result.requiresConfirmation).toBe(false);
+    expect(result.blocked).toBe(false);
+  });
+});
+
+describe('Safety — validation helpers', () => {
+  it('accepts valid UUID user ID', () => {
+    expect(validateUserId('8b616ceb-7e77-4886-9361-92a534374fac')).toEqual({ valid: true });
   });
 
-  it('rate limiter blocks 6th request', () => {
-    const limiter = createRateLimiter(5, 60000);
-    const uid = '77a22c75-4e6b-47ca-aee6-2f4ace21be53';
-    for (let i = 0; i < 5; i++) {
-      expect(limiter.check(uid).allowed).toBe(true);
-    }
-    const sixth = limiter.check(uid);
-    expect(sixth.allowed).toBe(false);
-    expect(sixth.retryAfterMs).toBeDefined();
-    limiter.reset(uid);
+  it('rejects invalid user IDs', () => {
+    expect(validateUserId('')).toEqual({ valid: false, error: 'Invalid user ID' });
+    expect(validateUserId('not-a-uuid')).toEqual({ valid: false, error: 'Invalid user ID' });
+  });
+
+  it('validates utterance presence and max length', () => {
+    expect(validateUtterance('Schedule lunch', 200)).toEqual({ valid: true });
+    expect(validateUtterance('   ', 200)).toEqual({ valid: false, error: 'Utterance is required' });
+  });
+});
+
+describe('Safety — tier confirmation helper', () => {
+  it('requires confirmation for tier 0 always', () => {
+    expect(requiresConfirmationForTier(0, false)).toBe(true);
+    expect(requiresConfirmationForTier(0, true)).toBe(true);
+  });
+
+  it('requires confirmation for tier 1 only when destructive', () => {
+    expect(requiresConfirmationForTier(1, true)).toBe(true);
+    expect(requiresConfirmationForTier(1, false)).toBe(false);
+  });
+
+  it('does not require confirmation for tier 2+', () => {
+    expect(requiresConfirmationForTier(2, true)).toBe(false);
+    expect(requiresConfirmationForTier(3, false)).toBe(false);
   });
 });

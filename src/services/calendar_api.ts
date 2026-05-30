@@ -5,21 +5,32 @@ import { CalendarEvent } from '../core/adts.js';
 import { gcalErrorMessage, normalizeGCalRange } from '../core/date-utils.js';
 import { logger } from '../logger.js';
 
+function gcalAttendees(participants: string[] | undefined) {
+  return (participants ?? []).map((email) => ({ email }));
+}
+
+function eventRequestBody(event: CalendarEvent) {
+  return {
+    summary: event.title,
+    start: { dateTime: event.start },
+    end: { dateTime: event.end },
+    ...(event.participants?.length ? { attendees: gcalAttendees(event.participants) } : {}),
+  };
+}
+
 export async function syncEventToGCal(
   cal: calendar_v3.Calendar,
   userId: string,
   event: CalendarEvent,
   operation: 'create' | 'update' | 'delete',
+  options?: { sendUpdates?: 'all' | 'externalOnly' | 'none' },
 ): Promise<string | null> {
   try {
     if (operation === 'create') {
       const res = await cal.events.insert({
         calendarId: 'primary',
-        requestBody: {
-          summary: event.title,
-          start: { dateTime: event.start },
-          end: { dateTime: event.end },
-        },
+        sendUpdates: options?.sendUpdates ?? (event.participants?.length ? 'all' : 'none'),
+        requestBody: eventRequestBody(event),
       });
       return res.data.id ?? null;
     }
@@ -27,11 +38,8 @@ export async function syncEventToGCal(
       await cal.events.patch({
         calendarId: 'primary',
         eventId: event.gcalEventId,
-        requestBody: {
-          summary: event.title,
-          start: { dateTime: event.start },
-          end: { dateTime: event.end },
-        },
+        sendUpdates: options?.sendUpdates ?? (event.participants?.length ? 'all' : 'none'),
+        requestBody: eventRequestBody(event),
       });
       return event.gcalEventId;
     }
@@ -139,6 +147,32 @@ export async function deleteEventByTitle(
     title: match.title,
     message: `Removed "${match.title}" from your calendar.`,
   };
+}
+
+export async function addInviteesToGCalEvent(
+  cal: calendar_v3.Calendar,
+  gcalEventId: string,
+  emails: string[],
+): Promise<{ participants: string[]; added: string[] }> {
+  const existing = await cal.events.get({ calendarId: 'primary', eventId: gcalEventId });
+  const current = (existing.data.attendees ?? [])
+    .map((a) => a.email?.toLowerCase())
+    .filter((e): e is string => Boolean(e));
+  const toAdd = emails.filter((e) => !current.includes(e.toLowerCase()));
+  const merged = [...new Set([...current, ...emails.map((e) => e.toLowerCase())])];
+
+  if (toAdd.length > 0) {
+    await cal.events.patch({
+      calendarId: 'primary',
+      eventId: gcalEventId,
+      sendUpdates: 'all',
+      requestBody: {
+        attendees: merged.map((email) => ({ email })),
+      },
+    });
+  }
+
+  return { participants: merged, added: toAdd };
 }
 
 export async function listBusyFromGCal(

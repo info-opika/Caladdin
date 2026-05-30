@@ -12,6 +12,7 @@ export const IntentEnum = z.enum([
   'QUERY_CALENDAR',
   'UNDO',
   'RESOLVE_MANUAL',
+  'WARM_REDIRECT',
 ]);
 
 export type Intent = z.infer<typeof IntentEnum>;
@@ -105,6 +106,7 @@ export const IntentResultSchema = z.object({
   schemaVersion: z.number().int().optional(),
   schedulingLink: z.string().url().optional(),
   executionStatus: z.enum(['success', 'failed']).optional(),
+  isWarmRedirect: z.boolean().optional(),
 });
 
 export type IntentResult = z.infer<typeof IntentResultSchema>;
@@ -126,15 +128,17 @@ export const CLASSIFY_INTENT_TOOL = {
       confidence: { type: 'number', minimum: 0, maximum: 1 },
       params: {
         type: 'object',
-        description: 'Intent-specific fields. CREATE_EVENT: title, start, end (ISO 8601). MODIFY_EVENT: eventTitle?, newTitle?, newStart?, newEnd?. QUERY_CALENDAR: rangeStart?, rangeEnd?. FLUSH_RANGE: rangeStart?, rangeEnd?, eventTitle? (delete one event by title).',
+        description: 'Intent-specific fields. CREATE_EVENT: title, start, end, participants? (emails). MODIFY_EVENT: eventTitle?, newTitle?, newStart?, newEnd?, addInvitees? (emails). QUERY_CALENDAR: rangeStart?, rangeEnd?. FLUSH_RANGE: rangeStart?, rangeEnd?, eventTitle? (delete one event by title).',
         properties: {
           title: { type: 'string', description: 'Event title for CREATE_EVENT' },
           start: { type: 'string', description: 'ISO 8601 start datetime' },
           end: { type: 'string', description: 'ISO 8601 end datetime' },
+          participants: { type: 'array', items: { type: 'string' }, description: 'Guest emails for CREATE_EVENT' },
           eventTitle: { type: 'string', description: 'Existing event title to match for MODIFY_EVENT' },
           newTitle: { type: 'string', description: 'New title when renaming an event' },
           newStart: { type: 'string', description: 'New start time for MODIFY_EVENT' },
           newEnd: { type: 'string', description: 'New end time for MODIFY_EVENT' },
+          addInvitees: { type: 'array', items: { type: 'string' }, description: 'Emails to invite to an existing event' },
           rangeStart: { type: 'string', description: 'Query/cancel window start ISO' },
           rangeEnd: { type: 'string', description: 'Query/cancel window end ISO' },
         },
@@ -152,7 +156,7 @@ export const DESTRUCTIVE_VERB_RE = /\b(delete|cancel|remove|clear|drop|erase|wip
 
 export const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
-export const CALENDAR_TOPIC_RE = /\b(calendar|meetings?|schedule|block|free|busy|appointments?|tomorrow|today|monday|tuesday|wednesday|thursday|friday|saturday|sunday|am|pm|mornings?|afternoons?|events?|calls?|slots?|times?|undo|decline|move|cancel|protect|lunch|standup|deep work|haircut|dentist|investor|starting|ending|hour|update|change|rename|central)\b/i;
+export const CALENDAR_TOPIC_RE = /\b(calendar|meetings?|schedule|block|free|busy|appointments?|tomorrow|today|monday|tuesday|wednesday|thursday|friday|saturday|sunday|am|pm|mornings?|afternoons?|events?|calls?|slots?|times?|undo|decline|move|cancel|protect|lunch|standup|deep work|haircut|dentist|investor|starting|ending|hour|update|change|rename|central|invite|invitee|guest|attendee|participant)\b/i;
 
 export const OFF_TOPIC_RE = /\b(weather|sports|recipe|joke|movie|stock price|president|politics|election|capital of|tell me a story|homework|write code|python|javascript|news headlines?)\b/i;
 
@@ -172,6 +176,7 @@ export interface OrchestratorContext {
   userId: string;
   requestId: string;
   oauthClient?: unknown;
+  conversationContext?: import('../db/conversation-context.js').ConversationContext | null;
   _skipConfirmationGate?: boolean;
 }
 

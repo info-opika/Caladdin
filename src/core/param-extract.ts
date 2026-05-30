@@ -1,6 +1,27 @@
 import { addDays, addMinutes, formatISO, startOfDay } from './date-utils.js';
 import { ParsedIntent, ParsedIntentSchema } from './adts.js';
 
+const EMAIL_RE = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
+
+export function extractEmails(utterance: string): string[] {
+  return [...new Set((utterance.match(EMAIL_RE) ?? []).map((e) => e.toLowerCase()))];
+}
+
+export function isInviteUtterance(utterance: string): boolean {
+  if (!utterance) return false;
+  const hasEmail = extractEmails(utterance).length > 0;
+  if (!hasEmail) return false;
+  return /\b(invite|invitee|guest|attendee|add\s+.+@|include\s+.+@|send\s+(?:an?\s+)?invite)\b/i.test(utterance);
+}
+
+export function isReferentialUtterance(utterance: string): boolean {
+  return /\b(that event|that meeting|the event|this event|it|that one|the last one|same event)\b/i.test(utterance);
+}
+
+export function isCalendarInviteUtterance(utterance: string): boolean {
+  return isInviteUtterance(utterance) || (extractEmails(utterance).length > 0 && /\b(invite|guest|attendee|add)\b/i.test(utterance));
+}
+
 /** Pull event title from natural language (Name it X, called "X", etc.) */
 export function extractTitle(utterance: string): string | undefined {
   const patterns = [
@@ -202,6 +223,10 @@ export function enrichCreateParams(
       if (!out.end) out.end = range.end;
     }
   }
+  const emails = extractEmails(utterance);
+  if (emails.length && (/\b(invite|with|add|include|guest|attendee)\b/i.test(utterance) || isInviteUtterance(utterance))) {
+    out.participants = [...new Set([...(out.participants as string[] | undefined ?? []), ...emails])];
+  }
   return out;
 }
 
@@ -235,6 +260,10 @@ export function enrichModifyParams(
     if (range.newStart) out.newStart = range.newStart;
     if (range.newEnd) out.newEnd = range.newEnd;
   }
+  if (isInviteUtterance(utterance)) {
+    const emails = (out.addInvitees as string[] | undefined) ?? extractEmails(utterance);
+    if (emails.length) out.addInvitees = emails;
+  }
   return out;
 }
 
@@ -243,7 +272,9 @@ export function hasActionableParams(intent: string, params: Record<string, unkno
     case 'CREATE_EVENT':
       return Boolean(params.title || params.start);
     case 'MODIFY_EVENT':
-      return Boolean(params.newTitle || params.newStart || params.newEnd || params.eventTitle);
+      return Boolean(
+        params.newTitle || params.newStart || params.newEnd || params.eventTitle || params.addInvitees,
+      );
     case 'QUERY_CALENDAR':
     case 'PROTECT_BLOCK':
     case 'OFFER_SPECIFIC':
