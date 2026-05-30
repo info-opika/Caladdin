@@ -169,7 +169,7 @@ Today is ${new Date().toISOString().split('T')[0]} (use local-style ISO datetime
 
 Rules:
 - CREATE_EVENT: always set params.title, params.start, params.end. Parse times like "tomorrow at 8 AM" into ISO strings. If the user did not give a title, omit params.title (do NOT use placeholders like "<UNKNOWN>"). Set params.description when the user asks for event notes/description.
-- CREATE_EVENT with guests: set params.participants to email array when user says invite/include/add with emails.
+- CREATE_EVENT with guests: set params.participants to email array when user says invite/include/add with emails. Utterances that say "create a new event" with invite emails are CREATE_EVENT, not MODIFY_EVENT.
 - MODIFY_EVENT for rename: set params.newTitle and params.eventTitle (existing name if mentioned). Do NOT set newStart/newEnd for renames.
 - MODIFY_EVENT for description: set params.newDescription when user adds or changes event notes/description.
 - MODIFY_EVENT for move/reschedule/correction: set params.newStart, params.newEnd, and params.eventTitle when the user names the event. Examples: "starting at 8 AM ending at 9 AM", "make it 1 hour starting at 8 AM Central".

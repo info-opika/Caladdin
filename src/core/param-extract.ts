@@ -31,29 +31,40 @@ export function isCalendarInviteUtterance(utterance: string): boolean {
   return isInviteUtterance(utterance) || (extractEmails(utterance).length > 0 && /\b(invite|guest|attendee|add)\b/i.test(utterance));
 }
 
+/** User is asking to create/schedule a brand-new event (not modify an existing one). */
+export function isCreateEventUtterance(utterance: string): boolean {
+  return /\b(create|schedule|book|set up)\s+(?:a\s+)?(?:new\s+)?event\b/i.test(utterance)
+    || /\bnew event for\b/i.test(utterance);
+}
+
 /** Pull event title from natural language (Name it X, called "X", etc.) */
 export function extractTitle(utterance: string): string | undefined {
   const patterns = [
     /(?:name(?:\s+it)?(?:\s+as)?|named|call(?:\s+it)?(?:\s+as)?|title(?:\s+is)?)\s+['"]([^'"]+)['"]/i,
     /(?:name(?:\s+it)?(?:\s+as)?|named|call(?:\s+it)?(?:\s+as)?|title(?:\s+is)?)\s+(.+?)(?:\s+and\s+(?:then\s+)?(?:invite|add|with|description)|\.?\s*$)/i,
-    /['"]([^'"]+)['"]/,
   ];
   for (const re of patterns) {
     const m = utterance.match(re);
     if (m?.[1]?.trim()) return sanitizeTitle(m[1].trim());
+  }
+  if (!/(?:description|notes)\s+['"]/i.test(utterance)) {
+    const quoted = utterance.match(/['"]([^'"]+)['"]/);
+    if (quoted?.[1]?.trim()) return sanitizeTitle(quoted[1].trim());
   }
   return undefined;
 }
 
 /** Pull event description/notes from natural language */
 export function extractDescription(utterance: string): string | undefined {
-  const patterns = [
-    /(?:add (?:an? )?event description(?: that|:)?|with (?:an? )?(?:event )?description(?: that|:)?|description(?: is|:))\s+(.+?)\.?\s*$/i,
-    /(?:set (?:the )?description(?: to|:)?|notes(?: that|:)?)\s+(.+?)\.?\s*$/i,
-  ];
-  for (const re of patterns) {
-    const m = utterance.match(re);
-    if (m?.[1]?.trim()) return m[1].trim();
+  const tail = utterance.match(
+    /(?:add (?:an? )?event description|with (?:an? )?(?:event )?description|(?:set )?(?:the )?event description|description)\s+(.+?)\.?\s*$/i,
+  );
+  if (tail?.[1]?.trim()) {
+    let d = tail[1].trim();
+    if ((d.startsWith("'") && d.endsWith("'")) || (d.startsWith('"') && d.endsWith('"'))) {
+      d = d.slice(1, -1);
+    }
+    return d;
   }
   return undefined;
 }
@@ -119,7 +130,10 @@ export function normalizeStoredParsed(raw: unknown): ParsedIntent {
 /** Re-enrich params and force delete utterances onto FLUSH_RANGE before execution. */
 export function prepareParsedForExecution(parsed: ParsedIntent): ParsedIntent {
   const rawUtterance = parsed.rawUtterance ?? '';
-  const params = enrichFlushParams(enrichModifyParams(parsed.params ?? {}, rawUtterance), rawUtterance);
+  const enrichedParams = parsed.intent === 'CREATE_EVENT'
+    ? enrichCreateParams(parsed.params ?? {}, rawUtterance)
+    : enrichModifyParams(parsed.params ?? {}, rawUtterance);
+  const params = enrichFlushParams(enrichedParams, rawUtterance);
 
   if (isDeleteUtterance(rawUtterance)) {
     return ParsedIntentSchema.parse({
@@ -141,12 +155,14 @@ export function isModifyUtterance(utterance: string): boolean {
   return /\b(update|change|correct|fix|move|reschedule|starting at|ending at|\d+\s*hour|make it|should be)\b/i.test(utterance);
 }
 
-const TIME_RE = /\b(?:at\s+)?(\d{1,2})(?::(\d{2}))?\s*(am|pm)?\b/i;
+const TIME_RE = /\b(?:at|for)\s+(\d{1,2})(?::(\d{2}))?\s*(am|pm)?\b|\b(\d{1,2})(?::(\d{2}))?\s*(am|pm)\b/i;
 
 function parseClockMatch(match: RegExpMatchArray, base: Date): Date {
-  let hour = parseInt(match[1], 10);
-  const minute = match[2] ? parseInt(match[2], 10) : 0;
-  const ampm = match[3]?.toLowerCase();
+  const hourStr = match[1] ?? match[4];
+  const minuteStr = match[2] ?? match[5];
+  const ampm = (match[3] ?? match[6])?.toLowerCase();
+  let hour = parseInt(hourStr, 10);
+  const minute = minuteStr ? parseInt(minuteStr, 10) : 0;
 
   if (ampm === 'pm' && hour < 12) hour += 12;
   if (ampm === 'am' && hour === 12) hour = 0;
@@ -197,10 +213,22 @@ export function parseModifyTimeRange(
   return out;
 }
 
+/** Parse duration like "12 minutes duration" or "30 minute event" */
+export function extractDurationMinutes(utterance: string): number | undefined {
+  const minDur = utterance.match(/\b(\d+)\s*(?:minute|min)s?\s+duration\b/i);
+  if (minDur) return parseInt(minDur[1], 10);
+  const andMin = utterance.match(/\band\s+(\d+)\s*(?:minute|min)s?\s+duration\b/i);
+  if (andMin) return parseInt(andMin[1], 10);
+  const hourDur = utterance.match(/\b(\d+(?:\.\d+)?)\s*hours?\s+duration\b/i);
+  if (hourDur) return Math.round(parseFloat(hourDur[1]) * 60);
+  return undefined;
+}
+
 /** Parse "tomorrow at 8 AM" style phrases into ISO start/end (1h default duration) */
 export function parseStartEndFromUtterance(
   utterance: string,
   ref = new Date(),
+  durationMinutes = 60,
 ): { start: string; end: string } | null {
   const lower = utterance.toLowerCase();
   let base = startOfDay(ref);
@@ -209,20 +237,15 @@ export function parseStartEndFromUtterance(
     base = startOfDay(addDays(ref, 1));
   } else if (lower.includes('today')) {
     base = startOfDay(ref);
-  } else if (!lower.includes('tomorrow') && !lower.includes('today')) {
-    const startRe = /\bstarting(?:\s+at)?\s+(\d{1,2})(?::(\d{2}))?\s*(am|pm)?/i;
-    if (startRe.test(utterance)) {
-      base = startOfDay(ref);
-    } else {
-      return null;
-    }
+  } else {
+    base = startOfDay(ref);
   }
 
   const tm = utterance.match(TIME_RE);
   if (!tm) return null;
 
   const start = parseClockMatch(tm, base);
-  const end = addMinutes(start, 60);
+  const end = addMinutes(start, durationMinutes);
 
   return { start: formatISO(start), end: formatISO(end) };
 }
@@ -243,12 +266,15 @@ export function enrichCreateParams(
   const out = { ...params };
   out.title = sanitizeTitle(out.title as string | undefined)
     ?? sanitizeTitle(extractTitle(utterance));
+  const durationMinutes = extractDurationMinutes(utterance);
   if (!out.start || !out.end) {
-    const range = parseStartEndFromUtterance(utterance);
+    const range = parseStartEndFromUtterance(utterance, new Date(), durationMinutes ?? 60);
     if (range) {
       if (!out.start) out.start = range.start;
       if (!out.end) out.end = range.end;
     }
+  } else if (durationMinutes && out.start) {
+    out.end = formatISO(addMinutes(new Date(out.start as string), durationMinutes));
   }
   const emails = extractEmails(utterance);
   if (emails.length && (/\b(invite|with|add|include|guest|attendee)\b/i.test(utterance) || isInviteUtterance(utterance))) {

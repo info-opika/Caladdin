@@ -2,10 +2,12 @@ import { ParsedIntent, ParsedIntentSchema } from './adts.js';
 import type { ConversationContext } from '../db/conversation-context.js';
 import {
   enrichModifyParams,
+  enrichCreateParams,
   extractEmails,
   isInviteUtterance,
   isReferentialUtterance,
   isRenameUtterance,
+  isCreateEventUtterance,
 } from './param-extract.js';
 
 /** Merge session memory into parsed intent for follow-up commands. */
@@ -13,10 +15,21 @@ export function applyConversationContext(
   parsed: ParsedIntent,
   context: ConversationContext | null,
 ): ParsedIntent {
+  const utterance = parsed.rawUtterance;
+
+  if (isCreateEventUtterance(utterance)) {
+    return ParsedIntentSchema.parse({
+      ...parsed,
+      intent: 'CREATE_EVENT',
+      confidence: Math.max(parsed.confidence, 0.85),
+      params: enrichCreateParams(parsed.params, utterance),
+      mappingMethod: parsed.intent === 'CREATE_EVENT' ? parsed.mappingMethod : 'fuzzy',
+    });
+  }
+
   if (!context?.lastEvent) return parsed;
 
   const params = { ...parsed.params };
-  const utterance = parsed.rawUtterance;
   const referential = isReferentialUtterance(utterance);
 
   if (isInviteUtterance(utterance)) {

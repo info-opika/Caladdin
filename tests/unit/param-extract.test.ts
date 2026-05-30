@@ -11,6 +11,7 @@ import {
   isRenameUtterance,
   isDeleteUtterance,
   isInviteUtterance,
+  isCreateEventUtterance,
   prepareParsedForExecution,
 } from '../../src/core/param-extract.js';
 
@@ -63,8 +64,23 @@ describe('param-extract', () => {
     const utterance = "Create an event tomorrow 7 AM and name it as 'Caladdin Invite Test' and invite a@b.com. Add an event description that the event is a test to see if the script is running properly";
     const p = enrichCreateParams({}, utterance);
     expect(p.title).toBe('Caladdin Invite Test');
-    expect(p.description).toBe('the event is a test to see if the script is running properly');
+    expect(p.description).toBe('that the event is a test to see if the script is running properly');
     expect(p.participants).toContain('a@b.com');
+  });
+
+  it('parses create event with duration and description with apostrophe', () => {
+    const utterance = "Create a new event for 5 AM Central and 12 minutes duration. Invite kanthatbww@gmail.com and aniketde9@gmail.com and add an event description 'This is a test to see if it's able to add descriptions'";
+    expect(isCreateEventUtterance(utterance)).toBe(true);
+    const p = enrichCreateParams({}, utterance);
+    expect(p.title).toBeUndefined();
+    expect(p.description).toBe("This is a test to see if it's able to add descriptions");
+    expect(p.participants).toEqual(expect.arrayContaining(['kanthatbww@gmail.com', 'aniketde9@gmail.com']));
+    expect(p.start).toBeTruthy();
+    expect(p.end).toBeTruthy();
+    const start = new Date(p.start as string);
+    const end = new Date(p.end as string);
+    expect(start.getHours()).toBe(5);
+    expect((end.getTime() - start.getTime()) / 60000).toBe(12);
   });
 
   it('parses starting/ending time corrections', () => {
