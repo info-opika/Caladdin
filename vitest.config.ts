@@ -9,6 +9,8 @@ export default defineConfig({
       'tests/jobs/**/*.test.ts',
       'tests/security/**/*.test.ts',
       'tests/unit/{adts,conversation-context,gcal-time,notifications,param-extract,parser,safety}.test.ts',
+      'tests/unit/speech-input.test.ts',
+      'tests/unit/voice-ui-stt.test.ts',
       'tests/integration/orchestrator.test.ts',
       'tests/system/ten-user-sim.test.ts',
     ],

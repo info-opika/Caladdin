@@ -102,14 +102,65 @@ header {
 .chat-form {
   display: flex;
   gap: 0.5rem;
+  align-items: stretch;
 }
 
 .chat-form input {
   flex: 1;
+  min-width: 0;
   padding: 0.75rem;
   border: 1px solid #e7e5e4;
   border-radius: 10px;
   font-size: 1rem;
+}
+
+.chat-form .btn.primary {
+  width: auto;
+  margin-top: 0;
+  flex-shrink: 0;
+  padding-left: 1rem;
+  padding-right: 1rem;
+}
+
+.mic-btn {
+  flex-shrink: 0;
+  width: 2.75rem;
+  height: auto;
+  min-height: 2.75rem;
+  padding: 0;
+  margin-top: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--stone);
+}
+
+.mic-btn.is-listening {
+  color: #b45309;
+  border-color: #fcd34d;
+  background: #fffbeb;
+  animation: mic-pulse 1.2s ease-in-out infinite;
+}
+
+.mic-icon {
+  display: block;
+}
+
+.voice-hint {
+  margin: 0.5rem 0 0;
+  font-size: 0.85rem;
+  color: var(--stone);
+  text-align: center;
+}
+
+#chat.is-listening .chat-form input {
+  border-color: #fcd34d;
+  background: #fffbeb;
+}
+
+@keyframes mic-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(217, 119, 6, 0.25); }
+  50% { box-shadow: 0 0 0 4px rgba(217, 119, 6, 0.12); }
 }
 
 .confirm-card {
