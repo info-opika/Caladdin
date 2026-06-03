@@ -12,8 +12,17 @@
     <section id="landing" class="screen">
       <h1>Talk to your calendar like you talk to a smart friend.</h1>
       <p class="subtitle">Caladdin protects your time and makes scheduling effortless.</p>
-      <a href="/auth/start" class="btn primary">Sign in with Google</a>
+      <a href="/auth/start" class="btn primary" id="signup-btn">Sign in with Google</a>
       <p class="hint">We recommend using a test Google account for your first try.</p>
+      <div id="waitlist-panel" class="hidden">
+        <h2>Pilot full</h2>
+        <p>The Caladdin pilot is at capacity. Join the waitlist and we will notify you when a spot opens.</p>
+        <form id="waitlist-form">
+          <input type="email" id="waitlist-email" placeholder="your@email.com" required />
+          <button type="submit" class="btn primary">Join waitlist</button>
+        </form>
+        <p id="waitlist-msg" class="hint"></p>
+      </div>
     </section>
 
     <section id="onboarding" class="screen hidden">

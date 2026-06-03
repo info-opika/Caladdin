@@ -11,6 +11,7 @@ import { getOAuthClientForUser } from '../services/auth_service.js';
 import { approvePendingConfirmation, rejectPendingConfirmation } from '../core/confirmation-actions.js';
 import { getConversationContext } from '../db/conversation-context.js';
 import { applyConversationContext } from '../core/conversation-context.js';
+import { handleEmailConfirmationGate } from '../core/email-confirmation.js';
 
 export const voiceRouter = Router();
 
@@ -60,6 +61,19 @@ voiceRouter.post('/', requireSession, async (req: Request, res: Response) => {
     }
 
     parsed = applyConversationContext(parsed, conversationContext);
+
+    const emailGate = await handleEmailConfirmationGate(
+      parsed,
+      userId,
+      conversationContext,
+      req.body.source === 'text' ? 'text' : 'voice',
+    );
+    if (!emailGate.proceed) {
+      res.setHeader('x-request-id', requestId);
+      res.json(emailGate.result);
+      return;
+    }
+    parsed = emailGate.parsed;
 
     const oauthClient = await getOAuthClientForUser(userId);
     const result = await orchestrate(parsed, {

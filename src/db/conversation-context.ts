@@ -18,6 +18,14 @@ export interface ConversationContext {
 }
 
 const FRAME_TYPE = 'conversation';
+const EMAIL_FRAME_TYPE = 'email_confirmation';
+
+export interface PendingEmailConfirmation {
+  email: string;
+  originalIntent: string;
+  originalParams: Record<string, unknown>;
+  originalUtterance?: string;
+}
 
 function frameToContext(frame: Record<string, unknown>): ConversationContext | null {
   if (frame.type !== FRAME_TYPE) return null;
@@ -109,4 +117,73 @@ export async function recordLastEvent(
     lastIntent,
     lastUtterance,
   });
+}
+
+export async function getPendingEmailConfirmation(userId: string): Promise<PendingEmailConfirmation | null> {
+  await expireConversationContexts();
+  const { data, error } = await getSupabase()
+    .from('pending_clarification_frames')
+    .select('frame, expires_at')
+    .eq('user_id', userId)
+    .gt('expires_at', new Date().toISOString())
+    .order('created_at', { ascending: false });
+
+  if (error) throw error;
+  for (const row of data ?? []) {
+    const frame = row.frame as Record<string, unknown>;
+    if (frame.type === EMAIL_FRAME_TYPE) {
+      return {
+        email: frame.email as string,
+        originalIntent: frame.originalIntent as string,
+        originalParams: (frame.originalParams as Record<string, unknown>) ?? {},
+        originalUtterance: frame.originalUtterance as string | undefined,
+      };
+    }
+  }
+  return null;
+}
+
+export async function savePendingEmailConfirmation(
+  userId: string,
+  pending: PendingEmailConfirmation,
+): Promise<void> {
+  await clearPendingEmailConfirmation(userId);
+  const expiresAt = new Date(Date.now() + config.conversationSessionMinutes * 60 * 1000).toISOString();
+  const frame = {
+    type: EMAIL_FRAME_TYPE,
+    ...pending,
+  };
+  const { error } = await getSupabase().from('pending_clarification_frames').insert({
+    user_id: userId,
+    frame,
+    expires_at: expiresAt,
+  });
+  if (error) throw error;
+}
+
+export async function clearPendingEmailConfirmation(userId: string): Promise<void> {
+  const { data, error } = await getSupabase()
+    .from('pending_clarification_frames')
+    .select('id, frame')
+    .eq('user_id', userId);
+  if (error) throw error;
+  for (const row of data ?? []) {
+    if ((row.frame as { type?: string }).type === EMAIL_FRAME_TYPE) {
+      await getSupabase().from('pending_clarification_frames').delete().eq('id', row.id);
+    }
+  }
+}
+
+export async function savePendingClarification(
+  userId: string,
+  data: { pendingIntent: string; knownFields: Record<string, unknown>; question: string },
+): Promise<void> {
+  const expiresAt = new Date(Date.now() + config.conversationSessionMinutes * 60 * 1000).toISOString();
+  const frame = { type: 'clarification', ...data };
+  const { error } = await getSupabase().from('pending_clarification_frames').insert({
+    user_id: userId,
+    frame,
+    expires_at: expiresAt,
+  });
+  if (error) throw error;
 }

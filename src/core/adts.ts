@@ -11,6 +11,7 @@ export const IntentEnum = z.enum([
   'GATEKEEP_RULE',
   'QUERY_CALENDAR',
   'UNDO',
+  'INVITE_PLATFORM',
   'RESOLVE_MANUAL',
   'WARM_REDIRECT',
 ]);
@@ -30,8 +31,18 @@ export const ProtectedBlockSchema = z.object({
   endTime: z.string(),
 });
 
+export const FaxEffectConfigSchema = z.object({
+  targetSlotsPerOffer: z.number().int().default(2),
+  minBufferMinutes: z.number().int().default(15),
+  clusteringWeight: z.number().default(0.35),
+  energyWeight: z.number().default(0.45),
+  fragmentPenaltyWeight: z.number().default(0.15),
+  protectDeepWorkBlocks: z.boolean().default(true),
+});
+
 export const UserPolicyProfileSchema = z.object({
   schemaVersion: z.number().int().default(1),
+  userId: z.string().uuid().optional(),
   protectedBlocks: z.array(ProtectedBlockSchema).default([]),
   shapeRules: z.record(z.unknown()).default({}),
   gatekeepRules: z.array(z.object({
@@ -41,9 +52,28 @@ export const UserPolicyProfileSchema = z.object({
   timezone: z.string().default('America/Chicago'),
   workingHoursStart: z.string().default('09:00'),
   workingHoursEnd: z.string().default('18:00'),
+  chronotype: z.enum(['morning', 'evening', 'flexible']).default('morning'),
+  defaultBufferMinutes: z.number().int().default(15),
+  clusteringPreference: z.string().default('balanced'),
+  maxFragmentsPerDay: z.number().int().default(4),
+  faxEffectConfig: FaxEffectConfigSchema.optional(),
+  contactTiers: z.record(z.number()).default({}),
+  shareAvailabilityOnInvite: z.boolean().default(true),
 });
 
 export type UserPolicyProfile = z.infer<typeof UserPolicyProfileSchema>;
+
+export const CandidateSlotSchema = z.object({
+  start: z.string(),
+  end: z.string(),
+  adjacentEventCount: z.number().int().default(0),
+  energyScore: z.number().default(0.5),
+  createsFragment: z.boolean().default(false),
+  score: z.number().optional(),
+  label: z.string().optional(),
+});
+
+export type CandidateSlot = z.infer<typeof CandidateSlotSchema>;
 
 export function migratePolicy(raw: unknown): UserPolicyProfile {
   const obj = typeof raw === 'object' && raw !== null ? { ...(raw as Record<string, unknown>) } : {};
@@ -56,6 +86,22 @@ export function migratePolicy(raw: unknown): UserPolicyProfile {
   if (!obj.timezone) obj.timezone = 'America/Chicago';
   if (!obj.workingHoursStart) obj.workingHoursStart = '09:00';
   if (!obj.workingHoursEnd) obj.workingHoursEnd = '18:00';
+  if (!obj.chronotype) obj.chronotype = 'morning';
+  if (!obj.defaultBufferMinutes) obj.defaultBufferMinutes = 15;
+  if (!obj.clusteringPreference) obj.clusteringPreference = 'balanced';
+  if (!obj.maxFragmentsPerDay) obj.maxFragmentsPerDay = 4;
+  if (!obj.contactTiers) obj.contactTiers = {};
+  if (obj.shareAvailabilityOnInvite === undefined) obj.shareAvailabilityOnInvite = true;
+  if (!obj.faxEffectConfig) {
+    obj.faxEffectConfig = {
+      targetSlotsPerOffer: 2,
+      minBufferMinutes: 15,
+      clusteringWeight: 0.35,
+      energyWeight: 0.45,
+      fragmentPenaltyWeight: 0.15,
+      protectDeepWorkBlocks: true,
+    };
+  }
   return UserPolicyProfileSchema.parse(obj);
 }
 
@@ -123,7 +169,7 @@ export const CLASSIFY_INTENT_TOOL = {
         enum: [
           'PROTECT_BLOCK', 'OFFER_SPECIFIC', 'CREATE_EVENT', 'FLUSH_RANGE',
           'MODIFY_EVENT', 'PIVOT_ASYNC', 'SHAPE_RULES', 'GATEKEEP_RULE',
-          'QUERY_CALENDAR', 'UNDO', 'RESOLVE_MANUAL',
+          'QUERY_CALENDAR', 'UNDO', 'INVITE_PLATFORM', 'RESOLVE_MANUAL',
         ],
       },
       confidence: { type: 'number', minimum: 0, maximum: 1 },
@@ -144,6 +190,11 @@ export const CLASSIFY_INTENT_TOOL = {
           addInvitees: { type: 'array', items: { type: 'string' }, description: 'Emails to invite to an existing event' },
           rangeStart: { type: 'string', description: 'Query/cancel window start ISO' },
           rangeEnd: { type: 'string', description: 'Query/cancel window end ISO' },
+          recipientName: { type: 'string', description: 'Name of person to meet for OFFER_SPECIFIC' },
+          recipientEmail: { type: 'string', description: 'Email of invitee for OFFER_SPECIFIC' },
+          inviteeEmail: { type: 'string', description: 'Email for INVITE_PLATFORM' },
+          email: { type: 'string', description: 'Email alias for invites' },
+          label: { type: 'string', description: 'Label for PROTECT_BLOCK' },
         },
       },
       mappingMethod: {
@@ -196,7 +247,7 @@ export interface FailureLogEntry {
 
 export const MUTATION_INTENTS: Intent[] = [
   'PROTECT_BLOCK', 'OFFER_SPECIFIC', 'CREATE_EVENT', 'FLUSH_RANGE',
-  'MODIFY_EVENT', 'PIVOT_ASYNC', 'SHAPE_RULES', 'GATEKEEP_RULE', 'UNDO',
+  'MODIFY_EVENT', 'PIVOT_ASYNC', 'SHAPE_RULES', 'GATEKEEP_RULE', 'UNDO', 'INVITE_PLATFORM',
 ];
 
 export const READ_INTENTS: Intent[] = ['QUERY_CALENDAR'];

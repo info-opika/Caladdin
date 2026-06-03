@@ -1,0 +1,5 @@
+exit_code=0
+test_files=29 passed (29)
+tests=236 passed (236)
+duration=~22s
+note=Coordinator re-ran after narrowing vitest.config and fixing auth-oauth + slot-scoring tests

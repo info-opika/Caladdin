@@ -61,3 +61,10 @@ export async function notifyBuild(message: string): Promise<boolean> {
     return false;
   }
 }
+
+export async function sendHostBookingNotification(hostUserId: string, sessionToken: string): Promise<boolean> {
+  return sendNtfy(
+    'Caladdin - Meeting booked',
+    `Someone picked a time from your scheduling link (${sessionToken.slice(0, 8)}…).`,
+  );
+}

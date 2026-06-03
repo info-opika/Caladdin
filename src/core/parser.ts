@@ -18,6 +18,7 @@ import { enrichCreateParams, enrichModifyParams, enrichFlushParams, hasActionabl
 const client = new Anthropic({ apiKey: config.anthropicApiKey || 'sk-placeholder' });
 
 const KEYWORD_INTENTS: Array<{ re: RegExp; intent: string; params?: Record<string, unknown> }> = [
+  { re: /\binvite .+ to (caladdin|the platform|this platform|the calendar)\b/i, intent: 'INVITE_PLATFORM' },
   { re: /\bwhat'?s on|calendar today|my calendar\b/i, intent: 'QUERY_CALENDAR' },
   { re: /\bam i free|free (on|at|thursday|friday|monday)\b/i, intent: 'QUERY_CALENDAR' },
   { re: /\bblock\b/i, intent: 'PROTECT_BLOCK' },
@@ -35,6 +36,10 @@ function enrichParamsForIntent(intent: string, params: Record<string, unknown>, 
   if (intent === 'CREATE_EVENT') return enrichCreateParams(params, utterance);
   if (intent === 'MODIFY_EVENT') return enrichModifyParams(params, utterance);
   if (intent === 'FLUSH_RANGE') return enrichFlushParams(params, utterance);
+  if (intent === 'INVITE_PLATFORM') {
+    const emails = utterance.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g);
+    if (emails?.[0]) return { ...params, inviteeEmail: emails[0].toLowerCase(), email: emails[0].toLowerCase() };
+  }
   return params;
 }
 

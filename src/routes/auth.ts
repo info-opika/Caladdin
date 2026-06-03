@@ -7,16 +7,46 @@ import {
   exchangeCodeForTokens,
   getGoogleUserInfo,
   persistTokensForUser,
+  getOAuthClientForUser,
 } from '../services/auth_service.js';
 import { upsertUser, ensureDefaultPolicy } from '../db/users.js';
 import { createSession, setSessionCookie, clearSessionCookie, destroySession, requireSession } from '../middleware/session.js';
 import { logger } from '../logger.js';
+import {
+  checkPilotCapacity,
+  isExistingPilotUser,
+  isKillSwitchActive,
+} from '../pilot/pilot_controls.js';
+import { importEventsFromGCal } from '../services/calendar_api.js';
+import { startOfWeek, addDays } from '../core/date-utils.js';
+import { recordUsageEvent } from '../db/usage_events.js';
+import { getPlatformInviteByToken, markPlatformInviteAccepted } from '../db/platform_invites.js';
 
 export const authRouter = Router();
 
-authRouter.get('/start', (_req: Request, res: Response) => {
-  const payload = randomBytes(16).toString('base64url');
-  const state = signOAuthState(payload);
+function buildOAuthState(extra?: Record<string, string>): string {
+  const payload = Buffer.from(JSON.stringify({
+    nonce: randomBytes(12).toString('base64url'),
+    ...extra,
+  })).toString('base64url');
+  return signOAuthState(payload);
+}
+
+function parseOAuthState(state: string): Record<string, string> {
+  const parts = state.split('.');
+  if (parts.length !== 2) return {};
+  try {
+    return JSON.parse(Buffer.from(parts[0], 'base64url').toString('utf8')) as Record<string, string>;
+  } catch {
+    return {};
+  }
+}
+
+authRouter.get('/start', (req: Request, res: Response) => {
+  const ref = req.query.ref as string | undefined;
+  const token = req.query.token as string | undefined;
+  const invite = req.query.invite as string | undefined;
+  const state = buildOAuthState({ ref: ref ?? '', token: token ?? '', invite: invite ?? '' });
   res.redirect(getAuthUrl(state));
 });
 
@@ -27,11 +57,43 @@ authRouter.get('/callback', async (req: Request, res: Response) => {
       res.status(400).send('Invalid OAuth state. Please try signing in again.');
       return;
     }
+
+    const stateMeta = parseOAuthState(state);
     const tokens = await exchangeCodeForTokens(code);
     const info = await getGoogleUserInfo(tokens.access_token);
+
+    const existing = await isExistingPilotUser(info.email);
+    if (!existing) {
+      if (isKillSwitchActive()) {
+        res.redirect('/?pilot=paused');
+        return;
+      }
+      const cap = await checkPilotCapacity();
+      if (!cap.allowed) {
+        res.redirect('/?pilot=full');
+        return;
+      }
+    }
+
     const user = await upsertUser({ email: info.email, display_name: info.name });
     await persistTokensForUser(user.id, tokens);
     await ensureDefaultPolicy(user.id);
+
+    const cal = await getOAuthClientForUser(user.id);
+    if (cal) {
+      const weekStart = startOfWeek(new Date());
+      const endOfNextWeek = addDays(weekStart, 14);
+      await importEventsFromGCal(cal, user.id, weekStart.toISOString(), endOfNextWeek.toISOString());
+    }
+
+    if (stateMeta.ref === 'scheduling' && stateMeta.token) {
+      await recordUsageEvent(user.id, 'post_accept_signup', { sessionToken: stateMeta.token });
+    }
+    if (stateMeta.invite) {
+      await markPlatformInviteAccepted(stateMeta.invite, user.id);
+      await recordUsageEvent(user.id, 'platform_invite_signup', { inviteToken: stateMeta.invite });
+    }
+
     const sessionToken = createSession(user.id, user.email);
     setSessionCookie(res, sessionToken);
     res.redirect('/?welcome=1');

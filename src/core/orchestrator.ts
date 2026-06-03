@@ -20,6 +20,7 @@ import { handleGatekeepRule } from '../handlers/gatekeep-rule.js';
 import { handlePivotAsync } from '../handlers/pivot-async.js';
 import { handleUndo } from '../handlers/undo.js';
 import { handleResolveManual } from '../handlers/resolve-manual.js';
+import { handleInvitePlatform } from '../handlers/invite-platform.js';
 
 type HandlerFn = (
   parsed: ParsedIntent,
@@ -39,6 +40,7 @@ const HANDLERS: Record<string, HandlerFn> = {
   PIVOT_ASYNC: handlePivotAsync,
   UNDO: handleUndo,
   RESOLVE_MANUAL: handleResolveManual,
+  INVITE_PLATFORM: handleInvitePlatform,
 };
 
 function pickHandler(parsed: ParsedIntent): HandlerFn {
@@ -116,7 +118,7 @@ export async function orchestrate(
       success: false,
       requiresConfirmation: true,
       confirmationToken: token,
-      messageToUser: `Confirm: ${parsed.rawUtterance.slice(0, 120)}. Use Approve below (phone notification is optional).`,
+      messageToUser: `This cannot be undone. Confirm: ${parsed.rawUtterance.slice(0, 120)}. Use Approve below (phone notification is optional).`,
       schemaVersion: 1,
     };
   }

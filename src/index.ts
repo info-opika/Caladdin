@@ -8,7 +8,9 @@ import { errorSanitizer, notFoundHandler } from './middleware/errorSanitizer.js'
 import { authRouter } from './routes/auth.js';
 import { voiceRouter } from './routes/voice.js';
 import { confirmRouter } from './routes/confirm.js';
-import { schedulingRouter } from './routes/scheduling.js';
+import { waitlistRouter } from './routes/waitlist.js';
+import { inviteRouter } from './routes/invite.js';
+import schedulePublicRoutes from './routes/schedule_public.js';
 import { apiRouter, feedbackRouter } from './routes/api.js';
 import { jobsRouter } from './routes/jobs.js';
 import { startCompensationWorker } from './jobs/compensation-worker.js';
@@ -25,10 +27,12 @@ app.get('/health', (_req, res) => {
   res.json({ status: 'ok', version: '1.0.0' });
 });
 
+app.use('/waitlist', waitlistRouter);
 app.use('/auth', authRouter);
 app.use('/voice', voiceRouter);
 app.use('/confirm', confirmRouter);
-app.use('/s', schedulingRouter);
+app.use(schedulePublicRoutes);
+app.use('/invite', inviteRouter);
 app.use('/api', apiRouter);
 app.use('/feedback', feedbackRouter);
 app.use('/jobs', jobsRouter);

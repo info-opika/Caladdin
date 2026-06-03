@@ -16,6 +16,15 @@ export function startOfDay(d: Date): Date {
   return r;
 }
 
+/** Start of ISO week (Monday) in local time */
+export function startOfWeek(d: Date): Date {
+  const r = startOfDay(d);
+  const day = r.getDay();
+  const diff = day === 0 ? -6 : 1 - day;
+  r.setDate(r.getDate() + diff);
+  return r;
+}
+
 export function setHours(d: Date, h: number): Date {
   const r = new Date(d);
   r.setHours(h);

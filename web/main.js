@@ -254,6 +254,11 @@ function toggleSpeechInput() {
 
 async function init() {
   setupVoiceUi();
+  await refreshPilotStatus();
+  const params = new URLSearchParams(window.location.search);
+  if (params.get('pilot') === 'full') {
+    showWaitlistPanel();
+  }
   const { res } = await api('/auth/me');
   if (res.ok) {
     const onboarded = localStorage.getItem('caladdin_onboarded');
@@ -267,6 +272,38 @@ async function init() {
     show(landing);
   }
 }
+
+async function refreshPilotStatus() {
+  try {
+    const { res, data } = await api('/waitlist/status');
+    if (res.ok && data && !data.pilotOpen) {
+      showWaitlistPanel();
+    }
+  } catch {
+    // ignore
+  }
+}
+
+function showWaitlistPanel() {
+  document.getElementById('waitlist-panel')?.classList.remove('hidden');
+  document.getElementById('signup-btn')?.classList.add('hidden');
+}
+
+document.getElementById('waitlist-form')?.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const email = document.getElementById('waitlist-email')?.value?.trim();
+  if (!email) return;
+  const { res, data } = await api('/waitlist', {
+    method: 'POST',
+    body: JSON.stringify({ email }),
+  });
+  const msg = document.getElementById('waitlist-msg');
+  if (res.ok) {
+    if (msg) msg.textContent = "You're on the waitlist. We'll email you when a spot opens.";
+  } else if (msg) {
+    msg.textContent = data?.error ?? 'Could not join waitlist.';
+  }
+});
 
 document.getElementById('finish-onboarding')?.addEventListener('click', async () => {
   localStorage.setItem('caladdin_onboarded', '1');

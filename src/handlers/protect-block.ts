@@ -1,7 +1,8 @@
 import { ParsedIntent, IntentResult, OrchestratorContext } from '../core/adts.js';
-import { ensureDefaultPolicy, getPolicy, upsertPolicy } from '../db/users.js';
+import { ensureDefaultPolicy, upsertPolicy } from '../db/users.js';
 import { createEventWithSync } from '../services/calendar_api.js';
 import { calendar_v3 } from 'googleapis';
+import { savePendingClarification } from '../db/conversation-context.js';
 
 export async function handleProtectBlock(
   parsed: ParsedIntent,
@@ -10,9 +11,34 @@ export async function handleProtectBlock(
 ): Promise<IntentResult> {
   const policy = await ensureDefaultPolicy(ctx.userId);
   const label = (parsed.params.label as string) ?? 'Protected time';
-  const daysOfWeek = (parsed.params.daysOfWeek as number[]) ?? [2];
-  const startTime = (parsed.params.startTime as string) ?? '09:00';
-  const endTime = (parsed.params.endTime as string) ?? '12:00';
+  let daysOfWeek = (parsed.params.daysOfWeek as number[]) ?? [];
+  let startTime = (parsed.params.startTime as string) ?? '';
+  let endTime = (parsed.params.endTime as string) ?? '';
+
+  const vague =
+    !startTime ||
+    !endTime ||
+    (/\b(every|weekday|daily|lunch|morning|afternoon)\b/i.test(parsed.rawUtterance) && daysOfWeek.length === 0);
+
+  if (vague) {
+    await savePendingClarification(ctx.userId, {
+      pendingIntent: 'PROTECT_BLOCK',
+      knownFields: { label },
+      question: 'What time should I block, and which days? For example: weekdays 12pm to 1pm.',
+    });
+    return {
+      intent: 'PROTECT_BLOCK',
+      success: false,
+      requiresConfirmation: false,
+      messageToUser:
+        'I need a bit more detail. What time should I block, and which days? For example: "Block lunch every weekday from 12 to 1."',
+      schemaVersion: 1,
+    };
+  }
+
+  if (daysOfWeek.length === 0) daysOfWeek = [new Date().getDay()];
+  if (!startTime) startTime = '09:00';
+  if (!endTime) endTime = '12:00';
 
   const duplicate = policy.protectedBlocks.some(
     (b) => b.label === label &&
@@ -57,7 +83,7 @@ export async function handleProtectBlock(
     intent: 'PROTECT_BLOCK',
     success: true,
     requiresConfirmation: false,
-    messageToUser: `${label} is now protected on your calendar.`,
+    messageToUser: `${label} is now protected on your calendar and won't be offered for meetings.`,
     eventsAffected: 1,
     schemaVersion: 1,
   };

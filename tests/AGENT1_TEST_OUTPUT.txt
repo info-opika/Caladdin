@@ -1,0 +1,1039 @@
+=== npm test ===
+
+> caladdin@1.0.0 test
+> vitest run
+
+
+ RUN  v3.2.4 C:/Users/Aniket-Laptop/OneDrive/Documents/Caladdin
+
+ ✓ tests/unit/conversation-context.test.ts (1 test) 20ms
+ ✓ tests/contracts/intent-result-shape.test.ts (22 tests) 36ms
+ ✓ tests/unit/param-extract.test.ts (10 tests) 56ms
+ ✓ tests/unit/parser.test.ts (13 tests) 20ms
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > all 10 users complete without uncaught exceptions
+{"ts":"2026-05-29T20:48:35.553Z","level":"info","message":"Executing intent","intent":"PROTECT_BLOCK","requestId":"req-a1000001-0000-4000-8000-000000000001","utterance":"block 9 am to 10 am all weekdays for next four weeks. name the event 'Ten-user s","eventTitle":"Ten-user smoke block"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > all 10 users complete without uncaught exceptions
+{"ts":"2026-05-29T20:48:35.558Z","level":"info","message":"Executing intent","intent":"OFFER_SPECIFIC","requestId":"req-a1000001-0000-4000-8000-000000000001","utterance":"Find me 2 slots to meet with Alex next week"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > all 10 users complete without uncaught exceptions
+{"ts":"2026-05-29T20:48:35.562Z","level":"info","message":"Executing intent","intent":"MODIFY_EVENT","requestId":"req-a1000001-0000-4000-8000-000000000001","utterance":"Move my 3pm to tomorrow"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > all 10 users complete without uncaught exceptions
+{"ts":"2026-05-29T20:48:35.563Z","level":"info","message":"Executing intent","intent":"PIVOT_ASYNC","requestId":"req-a1000001-0000-4000-8000-000000000001","utterance":"Tell John I can't do a call, send him Loom instead"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > all 10 users complete without uncaught exceptions
+{"ts":"2026-05-29T20:48:35.564Z","level":"info","message":"Executing intent","intent":"SHAPE_RULES","requestId":"req-a1000001-0000-4000-8000-000000000001","utterance":"I don't want any meetings before 9am ever"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > all 10 users complete without uncaught exceptions
+{"ts":"2026-05-29T20:48:35.565Z","level":"info","message":"Executing intent","intent":"GATEKEEP_RULE","requestId":"req-a1000001-0000-4000-8000-000000000001","utterance":"Treat anything from sarah@enterprise.com as high priority"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > all 10 users complete without uncaught exceptions
+{"ts":"2026-05-29T20:48:35.566Z","level":"info","message":"Executing intent","intent":"RESOLVE_MANUAL","requestId":"req-a1000001-0000-4000-8000-000000000001","utterance":"My Thursday is a mess, help"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > all 10 users complete without uncaught exceptions
+{"ts":"2026-05-29T20:48:35.568Z","level":"info","message":"Executing intent","intent":"OFFER_SPECIFIC","requestId":"req-a1000001-0000-4000-8000-000000000001","utterance":"Book a haircut appointment"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > all 10 users complete without uncaught exceptions
+{"ts":"2026-05-29T20:48:35.569Z","level":"info","message":"Executing intent","intent":"PROTECT_BLOCK","requestId":"req-a1000002-0000-4000-8000-000000000002","utterance":"block 9 am to 10 am all weekdays for next four weeks. name the event 'Ten-user s","eventTitle":"Ten-user smoke block"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > all 10 users complete without uncaught exceptions
+{"ts":"2026-05-29T20:48:35.571Z","level":"info","message":"Executing intent","intent":"OFFER_SPECIFIC","requestId":"req-a1000002-0000-4000-8000-000000000002","utterance":"Find me 2 slots to meet with Alex next week"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > all 10 users complete without uncaught exceptions
+{"ts":"2026-05-29T20:48:35.573Z","level":"info","message":"Executing intent","intent":"MODIFY_EVENT","requestId":"req-a1000002-0000-4000-8000-000000000002","utterance":"Move my 3pm to tomorrow"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > all 10 users complete without uncaught exceptions
+{"ts":"2026-05-29T20:48:35.573Z","level":"info","message":"Executing intent","intent":"PIVOT_ASYNC","requestId":"req-a1000002-0000-4000-8000-000000000002","utterance":"Tell John I can't do a call, send him Loom instead"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > all 10 users complete without uncaught exceptions
+{"ts":"2026-05-29T20:48:35.574Z","level":"info","message":"Executing intent","intent":"SHAPE_RULES","requestId":"req-a1000002-0000-4000-8000-000000000002","utterance":"I don't want any meetings before 9am ever"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > all 10 users complete without uncaught exceptions
+{"ts":"2026-05-29T20:48:35.575Z","level":"info","message":"Executing intent","intent":"GATEKEEP_RULE","requestId":"req-a1000002-0000-4000-8000-000000000002","utterance":"Treat anything from sarah@enterprise.com as high priority"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > all 10 users complete without uncaught exceptions
+{"ts":"2026-05-29T20:48:35.576Z","level":"info","message":"Executing intent","intent":"RESOLVE_MANUAL","requestId":"req-a1000002-0000-4000-8000-000000000002","utterance":"My Thursday is a mess, help"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > all 10 users complete without uncaught exceptions
+{"ts":"2026-05-29T20:48:35.577Z","level":"info","message":"Executing intent","intent":"OFFER_SPECIFIC","requestId":"req-a1000002-0000-4000-8000-000000000002","utterance":"Book a haircut appointment"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > all 10 users complete without uncaught exceptions
+{"ts":"2026-05-29T20:48:35.577Z","level":"info","message":"Executing intent","intent":"PROTECT_BLOCK","requestId":"req-a1000003-0000-4000-8000-000000000003","utterance":"block 9 am to 10 am all weekdays for next four weeks. name the event 'Ten-user s","eventTitle":"Ten-user smoke block"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > all 10 users complete without uncaught exceptions
+{"ts":"2026-05-29T20:48:35.578Z","level":"info","message":"Executing intent","intent":"OFFER_SPECIFIC","requestId":"req-a1000003-0000-4000-8000-000000000003","utterance":"Find me 2 slots to meet with Alex next week"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > all 10 users complete without uncaught exceptions
+{"ts":"2026-05-29T20:48:35.579Z","level":"info","message":"Executing intent","intent":"MODIFY_EVENT","requestId":"req-a1000003-0000-4000-8000-000000000003","utterance":"Move my 3pm to tomorrow"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > all 10 users complete without uncaught exceptions
+{"ts":"2026-05-29T20:48:35.580Z","level":"info","message":"Executing intent","intent":"PIVOT_ASYNC","requestId":"req-a1000003-0000-4000-8000-000000000003","utterance":"Tell John I can't do a call, send him Loom instead"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > all 10 users complete without uncaught exceptions
+{"ts":"2026-05-29T20:48:35.580Z","level":"info","message":"Executing intent","intent":"SHAPE_RULES","requestId":"req-a1000003-0000-4000-8000-000000000003","utterance":"I don't want any meetings before 9am ever"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > all 10 users complete without uncaught exceptions
+{"ts":"2026-05-29T20:48:35.581Z","level":"info","message":"Executing intent","intent":"GATEKEEP_RULE","requestId":"req-a1000003-0000-4000-8000-000000000003","utterance":"Treat anything from sarah@enterprise.com as high priority"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > all 10 users complete without uncaught exceptions
+{"ts":"2026-05-29T20:48:35.582Z","level":"info","message":"Executing intent","intent":"RESOLVE_MANUAL","requestId":"req-a1000003-0000-4000-8000-000000000003","utterance":"My Thursday is a mess, help"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > all 10 users complete without uncaught exceptions
+{"ts":"2026-05-29T20:48:35.582Z","level":"info","message":"Executing intent","intent":"OFFER_SPECIFIC","requestId":"req-a1000003-0000-4000-8000-000000000003","utterance":"Book a haircut appointment"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > all 10 users complete without uncaught exceptions
+{"ts":"2026-05-29T20:48:35.583Z","level":"info","message":"Executing intent","intent":"PROTECT_BLOCK","requestId":"req-a1000004-0000-4000-8000-000000000004","utterance":"block 9 am to 10 am all weekdays for next four weeks. name the event 'Ten-user s","eventTitle":"Ten-user smoke block"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > all 10 users complete without uncaught exceptions
+{"ts":"2026-05-29T20:48:35.584Z","level":"info","message":"Executing intent","intent":"OFFER_SPECIFIC","requestId":"req-a1000004-0000-4000-8000-000000000004","utterance":"Find me 2 slots to meet with Alex next week"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > all 10 users complete without uncaught exceptions
+{"ts":"2026-05-29T20:48:35.584Z","level":"info","message":"Executing intent","intent":"MODIFY_EVENT","requestId":"req-a1000004-0000-4000-8000-000000000004","utterance":"Move my 3pm to tomorrow"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > all 10 users complete without uncaught exceptions
+{"ts":"2026-05-29T20:48:35.585Z","level":"info","message":"Executing intent","intent":"PIVOT_ASYNC","requestId":"req-a1000004-0000-4000-8000-000000000004","utterance":"Tell John I can't do a call, send him Loom instead"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > all 10 users complete without uncaught exceptions
+{"ts":"2026-05-29T20:48:35.585Z","level":"info","message":"Executing intent","intent":"SHAPE_RULES","requestId":"req-a1000004-0000-4000-8000-000000000004","utterance":"I don't want any meetings before 9am ever"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > all 10 users complete without uncaught exceptions
+{"ts":"2026-05-29T20:48:35.586Z","level":"info","message":"Executing intent","intent":"GATEKEEP_RULE","requestId":"req-a1000004-0000-4000-8000-000000000004","utterance":"Treat anything from sarah@enterprise.com as high priority"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > all 10 users complete without uncaught exceptions
+{"ts":"2026-05-29T20:48:35.587Z","level":"info","message":"Executing intent","intent":"RESOLVE_MANUAL","requestId":"req-a1000004-0000-4000-8000-000000000004","utterance":"My Thursday is a mess, help"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > all 10 users complete without uncaught exceptions
+{"ts":"2026-05-29T20:48:35.587Z","level":"info","message":"Executing intent","intent":"OFFER_SPECIFIC","requestId":"req-a1000004-0000-4000-8000-000000000004","utterance":"Book a haircut appointment"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > all 10 users complete without uncaught exceptions
+{"ts":"2026-05-29T20:48:35.588Z","level":"info","message":"Executing intent","intent":"PROTECT_BLOCK","requestId":"req-a1000005-0000-4000-8000-000000000005","utterance":"block 9 am to 10 am all weekdays for next four weeks. name the event 'Ten-user s","eventTitle":"Ten-user smoke block"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > all 10 users complete without uncaught exceptions
+{"ts":"2026-05-29T20:48:35.588Z","level":"info","message":"Executing intent","intent":"OFFER_SPECIFIC","requestId":"req-a1000005-0000-4000-8000-000000000005","utterance":"Find me 2 slots to meet with Alex next week"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > all 10 users complete without uncaught exceptions
+{"ts":"2026-05-29T20:48:35.589Z","level":"info","message":"Executing intent","intent":"MODIFY_EVENT","requestId":"req-a1000005-0000-4000-8000-000000000005","utterance":"Move my 3pm to tomorrow"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > all 10 users complete without uncaught exceptions
+{"ts":"2026-05-29T20:48:35.590Z","level":"info","message":"Executing intent","intent":"PIVOT_ASYNC","requestId":"req-a1000005-0000-4000-8000-000000000005","utterance":"Tell John I can't do a call, send him Loom instead"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > all 10 users complete without uncaught exceptions
+{"ts":"2026-05-29T20:48:35.590Z","level":"info","message":"Executing intent","intent":"SHAPE_RULES","requestId":"req-a1000005-0000-4000-8000-000000000005","utterance":"I don't want any meetings before 9am ever"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > all 10 users complete without uncaught exceptions
+{"ts":"2026-05-29T20:48:35.591Z","level":"info","message":"Executing intent","intent":"GATEKEEP_RULE","requestId":"req-a1000005-0000-4000-8000-000000000005","utterance":"Treat anything from sarah@enterprise.com as high priority"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > all 10 users complete without uncaught exceptions
+{"ts":"2026-05-29T20:48:35.592Z","level":"info","message":"Executing intent","intent":"RESOLVE_MANUAL","requestId":"req-a1000005-0000-4000-8000-000000000005","utterance":"My Thursday is a mess, help"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > all 10 users complete without uncaught exceptions
+{"ts":"2026-05-29T20:48:35.592Z","level":"info","message":"Executing intent","intent":"OFFER_SPECIFIC","requestId":"req-a1000005-0000-4000-8000-000000000005","utterance":"Book a haircut appointment"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > all 10 users complete without uncaught exceptions
+{"ts":"2026-05-29T20:48:35.593Z","level":"info","message":"Executing intent","intent":"PROTECT_BLOCK","requestId":"req-a1000006-0000-4000-8000-000000000006","utterance":"block 9 am to 10 am all weekdays for next four weeks. name the event 'Ten-user s","eventTitle":"Ten-user smoke block"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > all 10 users complete without uncaught exceptions
+{"ts":"2026-05-29T20:48:35.593Z","level":"info","message":"Executing intent","intent":"OFFER_SPECIFIC","requestId":"req-a1000006-0000-4000-8000-000000000006","utterance":"Find me 2 slots to meet with Alex next week"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > all 10 users complete without uncaught exceptions
+{"ts":"2026-05-29T20:48:35.594Z","level":"info","message":"Executing intent","intent":"MODIFY_EVENT","requestId":"req-a1000006-0000-4000-8000-000000000006","utterance":"Move my 3pm to tomorrow"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > all 10 users complete without uncaught exceptions
+{"ts":"2026-05-29T20:48:35.595Z","level":"info","message":"Executing intent","intent":"PIVOT_ASYNC","requestId":"req-a1000006-0000-4000-8000-000000000006","utterance":"Tell John I can't do a call, send him Loom instead"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > all 10 users complete without uncaught exceptions
+{"ts":"2026-05-29T20:48:35.595Z","level":"info","message":"Executing intent","intent":"SHAPE_RULES","requestId":"req-a1000006-0000-4000-8000-000000000006","utterance":"I don't want any meetings before 9am ever"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > all 10 users complete without uncaught exceptions
+{"ts":"2026-05-29T20:48:35.596Z","level":"info","message":"Executing intent","intent":"GATEKEEP_RULE","requestId":"req-a1000006-0000-4000-8000-000000000006","utterance":"Treat anything from sarah@enterprise.com as high priority"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > all 10 users complete without uncaught exceptions
+{"ts":"2026-05-29T20:48:35.596Z","level":"info","message":"Executing intent","intent":"RESOLVE_MANUAL","requestId":"req-a1000006-0000-4000-8000-000000000006","utterance":"My Thursday is a mess, help"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > all 10 users complete without uncaught exceptions
+{"ts":"2026-05-29T20:48:35.597Z","level":"info","message":"Executing intent","intent":"OFFER_SPECIFIC","requestId":"req-a1000006-0000-4000-8000-000000000006","utterance":"Book a haircut appointment"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > all 10 users complete without uncaught exceptions
+{"ts":"2026-05-29T20:48:35.597Z","level":"info","message":"Executing intent","intent":"PROTECT_BLOCK","requestId":"req-a1000007-0000-4000-8000-000000000007","utterance":"block 9 am to 10 am all weekdays for next four weeks. name the event 'Ten-user s","eventTitle":"Ten-user smoke block"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > all 10 users complete without uncaught exceptions
+{"ts":"2026-05-29T20:48:35.598Z","level":"info","message":"Executing intent","intent":"OFFER_SPECIFIC","requestId":"req-a1000007-0000-4000-8000-000000000007","utterance":"Find me 2 slots to meet with Alex next week"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > all 10 users complete without uncaught exceptions
+{"ts":"2026-05-29T20:48:35.599Z","level":"info","message":"Executing intent","intent":"MODIFY_EVENT","requestId":"req-a1000007-0000-4000-8000-000000000007","utterance":"Move my 3pm to tomorrow"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > all 10 users complete without uncaught exceptions
+{"ts":"2026-05-29T20:48:35.600Z","level":"info","message":"Executing intent","intent":"PIVOT_ASYNC","requestId":"req-a1000007-0000-4000-8000-000000000007","utterance":"Tell John I can't do a call, send him Loom instead"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > all 10 users complete without uncaught exceptions
+{"ts":"2026-05-29T20:48:35.600Z","level":"info","message":"Executing intent","intent":"SHAPE_RULES","requestId":"req-a1000007-0000-4000-8000-000000000007","utterance":"I don't want any meetings before 9am ever"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > all 10 users complete without uncaught exceptions
+{"ts":"2026-05-29T20:48:35.601Z","level":"info","message":"Executing intent","intent":"GATEKEEP_RULE","requestId":"req-a1000007-0000-4000-8000-000000000007","utterance":"Treat anything from sarah@enterprise.com as high priority"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > all 10 users complete without uncaught exceptions
+{"ts":"2026-05-29T20:48:35.601Z","level":"info","message":"Executing intent","intent":"RESOLVE_MANUAL","requestId":"req-a1000007-0000-4000-8000-000000000007","utterance":"My Thursday is a mess, help"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > all 10 users complete without uncaught exceptions
+{"ts":"2026-05-29T20:48:35.602Z","level":"info","message":"Executing intent","intent":"OFFER_SPECIFIC","requestId":"req-a1000007-0000-4000-8000-000000000007","utterance":"Book a haircut appointment"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > all 10 users complete without uncaught exceptions
+{"ts":"2026-05-29T20:48:35.603Z","level":"info","message":"Executing intent","intent":"PROTECT_BLOCK","requestId":"req-a1000008-0000-4000-8000-000000000008","utterance":"block 9 am to 10 am all weekdays for next four weeks. name the event 'Ten-user s","eventTitle":"Ten-user smoke block"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > all 10 users complete without uncaught exceptions
+{"ts":"2026-05-29T20:48:35.603Z","level":"info","message":"Executing intent","intent":"OFFER_SPECIFIC","requestId":"req-a1000008-0000-4000-8000-000000000008","utterance":"Find me 2 slots to meet with Alex next week"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > all 10 users complete without uncaught exceptions
+{"ts":"2026-05-29T20:48:35.604Z","level":"info","message":"Executing intent","intent":"MODIFY_EVENT","requestId":"req-a1000008-0000-4000-8000-000000000008","utterance":"Move my 3pm to tomorrow"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > all 10 users complete without uncaught exceptions
+{"ts":"2026-05-29T20:48:35.605Z","level":"info","message":"Executing intent","intent":"PIVOT_ASYNC","requestId":"req-a1000008-0000-4000-8000-000000000008","utterance":"Tell John I can't do a call, send him Loom instead"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > all 10 users complete without uncaught exceptions
+{"ts":"2026-05-29T20:48:35.605Z","level":"info","message":"Executing intent","intent":"SHAPE_RULES","requestId":"req-a1000008-0000-4000-8000-000000000008","utterance":"I don't want any meetings before 9am ever"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > all 10 users complete without uncaught exceptions
+{"ts":"2026-05-29T20:48:35.606Z","level":"info","message":"Executing intent","intent":"GATEKEEP_RULE","requestId":"req-a1000008-0000-4000-8000-000000000008","utterance":"Treat anything from sarah@enterprise.com as high priority"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > all 10 users complete without uncaught exceptions
+{"ts":"2026-05-29T20:48:35.606Z","level":"info","message":"Executing intent","intent":"RESOLVE_MANUAL","requestId":"req-a1000008-0000-4000-8000-000000000008","utterance":"My Thursday is a mess, help"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > all 10 users complete without uncaught exceptions
+{"ts":"2026-05-29T20:48:35.607Z","level":"info","message":"Executing intent","intent":"OFFER_SPECIFIC","requestId":"req-a1000008-0000-4000-8000-000000000008","utterance":"Book a haircut appointment"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > all 10 users complete without uncaught exceptions
+{"ts":"2026-05-29T20:48:35.608Z","level":"info","message":"Executing intent","intent":"PROTECT_BLOCK","requestId":"req-a1000009-0000-4000-8000-000000000009","utterance":"block 9 am to 10 am all weekdays for next four weeks. name the event 'Ten-user s","eventTitle":"Ten-user smoke block"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > all 10 users complete without uncaught exceptions
+{"ts":"2026-05-29T20:48:35.608Z","level":"info","message":"Executing intent","intent":"OFFER_SPECIFIC","requestId":"req-a1000009-0000-4000-8000-000000000009","utterance":"Find me 2 slots to meet with Alex next week"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > all 10 users complete without uncaught exceptions
+{"ts":"2026-05-29T20:48:35.609Z","level":"info","message":"Executing intent","intent":"MODIFY_EVENT","requestId":"req-a1000009-0000-4000-8000-000000000009","utterance":"Move my 3pm to tomorrow"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > all 10 users complete without uncaught exceptions
+{"ts":"2026-05-29T20:48:35.610Z","level":"info","message":"Executing intent","intent":"PIVOT_ASYNC","requestId":"req-a1000009-0000-4000-8000-000000000009","utterance":"Tell John I can't do a call, send him Loom instead"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > all 10 users complete without uncaught exceptions
+{"ts":"2026-05-29T20:48:35.610Z","level":"info","message":"Executing intent","intent":"SHAPE_RULES","requestId":"req-a1000009-0000-4000-8000-000000000009","utterance":"I don't want any meetings before 9am ever"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > all 10 users complete without uncaught exceptions
+{"ts":"2026-05-29T20:48:35.611Z","level":"info","message":"Executing intent","intent":"GATEKEEP_RULE","requestId":"req-a1000009-0000-4000-8000-000000000009","utterance":"Treat anything from sarah@enterprise.com as high priority"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > all 10 users complete without uncaught exceptions
+{"ts":"2026-05-29T20:48:35.611Z","level":"info","message":"Executing intent","intent":"RESOLVE_MANUAL","requestId":"req-a1000009-0000-4000-8000-000000000009","utterance":"My Thursday is a mess, help"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > all 10 users complete without uncaught exceptions
+{"ts":"2026-05-29T20:48:35.612Z","level":"info","message":"Executing intent","intent":"OFFER_SPECIFIC","requestId":"req-a1000009-0000-4000-8000-000000000009","utterance":"Book a haircut appointment"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > all 10 users complete without uncaught exceptions
+{"ts":"2026-05-29T20:48:35.612Z","level":"info","message":"Executing intent","intent":"PROTECT_BLOCK","requestId":"req-a1000010-0000-4000-8000-000000000010","utterance":"block 9 am to 10 am all weekdays for next four weeks. name the event 'Ten-user s","eventTitle":"Ten-user smoke block"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > all 10 users complete without uncaught exceptions
+{"ts":"2026-05-29T20:48:35.613Z","level":"info","message":"Executing intent","intent":"OFFER_SPECIFIC","requestId":"req-a1000010-0000-4000-8000-000000000010","utterance":"Find me 2 slots to meet with Alex next week"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > all 10 users complete without uncaught exceptions
+{"ts":"2026-05-29T20:48:35.613Z","level":"info","message":"Executing intent","intent":"MODIFY_EVENT","requestId":"req-a1000010-0000-4000-8000-000000000010","utterance":"Move my 3pm to tomorrow"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > all 10 users complete without uncaught exceptions
+{"ts":"2026-05-29T20:48:35.614Z","level":"info","message":"Executing intent","intent":"PIVOT_ASYNC","requestId":"req-a1000010-0000-4000-8000-000000000010","utterance":"Tell John I can't do a call, send him Loom instead"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > all 10 users complete without uncaught exceptions
+{"ts":"2026-05-29T20:48:35.614Z","level":"info","message":"Executing intent","intent":"SHAPE_RULES","requestId":"req-a1000010-0000-4000-8000-000000000010","utterance":"I don't want any meetings before 9am ever"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > all 10 users complete without uncaught exceptions
+{"ts":"2026-05-29T20:48:35.615Z","level":"info","message":"Executing intent","intent":"GATEKEEP_RULE","requestId":"req-a1000010-0000-4000-8000-000000000010","utterance":"Treat anything from sarah@enterprise.com as high priority"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > all 10 users complete without uncaught exceptions
+{"ts":"2026-05-29T20:48:35.615Z","level":"info","message":"Executing intent","intent":"RESOLVE_MANUAL","requestId":"req-a1000010-0000-4000-8000-000000000010","utterance":"My Thursday is a mess, help"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > all 10 users complete without uncaught exceptions
+{"ts":"2026-05-29T20:48:35.616Z","level":"info","message":"Executing intent","intent":"OFFER_SPECIFIC","requestId":"req-a1000010-0000-4000-8000-000000000010","utterance":"Book a haircut appointment"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > 90%+ utterances correctly classified (intent matches expected)
+{"ts":"2026-05-29T20:48:35.618Z","level":"info","message":"Executing intent","intent":"PROTECT_BLOCK","requestId":"req-a1000001-0000-4000-8000-000000000001","utterance":"block 9 am to 10 am all weekdays for next four weeks. name the event 'Ten-user s","eventTitle":"Ten-user smoke block"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > 90%+ utterances correctly classified (intent matches expected)
+{"ts":"2026-05-29T20:48:35.618Z","level":"info","message":"Executing intent","intent":"OFFER_SPECIFIC","requestId":"req-a1000001-0000-4000-8000-000000000001","utterance":"Find me 2 slots to meet with Alex next week"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > 90%+ utterances correctly classified (intent matches expected)
+{"ts":"2026-05-29T20:48:35.620Z","level":"info","message":"Executing intent","intent":"MODIFY_EVENT","requestId":"req-a1000001-0000-4000-8000-000000000001","utterance":"Move my 3pm to tomorrow"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > 90%+ utterances correctly classified (intent matches expected)
+{"ts":"2026-05-29T20:48:35.620Z","level":"info","message":"Executing intent","intent":"PIVOT_ASYNC","requestId":"req-a1000001-0000-4000-8000-000000000001","utterance":"Tell John I can't do a call, send him Loom instead"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > 90%+ utterances correctly classified (intent matches expected)
+{"ts":"2026-05-29T20:48:35.620Z","level":"info","message":"Executing intent","intent":"SHAPE_RULES","requestId":"req-a1000001-0000-4000-8000-000000000001","utterance":"I don't want any meetings before 9am ever"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > 90%+ utterances correctly classified (intent matches expected)
+{"ts":"2026-05-29T20:48:35.621Z","level":"info","message":"Executing intent","intent":"GATEKEEP_RULE","requestId":"req-a1000001-0000-4000-8000-000000000001","utterance":"Treat anything from sarah@enterprise.com as high priority"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > 90%+ utterances correctly classified (intent matches expected)
+{"ts":"2026-05-29T20:48:35.621Z","level":"info","message":"Executing intent","intent":"RESOLVE_MANUAL","requestId":"req-a1000001-0000-4000-8000-000000000001","utterance":"My Thursday is a mess, help"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > 90%+ utterances correctly classified (intent matches expected)
+{"ts":"2026-05-29T20:48:35.621Z","level":"info","message":"Executing intent","intent":"OFFER_SPECIFIC","requestId":"req-a1000001-0000-4000-8000-000000000001","utterance":"Book a haircut appointment"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > 90%+ utterances correctly classified (intent matches expected)
+{"ts":"2026-05-29T20:48:35.622Z","level":"info","message":"Executing intent","intent":"PROTECT_BLOCK","requestId":"req-a1000002-0000-4000-8000-000000000002","utterance":"block 9 am to 10 am all weekdays for next four weeks. name the event 'Ten-user s","eventTitle":"Ten-user smoke block"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > 90%+ utterances correctly classified (intent matches expected)
+{"ts":"2026-05-29T20:48:35.622Z","level":"info","message":"Executing intent","intent":"OFFER_SPECIFIC","requestId":"req-a1000002-0000-4000-8000-000000000002","utterance":"Find me 2 slots to meet with Alex next week"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > 90%+ utterances correctly classified (intent matches expected)
+{"ts":"2026-05-29T20:48:35.622Z","level":"info","message":"Executing intent","intent":"MODIFY_EVENT","requestId":"req-a1000002-0000-4000-8000-000000000002","utterance":"Move my 3pm to tomorrow"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > 90%+ utterances correctly classified (intent matches expected)
+{"ts":"2026-05-29T20:48:35.622Z","level":"info","message":"Executing intent","intent":"PIVOT_ASYNC","requestId":"req-a1000002-0000-4000-8000-000000000002","utterance":"Tell John I can't do a call, send him Loom instead"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > 90%+ utterances correctly classified (intent matches expected)
+{"ts":"2026-05-29T20:48:35.623Z","level":"info","message":"Executing intent","intent":"SHAPE_RULES","requestId":"req-a1000002-0000-4000-8000-000000000002","utterance":"I don't want any meetings before 9am ever"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > 90%+ utterances correctly classified (intent matches expected)
+{"ts":"2026-05-29T20:48:35.623Z","level":"info","message":"Executing intent","intent":"GATEKEEP_RULE","requestId":"req-a1000002-0000-4000-8000-000000000002","utterance":"Treat anything from sarah@enterprise.com as high priority"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > 90%+ utterances correctly classified (intent matches expected)
+{"ts":"2026-05-29T20:48:35.623Z","level":"info","message":"Executing intent","intent":"RESOLVE_MANUAL","requestId":"req-a1000002-0000-4000-8000-000000000002","utterance":"My Thursday is a mess, help"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > 90%+ utterances correctly classified (intent matches expected)
+{"ts":"2026-05-29T20:48:35.623Z","level":"info","message":"Executing intent","intent":"OFFER_SPECIFIC","requestId":"req-a1000002-0000-4000-8000-000000000002","utterance":"Book a haircut appointment"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > 90%+ utterances correctly classified (intent matches expected)
+{"ts":"2026-05-29T20:48:35.624Z","level":"info","message":"Executing intent","intent":"PROTECT_BLOCK","requestId":"req-a1000003-0000-4000-8000-000000000003","utterance":"block 9 am to 10 am all weekdays for next four weeks. name the event 'Ten-user s","eventTitle":"Ten-user smoke block"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > 90%+ utterances correctly classified (intent matches expected)
+{"ts":"2026-05-29T20:48:35.624Z","level":"info","message":"Executing intent","intent":"OFFER_SPECIFIC","requestId":"req-a1000003-0000-4000-8000-000000000003","utterance":"Find me 2 slots to meet with Alex next week"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > 90%+ utterances correctly classified (intent matches expected)
+{"ts":"2026-05-29T20:48:35.624Z","level":"info","message":"Executing intent","intent":"MODIFY_EVENT","requestId":"req-a1000003-0000-4000-8000-000000000003","utterance":"Move my 3pm to tomorrow"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > 90%+ utterances correctly classified (intent matches expected)
+{"ts":"2026-05-29T20:48:35.625Z","level":"info","message":"Executing intent","intent":"PIVOT_ASYNC","requestId":"req-a1000003-0000-4000-8000-000000000003","utterance":"Tell John I can't do a call, send him Loom instead"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > 90%+ utterances correctly classified (intent matches expected)
+{"ts":"2026-05-29T20:48:35.625Z","level":"info","message":"Executing intent","intent":"SHAPE_RULES","requestId":"req-a1000003-0000-4000-8000-000000000003","utterance":"I don't want any meetings before 9am ever"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > 90%+ utterances correctly classified (intent matches expected)
+{"ts":"2026-05-29T20:48:35.625Z","level":"info","message":"Executing intent","intent":"GATEKEEP_RULE","requestId":"req-a1000003-0000-4000-8000-000000000003","utterance":"Treat anything from sarah@enterprise.com as high priority"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > 90%+ utterances correctly classified (intent matches expected)
+{"ts":"2026-05-29T20:48:35.625Z","level":"info","message":"Executing intent","intent":"RESOLVE_MANUAL","requestId":"req-a1000003-0000-4000-8000-000000000003","utterance":"My Thursday is a mess, help"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > 90%+ utterances correctly classified (intent matches expected)
+{"ts":"2026-05-29T20:48:35.626Z","level":"info","message":"Executing intent","intent":"OFFER_SPECIFIC","requestId":"req-a1000003-0000-4000-8000-000000000003","utterance":"Book a haircut appointment"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > 90%+ utterances correctly classified (intent matches expected)
+{"ts":"2026-05-29T20:48:35.626Z","level":"info","message":"Executing intent","intent":"PROTECT_BLOCK","requestId":"req-a1000004-0000-4000-8000-000000000004","utterance":"block 9 am to 10 am all weekdays for next four weeks. name the event 'Ten-user s","eventTitle":"Ten-user smoke block"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > 90%+ utterances correctly classified (intent matches expected)
+{"ts":"2026-05-29T20:48:35.627Z","level":"info","message":"Executing intent","intent":"OFFER_SPECIFIC","requestId":"req-a1000004-0000-4000-8000-000000000004","utterance":"Find me 2 slots to meet with Alex next week"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > 90%+ utterances correctly classified (intent matches expected)
+{"ts":"2026-05-29T20:48:35.627Z","level":"info","message":"Executing intent","intent":"MODIFY_EVENT","requestId":"req-a1000004-0000-4000-8000-000000000004","utterance":"Move my 3pm to tomorrow"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > 90%+ utterances correctly classified (intent matches expected)
+{"ts":"2026-05-29T20:48:35.628Z","level":"info","message":"Executing intent","intent":"PIVOT_ASYNC","requestId":"req-a1000004-0000-4000-8000-000000000004","utterance":"Tell John I can't do a call, send him Loom instead"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > 90%+ utterances correctly classified (intent matches expected)
+{"ts":"2026-05-29T20:48:35.628Z","level":"info","message":"Executing intent","intent":"SHAPE_RULES","requestId":"req-a1000004-0000-4000-8000-000000000004","utterance":"I don't want any meetings before 9am ever"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > 90%+ utterances correctly classified (intent matches expected)
+{"ts":"2026-05-29T20:48:35.628Z","level":"info","message":"Executing intent","intent":"GATEKEEP_RULE","requestId":"req-a1000004-0000-4000-8000-000000000004","utterance":"Treat anything from sarah@enterprise.com as high priority"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > 90%+ utterances correctly classified (intent matches expected)
+{"ts":"2026-05-29T20:48:35.628Z","level":"info","message":"Executing intent","intent":"RESOLVE_MANUAL","requestId":"req-a1000004-0000-4000-8000-000000000004","utterance":"My Thursday is a mess, help"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > 90%+ utterances correctly classified (intent matches expected)
+{"ts":"2026-05-29T20:48:35.629Z","level":"info","message":"Executing intent","intent":"OFFER_SPECIFIC","requestId":"req-a1000004-0000-4000-8000-000000000004","utterance":"Book a haircut appointment"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > 90%+ utterances correctly classified (intent matches expected)
+{"ts":"2026-05-29T20:48:35.629Z","level":"info","message":"Executing intent","intent":"PROTECT_BLOCK","requestId":"req-a1000005-0000-4000-8000-000000000005","utterance":"block 9 am to 10 am all weekdays for next four weeks. name the event 'Ten-user s","eventTitle":"Ten-user smoke block"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > 90%+ utterances correctly classified (intent matches expected)
+{"ts":"2026-05-29T20:48:35.629Z","level":"info","message":"Executing intent","intent":"OFFER_SPECIFIC","requestId":"req-a1000005-0000-4000-8000-000000000005","utterance":"Find me 2 slots to meet with Alex next week"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > 90%+ utterances correctly classified (intent matches expected)
+{"ts":"2026-05-29T20:48:35.629Z","level":"info","message":"Executing intent","intent":"MODIFY_EVENT","requestId":"req-a1000005-0000-4000-8000-000000000005","utterance":"Move my 3pm to tomorrow"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > 90%+ utterances correctly classified (intent matches expected)
+{"ts":"2026-05-29T20:48:35.630Z","level":"info","message":"Executing intent","intent":"PIVOT_ASYNC","requestId":"req-a1000005-0000-4000-8000-000000000005","utterance":"Tell John I can't do a call, send him Loom instead"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > 90%+ utterances correctly classified (intent matches expected)
+{"ts":"2026-05-29T20:48:35.630Z","level":"info","message":"Executing intent","intent":"SHAPE_RULES","requestId":"req-a1000005-0000-4000-8000-000000000005","utterance":"I don't want any meetings before 9am ever"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > 90%+ utterances correctly classified (intent matches expected)
+{"ts":"2026-05-29T20:48:35.630Z","level":"info","message":"Executing intent","intent":"GATEKEEP_RULE","requestId":"req-a1000005-0000-4000-8000-000000000005","utterance":"Treat anything from sarah@enterprise.com as high priority"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > 90%+ utterances correctly classified (intent matches expected)
+{"ts":"2026-05-29T20:48:35.630Z","level":"info","message":"Executing intent","intent":"RESOLVE_MANUAL","requestId":"req-a1000005-0000-4000-8000-000000000005","utterance":"My Thursday is a mess, help"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > 90%+ utterances correctly classified (intent matches expected)
+{"ts":"2026-05-29T20:48:35.631Z","level":"info","message":"Executing intent","intent":"OFFER_SPECIFIC","requestId":"req-a1000005-0000-4000-8000-000000000005","utterance":"Book a haircut appointment"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > 90%+ utterances correctly classified (intent matches expected)
+{"ts":"2026-05-29T20:48:35.631Z","level":"info","message":"Executing intent","intent":"PROTECT_BLOCK","requestId":"req-a1000006-0000-4000-8000-000000000006","utterance":"block 9 am to 10 am all weekdays for next four weeks. name the event 'Ten-user s","eventTitle":"Ten-user smoke block"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > 90%+ utterances correctly classified (intent matches expected)
+{"ts":"2026-05-29T20:48:35.631Z","level":"info","message":"Executing intent","intent":"OFFER_SPECIFIC","requestId":"req-a1000006-0000-4000-8000-000000000006","utterance":"Find me 2 slots to meet with Alex next week"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > 90%+ utterances correctly classified (intent matches expected)
+{"ts":"2026-05-29T20:48:35.632Z","level":"info","message":"Executing intent","intent":"MODIFY_EVENT","requestId":"req-a1000006-0000-4000-8000-000000000006","utterance":"Move my 3pm to tomorrow"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > 90%+ utterances correctly classified (intent matches expected)
+{"ts":"2026-05-29T20:48:35.643Z","level":"info","message":"Executing intent","intent":"PIVOT_ASYNC","requestId":"req-a1000006-0000-4000-8000-000000000006","utterance":"Tell John I can't do a call, send him Loom instead"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > 90%+ utterances correctly classified (intent matches expected)
+{"ts":"2026-05-29T20:48:35.643Z","level":"info","message":"Executing intent","intent":"SHAPE_RULES","requestId":"req-a1000006-0000-4000-8000-000000000006","utterance":"I don't want any meetings before 9am ever"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > 90%+ utterances correctly classified (intent matches expected)
+{"ts":"2026-05-29T20:48:35.644Z","level":"info","message":"Executing intent","intent":"GATEKEEP_RULE","requestId":"req-a1000006-0000-4000-8000-000000000006","utterance":"Treat anything from sarah@enterprise.com as high priority"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > 90%+ utterances correctly classified (intent matches expected)
+{"ts":"2026-05-29T20:48:35.644Z","level":"info","message":"Executing intent","intent":"RESOLVE_MANUAL","requestId":"req-a1000006-0000-4000-8000-000000000006","utterance":"My Thursday is a mess, help"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > 90%+ utterances correctly classified (intent matches expected)
+{"ts":"2026-05-29T20:48:35.644Z","level":"info","message":"Executing intent","intent":"OFFER_SPECIFIC","requestId":"req-a1000006-0000-4000-8000-000000000006","utterance":"Book a haircut appointment"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > 90%+ utterances correctly classified (intent matches expected)
+{"ts":"2026-05-29T20:48:35.644Z","level":"info","message":"Executing intent","intent":"PROTECT_BLOCK","requestId":"req-a1000007-0000-4000-8000-000000000007","utterance":"block 9 am to 10 am all weekdays for next four weeks. name the event 'Ten-user s","eventTitle":"Ten-user smoke block"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > 90%+ utterances correctly classified (intent matches expected)
+{"ts":"2026-05-29T20:48:35.645Z","level":"info","message":"Executing intent","intent":"OFFER_SPECIFIC","requestId":"req-a1000007-0000-4000-8000-000000000007","utterance":"Find me 2 slots to meet with Alex next week"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > 90%+ utterances correctly classified (intent matches expected)
+{"ts":"2026-05-29T20:48:35.645Z","level":"info","message":"Executing intent","intent":"MODIFY_EVENT","requestId":"req-a1000007-0000-4000-8000-000000000007","utterance":"Move my 3pm to tomorrow"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > 90%+ utterances correctly classified (intent matches expected)
+{"ts":"2026-05-29T20:48:35.645Z","level":"info","message":"Executing intent","intent":"PIVOT_ASYNC","requestId":"req-a1000007-0000-4000-8000-000000000007","utterance":"Tell John I can't do a call, send him Loom instead"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > 90%+ utterances correctly classified (intent matches expected)
+{"ts":"2026-05-29T20:48:35.646Z","level":"info","message":"Executing intent","intent":"SHAPE_RULES","requestId":"req-a1000007-0000-4000-8000-000000000007","utterance":"I don't want any meetings before 9am ever"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > 90%+ utterances correctly classified (intent matches expected)
+{"ts":"2026-05-29T20:48:35.646Z","level":"info","message":"Executing intent","intent":"GATEKEEP_RULE","requestId":"req-a1000007-0000-4000-8000-000000000007","utterance":"Treat anything from sarah@enterprise.com as high priority"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > 90%+ utterances correctly classified (intent matches expected)
+{"ts":"2026-05-29T20:48:35.646Z","level":"info","message":"Executing intent","intent":"RESOLVE_MANUAL","requestId":"req-a1000007-0000-4000-8000-000000000007","utterance":"My Thursday is a mess, help"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > 90%+ utterances correctly classified (intent matches expected)
+{"ts":"2026-05-29T20:48:35.647Z","level":"info","message":"Executing intent","intent":"OFFER_SPECIFIC","requestId":"req-a1000007-0000-4000-8000-000000000007","utterance":"Book a haircut appointment"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > 90%+ utterances correctly classified (intent matches expected)
+{"ts":"2026-05-29T20:48:35.647Z","level":"info","message":"Executing intent","intent":"PROTECT_BLOCK","requestId":"req-a1000008-0000-4000-8000-000000000008","utterance":"block 9 am to 10 am all weekdays for next four weeks. name the event 'Ten-user s","eventTitle":"Ten-user smoke block"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > 90%+ utterances correctly classified (intent matches expected)
+{"ts":"2026-05-29T20:48:35.647Z","level":"info","message":"Executing intent","intent":"OFFER_SPECIFIC","requestId":"req-a1000008-0000-4000-8000-000000000008","utterance":"Find me 2 slots to meet with Alex next week"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > 90%+ utterances correctly classified (intent matches expected)
+{"ts":"2026-05-29T20:48:35.648Z","level":"info","message":"Executing intent","intent":"MODIFY_EVENT","requestId":"req-a1000008-0000-4000-8000-000000000008","utterance":"Move my 3pm to tomorrow"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > 90%+ utterances correctly classified (intent matches expected)
+{"ts":"2026-05-29T20:48:35.648Z","level":"info","message":"Executing intent","intent":"PIVOT_ASYNC","requestId":"req-a1000008-0000-4000-8000-000000000008","utterance":"Tell John I can't do a call, send him Loom instead"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > 90%+ utterances correctly classified (intent matches expected)
+{"ts":"2026-05-29T20:48:35.648Z","level":"info","message":"Executing intent","intent":"SHAPE_RULES","requestId":"req-a1000008-0000-4000-8000-000000000008","utterance":"I don't want any meetings before 9am ever"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > 90%+ utterances correctly classified (intent matches expected)
+{"ts":"2026-05-29T20:48:35.649Z","level":"info","message":"Executing intent","intent":"GATEKEEP_RULE","requestId":"req-a1000008-0000-4000-8000-000000000008","utterance":"Treat anything from sarah@enterprise.com as high priority"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > 90%+ utterances correctly classified (intent matches expected)
+{"ts":"2026-05-29T20:48:35.649Z","level":"info","message":"Executing intent","intent":"RESOLVE_MANUAL","requestId":"req-a1000008-0000-4000-8000-000000000008","utterance":"My Thursday is a mess, help"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > 90%+ utterances correctly classified (intent matches expected)
+{"ts":"2026-05-29T20:48:35.649Z","level":"info","message":"Executing intent","intent":"OFFER_SPECIFIC","requestId":"req-a1000008-0000-4000-8000-000000000008","utterance":"Book a haircut appointment"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > 90%+ utterances correctly classified (intent matches expected)
+{"ts":"2026-05-29T20:48:35.650Z","level":"info","message":"Executing intent","intent":"PROTECT_BLOCK","requestId":"req-a1000009-0000-4000-8000-000000000009","utterance":"block 9 am to 10 am all weekdays for next four weeks. name the event 'Ten-user s","eventTitle":"Ten-user smoke block"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > 90%+ utterances correctly classified (intent matches expected)
+{"ts":"2026-05-29T20:48:35.650Z","level":"info","message":"Executing intent","intent":"OFFER_SPECIFIC","requestId":"req-a1000009-0000-4000-8000-000000000009","utterance":"Find me 2 slots to meet with Alex next week"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > 90%+ utterances correctly classified (intent matches expected)
+{"ts":"2026-05-29T20:48:35.651Z","level":"info","message":"Executing intent","intent":"MODIFY_EVENT","requestId":"req-a1000009-0000-4000-8000-000000000009","utterance":"Move my 3pm to tomorrow"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > 90%+ utterances correctly classified (intent matches expected)
+{"ts":"2026-05-29T20:48:35.651Z","level":"info","message":"Executing intent","intent":"PIVOT_ASYNC","requestId":"req-a1000009-0000-4000-8000-000000000009","utterance":"Tell John I can't do a call, send him Loom instead"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > 90%+ utterances correctly classified (intent matches expected)
+{"ts":"2026-05-29T20:48:35.651Z","level":"info","message":"Executing intent","intent":"SHAPE_RULES","requestId":"req-a1000009-0000-4000-8000-000000000009","utterance":"I don't want any meetings before 9am ever"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > 90%+ utterances correctly classified (intent matches expected)
+{"ts":"2026-05-29T20:48:35.652Z","level":"info","message":"Executing intent","intent":"GATEKEEP_RULE","requestId":"req-a1000009-0000-4000-8000-000000000009","utterance":"Treat anything from sarah@enterprise.com as high priority"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > 90%+ utterances correctly classified (intent matches expected)
+{"ts":"2026-05-29T20:48:35.652Z","level":"info","message":"Executing intent","intent":"RESOLVE_MANUAL","requestId":"req-a1000009-0000-4000-8000-000000000009","utterance":"My Thursday is a mess, help"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > 90%+ utterances correctly classified (intent matches expected)
+{"ts":"2026-05-29T20:48:35.653Z","level":"info","message":"Executing intent","intent":"OFFER_SPECIFIC","requestId":"req-a1000009-0000-4000-8000-000000000009","utterance":"Book a haircut appointment"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > 90%+ utterances correctly classified (intent matches expected)
+{"ts":"2026-05-29T20:48:35.653Z","level":"info","message":"Executing intent","intent":"PROTECT_BLOCK","requestId":"req-a1000010-0000-4000-8000-000000000010","utterance":"block 9 am to 10 am all weekdays for next four weeks. name the event 'Ten-user s","eventTitle":"Ten-user smoke block"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > 90%+ utterances correctly classified (intent matches expected)
+{"ts":"2026-05-29T20:48:35.653Z","level":"info","message":"Executing intent","intent":"OFFER_SPECIFIC","requestId":"req-a1000010-0000-4000-8000-000000000010","utterance":"Find me 2 slots to meet with Alex next week"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > 90%+ utterances correctly classified (intent matches expected)
+{"ts":"2026-05-29T20:48:35.654Z","level":"info","message":"Executing intent","intent":"MODIFY_EVENT","requestId":"req-a1000010-0000-4000-8000-000000000010","utterance":"Move my 3pm to tomorrow"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > 90%+ utterances correctly classified (intent matches expected)
+{"ts":"2026-05-29T20:48:35.654Z","level":"info","message":"Executing intent","intent":"PIVOT_ASYNC","requestId":"req-a1000010-0000-4000-8000-000000000010","utterance":"Tell John I can't do a call, send him Loom instead"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > 90%+ utterances correctly classified (intent matches expected)
+{"ts":"2026-05-29T20:48:35.654Z","level":"info","message":"Executing intent","intent":"SHAPE_RULES","requestId":"req-a1000010-0000-4000-8000-000000000010","utterance":"I don't want any meetings before 9am ever"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > 90%+ utterances correctly classified (intent matches expected)
+{"ts":"2026-05-29T20:48:35.654Z","level":"info","message":"Executing intent","intent":"GATEKEEP_RULE","requestId":"req-a1000010-0000-4000-8000-000000000010","utterance":"Treat anything from sarah@enterprise.com as high priority"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > 90%+ utterances correctly classified (intent matches expected)
+{"ts":"2026-05-29T20:48:35.655Z","level":"info","message":"Executing intent","intent":"RESOLVE_MANUAL","requestId":"req-a1000010-0000-4000-8000-000000000010","utterance":"My Thursday is a mess, help"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > 90%+ utterances correctly classified (intent matches expected)
+{"ts":"2026-05-29T20:48:35.655Z","level":"info","message":"Executing intent","intent":"OFFER_SPECIFIC","requestId":"req-a1000010-0000-4000-8000-000000000010","utterance":"Book a haircut appointment"}
+
+ ✓ tests/system/ten-user-sim.test.ts (4 tests) 118ms
+ ✓ tests/unit/adts.test.ts (5 tests) 23ms
+ ✓ tests/unit/gcal-time.test.ts (2 tests) 9ms
+stdout | tests/integration/orchestrator.test.ts > Orchestrator > bounded PROTECT_BLOCK applies without blast confirmation
+{"ts":"2026-06-08T12:00:00.000Z","level":"info","message":"Executing intent","intent":"PROTECT_BLOCK","requestId":"test-req","utterance":"protect"}
+
+stdout | tests/integration/orchestrator.test.ts > Orchestrator > QUERY_CALENDAR > lists events from Google Calendar response
+{"ts":"2026-04-26T15:00:00.000Z","level":"info","message":"Executing intent","intent":"QUERY_CALENDAR","requestId":"test-req","utterance":"What's on my calendar today?"}
+
+stdout | tests/integration/orchestrator.test.ts > Orchestrator > QUERY_CALENDAR > returns clear-calendar message when no events found
+{"ts":"2026-04-26T15:00:00.000Z","level":"info","message":"Executing intent","intent":"QUERY_CALENDAR","requestId":"test-req","utterance":"q"}
+
+stdout | tests/integration/orchestrator.test.ts > Orchestrator > QUERY_CALENDAR > returns reconnect message when OAuth is missing
+{"ts":"2026-04-26T15:00:00.000Z","level":"info","message":"Executing intent","intent":"QUERY_CALENDAR","requestId":"test-req","utterance":"q"}
+
+stdout | tests/integration/orchestrator.test.ts > Orchestrator > QUERY_CALENDAR > returns graceful error when Google Calendar read fails
+{"ts":"2026-04-26T15:00:00.000Z","level":"info","message":"Executing intent","intent":"QUERY_CALENDAR","requestId":"test-req","utterance":"q"}
+
+ ✓ tests/integration/orchestrator.test.ts (6 tests) 96ms
+ ✓ tests/unit/safety.test.ts (9 tests) 14ms
+ ✓ tests/jobs/improvement-loop.test.ts (2 tests) 9ms
+ ✓ tests/unit/notifications.test.ts (2 tests) 7ms
+ ✓ tests/security/red-team.test.ts (4 tests) 86ms
+
+ Test Files  12 passed (12)
+      Tests  80 passed (80)
+   Start at  02:18:33
+   Duration  3.54s (transform 2.49s, setup 0ms, collect 7.96s, tests 494ms, environment 6ms, prepare 4.77s)
+
+ 
+=== npx vitest run --config vitest.config.ts ===
+
+ RUN  v3.2.4 C:/Users/Aniket-Laptop/OneDrive/Documents/Caladdin
+
+ ✓ tests/contracts/intent-result-shape.test.ts (22 tests) 37ms
+ ✓ tests/unit/adts.test.ts (5 tests) 18ms
+ ✓ tests/unit/param-extract.test.ts (10 tests) 35ms
+ ✓ tests/unit/parser.test.ts (13 tests) 20ms
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > all 10 users complete without uncaught exceptions
+{"ts":"2026-05-29T20:49:24.402Z","level":"info","message":"Executing intent","intent":"PROTECT_BLOCK","requestId":"req-a1000001-0000-4000-8000-000000000001","utterance":"block 9 am to 10 am all weekdays for next four weeks. name the event 'Ten-user s","eventTitle":"Ten-user smoke block"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > all 10 users complete without uncaught exceptions
+{"ts":"2026-05-29T20:49:24.407Z","level":"info","message":"Executing intent","intent":"OFFER_SPECIFIC","requestId":"req-a1000001-0000-4000-8000-000000000001","utterance":"Find me 2 slots to meet with Alex next week"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > all 10 users complete without uncaught exceptions
+{"ts":"2026-05-29T20:49:24.411Z","level":"info","message":"Executing intent","intent":"MODIFY_EVENT","requestId":"req-a1000001-0000-4000-8000-000000000001","utterance":"Move my 3pm to tomorrow"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > all 10 users complete without uncaught exceptions
+{"ts":"2026-05-29T20:49:24.412Z","level":"info","message":"Executing intent","intent":"PIVOT_ASYNC","requestId":"req-a1000001-0000-4000-8000-000000000001","utterance":"Tell John I can't do a call, send him Loom instead"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > all 10 users complete without uncaught exceptions
+{"ts":"2026-05-29T20:49:24.413Z","level":"info","message":"Executing intent","intent":"SHAPE_RULES","requestId":"req-a1000001-0000-4000-8000-000000000001","utterance":"I don't want any meetings before 9am ever"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > all 10 users complete without uncaught exceptions
+{"ts":"2026-05-29T20:49:24.414Z","level":"info","message":"Executing intent","intent":"GATEKEEP_RULE","requestId":"req-a1000001-0000-4000-8000-000000000001","utterance":"Treat anything from sarah@enterprise.com as high priority"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > all 10 users complete without uncaught exceptions
+{"ts":"2026-05-29T20:49:24.414Z","level":"info","message":"Executing intent","intent":"RESOLVE_MANUAL","requestId":"req-a1000001-0000-4000-8000-000000000001","utterance":"My Thursday is a mess, help"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > all 10 users complete without uncaught exceptions
+{"ts":"2026-05-29T20:49:24.416Z","level":"info","message":"Executing intent","intent":"OFFER_SPECIFIC","requestId":"req-a1000001-0000-4000-8000-000000000001","utterance":"Book a haircut appointment"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > all 10 users complete without uncaught exceptions
+{"ts":"2026-05-29T20:49:24.417Z","level":"info","message":"Executing intent","intent":"PROTECT_BLOCK","requestId":"req-a1000002-0000-4000-8000-000000000002","utterance":"block 9 am to 10 am all weekdays for next four weeks. name the event 'Ten-user s","eventTitle":"Ten-user smoke block"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > all 10 users complete without uncaught exceptions
+{"ts":"2026-05-29T20:49:24.418Z","level":"info","message":"Executing intent","intent":"OFFER_SPECIFIC","requestId":"req-a1000002-0000-4000-8000-000000000002","utterance":"Find me 2 slots to meet with Alex next week"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > all 10 users complete without uncaught exceptions
+{"ts":"2026-05-29T20:49:24.420Z","level":"info","message":"Executing intent","intent":"MODIFY_EVENT","requestId":"req-a1000002-0000-4000-8000-000000000002","utterance":"Move my 3pm to tomorrow"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > all 10 users complete without uncaught exceptions
+{"ts":"2026-05-29T20:49:24.420Z","level":"info","message":"Executing intent","intent":"PIVOT_ASYNC","requestId":"req-a1000002-0000-4000-8000-000000000002","utterance":"Tell John I can't do a call, send him Loom instead"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > all 10 users complete without uncaught exceptions
+{"ts":"2026-05-29T20:49:24.421Z","level":"info","message":"Executing intent","intent":"SHAPE_RULES","requestId":"req-a1000002-0000-4000-8000-000000000002","utterance":"I don't want any meetings before 9am ever"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > all 10 users complete without uncaught exceptions
+{"ts":"2026-05-29T20:49:24.421Z","level":"info","message":"Executing intent","intent":"GATEKEEP_RULE","requestId":"req-a1000002-0000-4000-8000-000000000002","utterance":"Treat anything from sarah@enterprise.com as high priority"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > all 10 users complete without uncaught exceptions
+{"ts":"2026-05-29T20:49:24.422Z","level":"info","message":"Executing intent","intent":"RESOLVE_MANUAL","requestId":"req-a1000002-0000-4000-8000-000000000002","utterance":"My Thursday is a mess, help"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > all 10 users complete without uncaught exceptions
+{"ts":"2026-05-29T20:49:24.423Z","level":"info","message":"Executing intent","intent":"OFFER_SPECIFIC","requestId":"req-a1000002-0000-4000-8000-000000000002","utterance":"Book a haircut appointment"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > all 10 users complete without uncaught exceptions
+{"ts":"2026-05-29T20:49:24.423Z","level":"info","message":"Executing intent","intent":"PROTECT_BLOCK","requestId":"req-a1000003-0000-4000-8000-000000000003","utterance":"block 9 am to 10 am all weekdays for next four weeks. name the event 'Ten-user s","eventTitle":"Ten-user smoke block"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > all 10 users complete without uncaught exceptions
+{"ts":"2026-05-29T20:49:24.424Z","level":"info","message":"Executing intent","intent":"OFFER_SPECIFIC","requestId":"req-a1000003-0000-4000-8000-000000000003","utterance":"Find me 2 slots to meet with Alex next week"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > all 10 users complete without uncaught exceptions
+{"ts":"2026-05-29T20:49:24.425Z","level":"info","message":"Executing intent","intent":"MODIFY_EVENT","requestId":"req-a1000003-0000-4000-8000-000000000003","utterance":"Move my 3pm to tomorrow"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > all 10 users complete without uncaught exceptions
+{"ts":"2026-05-29T20:49:24.425Z","level":"info","message":"Executing intent","intent":"PIVOT_ASYNC","requestId":"req-a1000003-0000-4000-8000-000000000003","utterance":"Tell John I can't do a call, send him Loom instead"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > all 10 users complete without uncaught exceptions
+{"ts":"2026-05-29T20:49:24.426Z","level":"info","message":"Executing intent","intent":"SHAPE_RULES","requestId":"req-a1000003-0000-4000-8000-000000000003","utterance":"I don't want any meetings before 9am ever"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > all 10 users complete without uncaught exceptions
+{"ts":"2026-05-29T20:49:24.427Z","level":"info","message":"Executing intent","intent":"GATEKEEP_RULE","requestId":"req-a1000003-0000-4000-8000-000000000003","utterance":"Treat anything from sarah@enterprise.com as high priority"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > all 10 users complete without uncaught exceptions
+{"ts":"2026-05-29T20:49:24.427Z","level":"info","message":"Executing intent","intent":"RESOLVE_MANUAL","requestId":"req-a1000003-0000-4000-8000-000000000003","utterance":"My Thursday is a mess, help"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > all 10 users complete without uncaught exceptions
+{"ts":"2026-05-29T20:49:24.428Z","level":"info","message":"Executing intent","intent":"OFFER_SPECIFIC","requestId":"req-a1000003-0000-4000-8000-000000000003","utterance":"Book a haircut appointment"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > all 10 users complete without uncaught exceptions
+{"ts":"2026-05-29T20:49:24.428Z","level":"info","message":"Executing intent","intent":"PROTECT_BLOCK","requestId":"req-a1000004-0000-4000-8000-000000000004","utterance":"block 9 am to 10 am all weekdays for next four weeks. name the event 'Ten-user s","eventTitle":"Ten-user smoke block"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > all 10 users complete without uncaught exceptions
+{"ts":"2026-05-29T20:49:24.429Z","level":"info","message":"Executing intent","intent":"OFFER_SPECIFIC","requestId":"req-a1000004-0000-4000-8000-000000000004","utterance":"Find me 2 slots to meet with Alex next week"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > all 10 users complete without uncaught exceptions
+{"ts":"2026-05-29T20:49:24.429Z","level":"info","message":"Executing intent","intent":"MODIFY_EVENT","requestId":"req-a1000004-0000-4000-8000-000000000004","utterance":"Move my 3pm to tomorrow"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > all 10 users complete without uncaught exceptions
+{"ts":"2026-05-29T20:49:24.430Z","level":"info","message":"Executing intent","intent":"PIVOT_ASYNC","requestId":"req-a1000004-0000-4000-8000-000000000004","utterance":"Tell John I can't do a call, send him Loom instead"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > all 10 users complete without uncaught exceptions
+{"ts":"2026-05-29T20:49:24.430Z","level":"info","message":"Executing intent","intent":"SHAPE_RULES","requestId":"req-a1000004-0000-4000-8000-000000000004","utterance":"I don't want any meetings before 9am ever"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > all 10 users complete without uncaught exceptions
+{"ts":"2026-05-29T20:49:24.431Z","level":"info","message":"Executing intent","intent":"GATEKEEP_RULE","requestId":"req-a1000004-0000-4000-8000-000000000004","utterance":"Treat anything from sarah@enterprise.com as high priority"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > all 10 users complete without uncaught exceptions
+{"ts":"2026-05-29T20:49:24.431Z","level":"info","message":"Executing intent","intent":"RESOLVE_MANUAL","requestId":"req-a1000004-0000-4000-8000-000000000004","utterance":"My Thursday is a mess, help"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > all 10 users complete without uncaught exceptions
+{"ts":"2026-05-29T20:49:24.432Z","level":"info","message":"Executing intent","intent":"OFFER_SPECIFIC","requestId":"req-a1000004-0000-4000-8000-000000000004","utterance":"Book a haircut appointment"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > all 10 users complete without uncaught exceptions
+{"ts":"2026-05-29T20:49:24.433Z","level":"info","message":"Executing intent","intent":"PROTECT_BLOCK","requestId":"req-a1000005-0000-4000-8000-000000000005","utterance":"block 9 am to 10 am all weekdays for next four weeks. name the event 'Ten-user s","eventTitle":"Ten-user smoke block"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > all 10 users complete without uncaught exceptions
+{"ts":"2026-05-29T20:49:24.434Z","level":"info","message":"Executing intent","intent":"OFFER_SPECIFIC","requestId":"req-a1000005-0000-4000-8000-000000000005","utterance":"Find me 2 slots to meet with Alex next week"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > all 10 users complete without uncaught exceptions
+{"ts":"2026-05-29T20:49:24.435Z","level":"info","message":"Executing intent","intent":"MODIFY_EVENT","requestId":"req-a1000005-0000-4000-8000-000000000005","utterance":"Move my 3pm to tomorrow"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > all 10 users complete without uncaught exceptions
+{"ts":"2026-05-29T20:49:24.435Z","level":"info","message":"Executing intent","intent":"PIVOT_ASYNC","requestId":"req-a1000005-0000-4000-8000-000000000005","utterance":"Tell John I can't do a call, send him Loom instead"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > all 10 users complete without uncaught exceptions
+{"ts":"2026-05-29T20:49:24.436Z","level":"info","message":"Executing intent","intent":"SHAPE_RULES","requestId":"req-a1000005-0000-4000-8000-000000000005","utterance":"I don't want any meetings before 9am ever"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > all 10 users complete without uncaught exceptions
+{"ts":"2026-05-29T20:49:24.437Z","level":"info","message":"Executing intent","intent":"GATEKEEP_RULE","requestId":"req-a1000005-0000-4000-8000-000000000005","utterance":"Treat anything from sarah@enterprise.com as high priority"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > all 10 users complete without uncaught exceptions
+{"ts":"2026-05-29T20:49:24.437Z","level":"info","message":"Executing intent","intent":"RESOLVE_MANUAL","requestId":"req-a1000005-0000-4000-8000-000000000005","utterance":"My Thursday is a mess, help"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > all 10 users complete without uncaught exceptions
+{"ts":"2026-05-29T20:49:24.438Z","level":"info","message":"Executing intent","intent":"OFFER_SPECIFIC","requestId":"req-a1000005-0000-4000-8000-000000000005","utterance":"Book a haircut appointment"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > all 10 users complete without uncaught exceptions
+{"ts":"2026-05-29T20:49:24.439Z","level":"info","message":"Executing intent","intent":"PROTECT_BLOCK","requestId":"req-a1000006-0000-4000-8000-000000000006","utterance":"block 9 am to 10 am all weekdays for next four weeks. name the event 'Ten-user s","eventTitle":"Ten-user smoke block"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > all 10 users complete without uncaught exceptions
+{"ts":"2026-05-29T20:49:24.439Z","level":"info","message":"Executing intent","intent":"OFFER_SPECIFIC","requestId":"req-a1000006-0000-4000-8000-000000000006","utterance":"Find me 2 slots to meet with Alex next week"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > all 10 users complete without uncaught exceptions
+{"ts":"2026-05-29T20:49:24.440Z","level":"info","message":"Executing intent","intent":"MODIFY_EVENT","requestId":"req-a1000006-0000-4000-8000-000000000006","utterance":"Move my 3pm to tomorrow"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > all 10 users complete without uncaught exceptions
+{"ts":"2026-05-29T20:49:24.441Z","level":"info","message":"Executing intent","intent":"PIVOT_ASYNC","requestId":"req-a1000006-0000-4000-8000-000000000006","utterance":"Tell John I can't do a call, send him Loom instead"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > all 10 users complete without uncaught exceptions
+{"ts":"2026-05-29T20:49:24.441Z","level":"info","message":"Executing intent","intent":"SHAPE_RULES","requestId":"req-a1000006-0000-4000-8000-000000000006","utterance":"I don't want any meetings before 9am ever"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > all 10 users complete without uncaught exceptions
+{"ts":"2026-05-29T20:49:24.441Z","level":"info","message":"Executing intent","intent":"GATEKEEP_RULE","requestId":"req-a1000006-0000-4000-8000-000000000006","utterance":"Treat anything from sarah@enterprise.com as high priority"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > all 10 users complete without uncaught exceptions
+{"ts":"2026-05-29T20:49:24.442Z","level":"info","message":"Executing intent","intent":"RESOLVE_MANUAL","requestId":"req-a1000006-0000-4000-8000-000000000006","utterance":"My Thursday is a mess, help"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > all 10 users complete without uncaught exceptions
+{"ts":"2026-05-29T20:49:24.442Z","level":"info","message":"Executing intent","intent":"OFFER_SPECIFIC","requestId":"req-a1000006-0000-4000-8000-000000000006","utterance":"Book a haircut appointment"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > all 10 users complete without uncaught exceptions
+{"ts":"2026-05-29T20:49:24.443Z","level":"info","message":"Executing intent","intent":"PROTECT_BLOCK","requestId":"req-a1000007-0000-4000-8000-000000000007","utterance":"block 9 am to 10 am all weekdays for next four weeks. name the event 'Ten-user s","eventTitle":"Ten-user smoke block"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > all 10 users complete without uncaught exceptions
+{"ts":"2026-05-29T20:49:24.443Z","level":"info","message":"Executing intent","intent":"OFFER_SPECIFIC","requestId":"req-a1000007-0000-4000-8000-000000000007","utterance":"Find me 2 slots to meet with Alex next week"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > all 10 users complete without uncaught exceptions
+{"ts":"2026-05-29T20:49:24.444Z","level":"info","message":"Executing intent","intent":"MODIFY_EVENT","requestId":"req-a1000007-0000-4000-8000-000000000007","utterance":"Move my 3pm to tomorrow"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > all 10 users complete without uncaught exceptions
+{"ts":"2026-05-29T20:49:24.444Z","level":"info","message":"Executing intent","intent":"PIVOT_ASYNC","requestId":"req-a1000007-0000-4000-8000-000000000007","utterance":"Tell John I can't do a call, send him Loom instead"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > all 10 users complete without uncaught exceptions
+{"ts":"2026-05-29T20:49:24.445Z","level":"info","message":"Executing intent","intent":"SHAPE_RULES","requestId":"req-a1000007-0000-4000-8000-000000000007","utterance":"I don't want any meetings before 9am ever"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > all 10 users complete without uncaught exceptions
+{"ts":"2026-05-29T20:49:24.445Z","level":"info","message":"Executing intent","intent":"GATEKEEP_RULE","requestId":"req-a1000007-0000-4000-8000-000000000007","utterance":"Treat anything from sarah@enterprise.com as high priority"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > all 10 users complete without uncaught exceptions
+{"ts":"2026-05-29T20:49:24.446Z","level":"info","message":"Executing intent","intent":"RESOLVE_MANUAL","requestId":"req-a1000007-0000-4000-8000-000000000007","utterance":"My Thursday is a mess, help"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > all 10 users complete without uncaught exceptions
+{"ts":"2026-05-29T20:49:24.446Z","level":"info","message":"Executing intent","intent":"OFFER_SPECIFIC","requestId":"req-a1000007-0000-4000-8000-000000000007","utterance":"Book a haircut appointment"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > all 10 users complete without uncaught exceptions
+{"ts":"2026-05-29T20:49:24.447Z","level":"info","message":"Executing intent","intent":"PROTECT_BLOCK","requestId":"req-a1000008-0000-4000-8000-000000000008","utterance":"block 9 am to 10 am all weekdays for next four weeks. name the event 'Ten-user s","eventTitle":"Ten-user smoke block"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > all 10 users complete without uncaught exceptions
+{"ts":"2026-05-29T20:49:24.447Z","level":"info","message":"Executing intent","intent":"OFFER_SPECIFIC","requestId":"req-a1000008-0000-4000-8000-000000000008","utterance":"Find me 2 slots to meet with Alex next week"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > all 10 users complete without uncaught exceptions
+{"ts":"2026-05-29T20:49:24.448Z","level":"info","message":"Executing intent","intent":"MODIFY_EVENT","requestId":"req-a1000008-0000-4000-8000-000000000008","utterance":"Move my 3pm to tomorrow"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > all 10 users complete without uncaught exceptions
+{"ts":"2026-05-29T20:49:24.449Z","level":"info","message":"Executing intent","intent":"PIVOT_ASYNC","requestId":"req-a1000008-0000-4000-8000-000000000008","utterance":"Tell John I can't do a call, send him Loom instead"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > all 10 users complete without uncaught exceptions
+{"ts":"2026-05-29T20:49:24.449Z","level":"info","message":"Executing intent","intent":"SHAPE_RULES","requestId":"req-a1000008-0000-4000-8000-000000000008","utterance":"I don't want any meetings before 9am ever"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > all 10 users complete without uncaught exceptions
+{"ts":"2026-05-29T20:49:24.450Z","level":"info","message":"Executing intent","intent":"GATEKEEP_RULE","requestId":"req-a1000008-0000-4000-8000-000000000008","utterance":"Treat anything from sarah@enterprise.com as high priority"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > all 10 users complete without uncaught exceptions
+{"ts":"2026-05-29T20:49:24.450Z","level":"info","message":"Executing intent","intent":"RESOLVE_MANUAL","requestId":"req-a1000008-0000-4000-8000-000000000008","utterance":"My Thursday is a mess, help"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > all 10 users complete without uncaught exceptions
+{"ts":"2026-05-29T20:49:24.450Z","level":"info","message":"Executing intent","intent":"OFFER_SPECIFIC","requestId":"req-a1000008-0000-4000-8000-000000000008","utterance":"Book a haircut appointment"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > all 10 users complete without uncaught exceptions
+{"ts":"2026-05-29T20:49:24.451Z","level":"info","message":"Executing intent","intent":"PROTECT_BLOCK","requestId":"req-a1000009-0000-4000-8000-000000000009","utterance":"block 9 am to 10 am all weekdays for next four weeks. name the event 'Ten-user s","eventTitle":"Ten-user smoke block"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > all 10 users complete without uncaught exceptions
+{"ts":"2026-05-29T20:49:24.451Z","level":"info","message":"Executing intent","intent":"OFFER_SPECIFIC","requestId":"req-a1000009-0000-4000-8000-000000000009","utterance":"Find me 2 slots to meet with Alex next week"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > all 10 users complete without uncaught exceptions
+{"ts":"2026-05-29T20:49:24.452Z","level":"info","message":"Executing intent","intent":"MODIFY_EVENT","requestId":"req-a1000009-0000-4000-8000-000000000009","utterance":"Move my 3pm to tomorrow"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > all 10 users complete without uncaught exceptions
+{"ts":"2026-05-29T20:49:24.453Z","level":"info","message":"Executing intent","intent":"PIVOT_ASYNC","requestId":"req-a1000009-0000-4000-8000-000000000009","utterance":"Tell John I can't do a call, send him Loom instead"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > all 10 users complete without uncaught exceptions
+{"ts":"2026-05-29T20:49:24.453Z","level":"info","message":"Executing intent","intent":"SHAPE_RULES","requestId":"req-a1000009-0000-4000-8000-000000000009","utterance":"I don't want any meetings before 9am ever"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > all 10 users complete without uncaught exceptions
+{"ts":"2026-05-29T20:49:24.454Z","level":"info","message":"Executing intent","intent":"GATEKEEP_RULE","requestId":"req-a1000009-0000-4000-8000-000000000009","utterance":"Treat anything from sarah@enterprise.com as high priority"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > all 10 users complete without uncaught exceptions
+{"ts":"2026-05-29T20:49:24.454Z","level":"info","message":"Executing intent","intent":"RESOLVE_MANUAL","requestId":"req-a1000009-0000-4000-8000-000000000009","utterance":"My Thursday is a mess, help"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > all 10 users complete without uncaught exceptions
+{"ts":"2026-05-29T20:49:24.455Z","level":"info","message":"Executing intent","intent":"OFFER_SPECIFIC","requestId":"req-a1000009-0000-4000-8000-000000000009","utterance":"Book a haircut appointment"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > all 10 users complete without uncaught exceptions
+{"ts":"2026-05-29T20:49:24.455Z","level":"info","message":"Executing intent","intent":"PROTECT_BLOCK","requestId":"req-a1000010-0000-4000-8000-000000000010","utterance":"block 9 am to 10 am all weekdays for next four weeks. name the event 'Ten-user s","eventTitle":"Ten-user smoke block"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > all 10 users complete without uncaught exceptions
+{"ts":"2026-05-29T20:49:24.456Z","level":"info","message":"Executing intent","intent":"OFFER_SPECIFIC","requestId":"req-a1000010-0000-4000-8000-000000000010","utterance":"Find me 2 slots to meet with Alex next week"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > all 10 users complete without uncaught exceptions
+{"ts":"2026-05-29T20:49:24.456Z","level":"info","message":"Executing intent","intent":"MODIFY_EVENT","requestId":"req-a1000010-0000-4000-8000-000000000010","utterance":"Move my 3pm to tomorrow"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > all 10 users complete without uncaught exceptions
+{"ts":"2026-05-29T20:49:24.457Z","level":"info","message":"Executing intent","intent":"PIVOT_ASYNC","requestId":"req-a1000010-0000-4000-8000-000000000010","utterance":"Tell John I can't do a call, send him Loom instead"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > all 10 users complete without uncaught exceptions
+{"ts":"2026-05-29T20:49:24.457Z","level":"info","message":"Executing intent","intent":"SHAPE_RULES","requestId":"req-a1000010-0000-4000-8000-000000000010","utterance":"I don't want any meetings before 9am ever"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > all 10 users complete without uncaught exceptions
+{"ts":"2026-05-29T20:49:24.458Z","level":"info","message":"Executing intent","intent":"GATEKEEP_RULE","requestId":"req-a1000010-0000-4000-8000-000000000010","utterance":"Treat anything from sarah@enterprise.com as high priority"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > all 10 users complete without uncaught exceptions
+{"ts":"2026-05-29T20:49:24.458Z","level":"info","message":"Executing intent","intent":"RESOLVE_MANUAL","requestId":"req-a1000010-0000-4000-8000-000000000010","utterance":"My Thursday is a mess, help"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > all 10 users complete without uncaught exceptions
+{"ts":"2026-05-29T20:49:24.459Z","level":"info","message":"Executing intent","intent":"OFFER_SPECIFIC","requestId":"req-a1000010-0000-4000-8000-000000000010","utterance":"Book a haircut appointment"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > 90%+ utterances correctly classified (intent matches expected)
+{"ts":"2026-05-29T20:49:24.461Z","level":"info","message":"Executing intent","intent":"PROTECT_BLOCK","requestId":"req-a1000001-0000-4000-8000-000000000001","utterance":"block 9 am to 10 am all weekdays for next four weeks. name the event 'Ten-user s","eventTitle":"Ten-user smoke block"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > 90%+ utterances correctly classified (intent matches expected)
+{"ts":"2026-05-29T20:49:24.461Z","level":"info","message":"Executing intent","intent":"OFFER_SPECIFIC","requestId":"req-a1000001-0000-4000-8000-000000000001","utterance":"Find me 2 slots to meet with Alex next week"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > 90%+ utterances correctly classified (intent matches expected)
+{"ts":"2026-05-29T20:49:24.462Z","level":"info","message":"Executing intent","intent":"MODIFY_EVENT","requestId":"req-a1000001-0000-4000-8000-000000000001","utterance":"Move my 3pm to tomorrow"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > 90%+ utterances correctly classified (intent matches expected)
+{"ts":"2026-05-29T20:49:24.462Z","level":"info","message":"Executing intent","intent":"PIVOT_ASYNC","requestId":"req-a1000001-0000-4000-8000-000000000001","utterance":"Tell John I can't do a call, send him Loom instead"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > 90%+ utterances correctly classified (intent matches expected)
+{"ts":"2026-05-29T20:49:24.462Z","level":"info","message":"Executing intent","intent":"SHAPE_RULES","requestId":"req-a1000001-0000-4000-8000-000000000001","utterance":"I don't want any meetings before 9am ever"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > 90%+ utterances correctly classified (intent matches expected)
+{"ts":"2026-05-29T20:49:24.462Z","level":"info","message":"Executing intent","intent":"GATEKEEP_RULE","requestId":"req-a1000001-0000-4000-8000-000000000001","utterance":"Treat anything from sarah@enterprise.com as high priority"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > 90%+ utterances correctly classified (intent matches expected)
+{"ts":"2026-05-29T20:49:24.463Z","level":"info","message":"Executing intent","intent":"RESOLVE_MANUAL","requestId":"req-a1000001-0000-4000-8000-000000000001","utterance":"My Thursday is a mess, help"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > 90%+ utterances correctly classified (intent matches expected)
+{"ts":"2026-05-29T20:49:24.463Z","level":"info","message":"Executing intent","intent":"OFFER_SPECIFIC","requestId":"req-a1000001-0000-4000-8000-000000000001","utterance":"Book a haircut appointment"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > 90%+ utterances correctly classified (intent matches expected)
+{"ts":"2026-05-29T20:49:24.464Z","level":"info","message":"Executing intent","intent":"PROTECT_BLOCK","requestId":"req-a1000002-0000-4000-8000-000000000002","utterance":"block 9 am to 10 am all weekdays for next four weeks. name the event 'Ten-user s","eventTitle":"Ten-user smoke block"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > 90%+ utterances correctly classified (intent matches expected)
+{"ts":"2026-05-29T20:49:24.466Z","level":"info","message":"Executing intent","intent":"OFFER_SPECIFIC","requestId":"req-a1000002-0000-4000-8000-000000000002","utterance":"Find me 2 slots to meet with Alex next week"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > 90%+ utterances correctly classified (intent matches expected)
+{"ts":"2026-05-29T20:49:24.466Z","level":"info","message":"Executing intent","intent":"MODIFY_EVENT","requestId":"req-a1000002-0000-4000-8000-000000000002","utterance":"Move my 3pm to tomorrow"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > 90%+ utterances correctly classified (intent matches expected)
+{"ts":"2026-05-29T20:49:24.467Z","level":"info","message":"Executing intent","intent":"PIVOT_ASYNC","requestId":"req-a1000002-0000-4000-8000-000000000002","utterance":"Tell John I can't do a call, send him Loom instead"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > 90%+ utterances correctly classified (intent matches expected)
+{"ts":"2026-05-29T20:49:24.467Z","level":"info","message":"Executing intent","intent":"SHAPE_RULES","requestId":"req-a1000002-0000-4000-8000-000000000002","utterance":"I don't want any meetings before 9am ever"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > 90%+ utterances correctly classified (intent matches expected)
+{"ts":"2026-05-29T20:49:24.468Z","level":"info","message":"Executing intent","intent":"GATEKEEP_RULE","requestId":"req-a1000002-0000-4000-8000-000000000002","utterance":"Treat anything from sarah@enterprise.com as high priority"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > 90%+ utterances correctly classified (intent matches expected)
+{"ts":"2026-05-29T20:49:24.468Z","level":"info","message":"Executing intent","intent":"RESOLVE_MANUAL","requestId":"req-a1000002-0000-4000-8000-000000000002","utterance":"My Thursday is a mess, help"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > 90%+ utterances correctly classified (intent matches expected)
+{"ts":"2026-05-29T20:49:24.468Z","level":"info","message":"Executing intent","intent":"OFFER_SPECIFIC","requestId":"req-a1000002-0000-4000-8000-000000000002","utterance":"Book a haircut appointment"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > 90%+ utterances correctly classified (intent matches expected)
+{"ts":"2026-05-29T20:49:24.469Z","level":"info","message":"Executing intent","intent":"PROTECT_BLOCK","requestId":"req-a1000003-0000-4000-8000-000000000003","utterance":"block 9 am to 10 am all weekdays for next four weeks. name the event 'Ten-user s","eventTitle":"Ten-user smoke block"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > 90%+ utterances correctly classified (intent matches expected)
+{"ts":"2026-05-29T20:49:24.469Z","level":"info","message":"Executing intent","intent":"OFFER_SPECIFIC","requestId":"req-a1000003-0000-4000-8000-000000000003","utterance":"Find me 2 slots to meet with Alex next week"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > 90%+ utterances correctly classified (intent matches expected)
+{"ts":"2026-05-29T20:49:24.470Z","level":"info","message":"Executing intent","intent":"MODIFY_EVENT","requestId":"req-a1000003-0000-4000-8000-000000000003","utterance":"Move my 3pm to tomorrow"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > 90%+ utterances correctly classified (intent matches expected)
+{"ts":"2026-05-29T20:49:24.470Z","level":"info","message":"Executing intent","intent":"PIVOT_ASYNC","requestId":"req-a1000003-0000-4000-8000-000000000003","utterance":"Tell John I can't do a call, send him Loom instead"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > 90%+ utterances correctly classified (intent matches expected)
+{"ts":"2026-05-29T20:49:24.471Z","level":"info","message":"Executing intent","intent":"SHAPE_RULES","requestId":"req-a1000003-0000-4000-8000-000000000003","utterance":"I don't want any meetings before 9am ever"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > 90%+ utterances correctly classified (intent matches expected)
+{"ts":"2026-05-29T20:49:24.471Z","level":"info","message":"Executing intent","intent":"GATEKEEP_RULE","requestId":"req-a1000003-0000-4000-8000-000000000003","utterance":"Treat anything from sarah@enterprise.com as high priority"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > 90%+ utterances correctly classified (intent matches expected)
+{"ts":"2026-05-29T20:49:24.472Z","level":"info","message":"Executing intent","intent":"RESOLVE_MANUAL","requestId":"req-a1000003-0000-4000-8000-000000000003","utterance":"My Thursday is a mess, help"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > 90%+ utterances correctly classified (intent matches expected)
+{"ts":"2026-05-29T20:49:24.473Z","level":"info","message":"Executing intent","intent":"OFFER_SPECIFIC","requestId":"req-a1000003-0000-4000-8000-000000000003","utterance":"Book a haircut appointment"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > 90%+ utterances correctly classified (intent matches expected)
+{"ts":"2026-05-29T20:49:24.474Z","level":"info","message":"Executing intent","intent":"PROTECT_BLOCK","requestId":"req-a1000004-0000-4000-8000-000000000004","utterance":"block 9 am to 10 am all weekdays for next four weeks. name the event 'Ten-user s","eventTitle":"Ten-user smoke block"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > 90%+ utterances correctly classified (intent matches expected)
+{"ts":"2026-05-29T20:49:24.474Z","level":"info","message":"Executing intent","intent":"OFFER_SPECIFIC","requestId":"req-a1000004-0000-4000-8000-000000000004","utterance":"Find me 2 slots to meet with Alex next week"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > 90%+ utterances correctly classified (intent matches expected)
+{"ts":"2026-05-29T20:49:24.475Z","level":"info","message":"Executing intent","intent":"MODIFY_EVENT","requestId":"req-a1000004-0000-4000-8000-000000000004","utterance":"Move my 3pm to tomorrow"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > 90%+ utterances correctly classified (intent matches expected)
+{"ts":"2026-05-29T20:49:24.475Z","level":"info","message":"Executing intent","intent":"PIVOT_ASYNC","requestId":"req-a1000004-0000-4000-8000-000000000004","utterance":"Tell John I can't do a call, send him Loom instead"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > 90%+ utterances correctly classified (intent matches expected)
+{"ts":"2026-05-29T20:49:24.476Z","level":"info","message":"Executing intent","intent":"SHAPE_RULES","requestId":"req-a1000004-0000-4000-8000-000000000004","utterance":"I don't want any meetings before 9am ever"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > 90%+ utterances correctly classified (intent matches expected)
+{"ts":"2026-05-29T20:49:24.476Z","level":"info","message":"Executing intent","intent":"GATEKEEP_RULE","requestId":"req-a1000004-0000-4000-8000-000000000004","utterance":"Treat anything from sarah@enterprise.com as high priority"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > 90%+ utterances correctly classified (intent matches expected)
+{"ts":"2026-05-29T20:49:24.476Z","level":"info","message":"Executing intent","intent":"RESOLVE_MANUAL","requestId":"req-a1000004-0000-4000-8000-000000000004","utterance":"My Thursday is a mess, help"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > 90%+ utterances correctly classified (intent matches expected)
+{"ts":"2026-05-29T20:49:24.477Z","level":"info","message":"Executing intent","intent":"OFFER_SPECIFIC","requestId":"req-a1000004-0000-4000-8000-000000000004","utterance":"Book a haircut appointment"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > 90%+ utterances correctly classified (intent matches expected)
+{"ts":"2026-05-29T20:49:24.480Z","level":"info","message":"Executing intent","intent":"PROTECT_BLOCK","requestId":"req-a1000005-0000-4000-8000-000000000005","utterance":"block 9 am to 10 am all weekdays for next four weeks. name the event 'Ten-user s","eventTitle":"Ten-user smoke block"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > 90%+ utterances correctly classified (intent matches expected)
+{"ts":"2026-05-29T20:49:24.481Z","level":"info","message":"Executing intent","intent":"OFFER_SPECIFIC","requestId":"req-a1000005-0000-4000-8000-000000000005","utterance":"Find me 2 slots to meet with Alex next week"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > 90%+ utterances correctly classified (intent matches expected)
+{"ts":"2026-05-29T20:49:24.481Z","level":"info","message":"Executing intent","intent":"MODIFY_EVENT","requestId":"req-a1000005-0000-4000-8000-000000000005","utterance":"Move my 3pm to tomorrow"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > 90%+ utterances correctly classified (intent matches expected)
+{"ts":"2026-05-29T20:49:24.482Z","level":"info","message":"Executing intent","intent":"PIVOT_ASYNC","requestId":"req-a1000005-0000-4000-8000-000000000005","utterance":"Tell John I can't do a call, send him Loom instead"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > 90%+ utterances correctly classified (intent matches expected)
+{"ts":"2026-05-29T20:49:24.482Z","level":"info","message":"Executing intent","intent":"SHAPE_RULES","requestId":"req-a1000005-0000-4000-8000-000000000005","utterance":"I don't want any meetings before 9am ever"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > 90%+ utterances correctly classified (intent matches expected)
+{"ts":"2026-05-29T20:49:24.483Z","level":"info","message":"Executing intent","intent":"GATEKEEP_RULE","requestId":"req-a1000005-0000-4000-8000-000000000005","utterance":"Treat anything from sarah@enterprise.com as high priority"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > 90%+ utterances correctly classified (intent matches expected)
+{"ts":"2026-05-29T20:49:24.484Z","level":"info","message":"Executing intent","intent":"RESOLVE_MANUAL","requestId":"req-a1000005-0000-4000-8000-000000000005","utterance":"My Thursday is a mess, help"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > 90%+ utterances correctly classified (intent matches expected)
+{"ts":"2026-05-29T20:49:24.484Z","level":"info","message":"Executing intent","intent":"OFFER_SPECIFIC","requestId":"req-a1000005-0000-4000-8000-000000000005","utterance":"Book a haircut appointment"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > 90%+ utterances correctly classified (intent matches expected)
+{"ts":"2026-05-29T20:49:24.484Z","level":"info","message":"Executing intent","intent":"PROTECT_BLOCK","requestId":"req-a1000006-0000-4000-8000-000000000006","utterance":"block 9 am to 10 am all weekdays for next four weeks. name the event 'Ten-user s","eventTitle":"Ten-user smoke block"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > 90%+ utterances correctly classified (intent matches expected)
+{"ts":"2026-05-29T20:49:24.485Z","level":"info","message":"Executing intent","intent":"OFFER_SPECIFIC","requestId":"req-a1000006-0000-4000-8000-000000000006","utterance":"Find me 2 slots to meet with Alex next week"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > 90%+ utterances correctly classified (intent matches expected)
+{"ts":"2026-05-29T20:49:24.485Z","level":"info","message":"Executing intent","intent":"MODIFY_EVENT","requestId":"req-a1000006-0000-4000-8000-000000000006","utterance":"Move my 3pm to tomorrow"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > 90%+ utterances correctly classified (intent matches expected)
+{"ts":"2026-05-29T20:49:24.485Z","level":"info","message":"Executing intent","intent":"PIVOT_ASYNC","requestId":"req-a1000006-0000-4000-8000-000000000006","utterance":"Tell John I can't do a call, send him Loom instead"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > 90%+ utterances correctly classified (intent matches expected)
+{"ts":"2026-05-29T20:49:24.486Z","level":"info","message":"Executing intent","intent":"SHAPE_RULES","requestId":"req-a1000006-0000-4000-8000-000000000006","utterance":"I don't want any meetings before 9am ever"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > 90%+ utterances correctly classified (intent matches expected)
+{"ts":"2026-05-29T20:49:24.486Z","level":"info","message":"Executing intent","intent":"GATEKEEP_RULE","requestId":"req-a1000006-0000-4000-8000-000000000006","utterance":"Treat anything from sarah@enterprise.com as high priority"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > 90%+ utterances correctly classified (intent matches expected)
+{"ts":"2026-05-29T20:49:24.486Z","level":"info","message":"Executing intent","intent":"RESOLVE_MANUAL","requestId":"req-a1000006-0000-4000-8000-000000000006","utterance":"My Thursday is a mess, help"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > 90%+ utterances correctly classified (intent matches expected)
+{"ts":"2026-05-29T20:49:24.487Z","level":"info","message":"Executing intent","intent":"OFFER_SPECIFIC","requestId":"req-a1000006-0000-4000-8000-000000000006","utterance":"Book a haircut appointment"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > 90%+ utterances correctly classified (intent matches expected)
+{"ts":"2026-05-29T20:49:24.487Z","level":"info","message":"Executing intent","intent":"PROTECT_BLOCK","requestId":"req-a1000007-0000-4000-8000-000000000007","utterance":"block 9 am to 10 am all weekdays for next four weeks. name the event 'Ten-user s","eventTitle":"Ten-user smoke block"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > 90%+ utterances correctly classified (intent matches expected)
+{"ts":"2026-05-29T20:49:24.487Z","level":"info","message":"Executing intent","intent":"OFFER_SPECIFIC","requestId":"req-a1000007-0000-4000-8000-000000000007","utterance":"Find me 2 slots to meet with Alex next week"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > 90%+ utterances correctly classified (intent matches expected)
+{"ts":"2026-05-29T20:49:24.488Z","level":"info","message":"Executing intent","intent":"MODIFY_EVENT","requestId":"req-a1000007-0000-4000-8000-000000000007","utterance":"Move my 3pm to tomorrow"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > 90%+ utterances correctly classified (intent matches expected)
+{"ts":"2026-05-29T20:49:24.488Z","level":"info","message":"Executing intent","intent":"PIVOT_ASYNC","requestId":"req-a1000007-0000-4000-8000-000000000007","utterance":"Tell John I can't do a call, send him Loom instead"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > 90%+ utterances correctly classified (intent matches expected)
+{"ts":"2026-05-29T20:49:24.489Z","level":"info","message":"Executing intent","intent":"SHAPE_RULES","requestId":"req-a1000007-0000-4000-8000-000000000007","utterance":"I don't want any meetings before 9am ever"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > 90%+ utterances correctly classified (intent matches expected)
+{"ts":"2026-05-29T20:49:24.489Z","level":"info","message":"Executing intent","intent":"GATEKEEP_RULE","requestId":"req-a1000007-0000-4000-8000-000000000007","utterance":"Treat anything from sarah@enterprise.com as high priority"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > 90%+ utterances correctly classified (intent matches expected)
+{"ts":"2026-05-29T20:49:24.489Z","level":"info","message":"Executing intent","intent":"RESOLVE_MANUAL","requestId":"req-a1000007-0000-4000-8000-000000000007","utterance":"My Thursday is a mess, help"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > 90%+ utterances correctly classified (intent matches expected)
+{"ts":"2026-05-29T20:49:24.490Z","level":"info","message":"Executing intent","intent":"OFFER_SPECIFIC","requestId":"req-a1000007-0000-4000-8000-000000000007","utterance":"Book a haircut appointment"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > 90%+ utterances correctly classified (intent matches expected)
+{"ts":"2026-05-29T20:49:24.490Z","level":"info","message":"Executing intent","intent":"PROTECT_BLOCK","requestId":"req-a1000008-0000-4000-8000-000000000008","utterance":"block 9 am to 10 am all weekdays for next four weeks. name the event 'Ten-user s","eventTitle":"Ten-user smoke block"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > 90%+ utterances correctly classified (intent matches expected)
+{"ts":"2026-05-29T20:49:24.490Z","level":"info","message":"Executing intent","intent":"OFFER_SPECIFIC","requestId":"req-a1000008-0000-4000-8000-000000000008","utterance":"Find me 2 slots to meet with Alex next week"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > 90%+ utterances correctly classified (intent matches expected)
+{"ts":"2026-05-29T20:49:24.491Z","level":"info","message":"Executing intent","intent":"MODIFY_EVENT","requestId":"req-a1000008-0000-4000-8000-000000000008","utterance":"Move my 3pm to tomorrow"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > 90%+ utterances correctly classified (intent matches expected)
+{"ts":"2026-05-29T20:49:24.491Z","level":"info","message":"Executing intent","intent":"PIVOT_ASYNC","requestId":"req-a1000008-0000-4000-8000-000000000008","utterance":"Tell John I can't do a call, send him Loom instead"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > 90%+ utterances correctly classified (intent matches expected)
+{"ts":"2026-05-29T20:49:24.491Z","level":"info","message":"Executing intent","intent":"SHAPE_RULES","requestId":"req-a1000008-0000-4000-8000-000000000008","utterance":"I don't want any meetings before 9am ever"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > 90%+ utterances correctly classified (intent matches expected)
+{"ts":"2026-05-29T20:49:24.492Z","level":"info","message":"Executing intent","intent":"GATEKEEP_RULE","requestId":"req-a1000008-0000-4000-8000-000000000008","utterance":"Treat anything from sarah@enterprise.com as high priority"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > 90%+ utterances correctly classified (intent matches expected)
+{"ts":"2026-05-29T20:49:24.492Z","level":"info","message":"Executing intent","intent":"RESOLVE_MANUAL","requestId":"req-a1000008-0000-4000-8000-000000000008","utterance":"My Thursday is a mess, help"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > 90%+ utterances correctly classified (intent matches expected)
+{"ts":"2026-05-29T20:49:24.492Z","level":"info","message":"Executing intent","intent":"OFFER_SPECIFIC","requestId":"req-a1000008-0000-4000-8000-000000000008","utterance":"Book a haircut appointment"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > 90%+ utterances correctly classified (intent matches expected)
+{"ts":"2026-05-29T20:49:24.493Z","level":"info","message":"Executing intent","intent":"PROTECT_BLOCK","requestId":"req-a1000009-0000-4000-8000-000000000009","utterance":"block 9 am to 10 am all weekdays for next four weeks. name the event 'Ten-user s","eventTitle":"Ten-user smoke block"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > 90%+ utterances correctly classified (intent matches expected)
+{"ts":"2026-05-29T20:49:24.493Z","level":"info","message":"Executing intent","intent":"OFFER_SPECIFIC","requestId":"req-a1000009-0000-4000-8000-000000000009","utterance":"Find me 2 slots to meet with Alex next week"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > 90%+ utterances correctly classified (intent matches expected)
+{"ts":"2026-05-29T20:49:24.494Z","level":"info","message":"Executing intent","intent":"MODIFY_EVENT","requestId":"req-a1000009-0000-4000-8000-000000000009","utterance":"Move my 3pm to tomorrow"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > 90%+ utterances correctly classified (intent matches expected)
+{"ts":"2026-05-29T20:49:24.494Z","level":"info","message":"Executing intent","intent":"PIVOT_ASYNC","requestId":"req-a1000009-0000-4000-8000-000000000009","utterance":"Tell John I can't do a call, send him Loom instead"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > 90%+ utterances correctly classified (intent matches expected)
+{"ts":"2026-05-29T20:49:24.495Z","level":"info","message":"Executing intent","intent":"SHAPE_RULES","requestId":"req-a1000009-0000-4000-8000-000000000009","utterance":"I don't want any meetings before 9am ever"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > 90%+ utterances correctly classified (intent matches expected)
+{"ts":"2026-05-29T20:49:24.495Z","level":"info","message":"Executing intent","intent":"GATEKEEP_RULE","requestId":"req-a1000009-0000-4000-8000-000000000009","utterance":"Treat anything from sarah@enterprise.com as high priority"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > 90%+ utterances correctly classified (intent matches expected)
+{"ts":"2026-05-29T20:49:24.495Z","level":"info","message":"Executing intent","intent":"RESOLVE_MANUAL","requestId":"req-a1000009-0000-4000-8000-000000000009","utterance":"My Thursday is a mess, help"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > 90%+ utterances correctly classified (intent matches expected)
+{"ts":"2026-05-29T20:49:24.496Z","level":"info","message":"Executing intent","intent":"OFFER_SPECIFIC","requestId":"req-a1000009-0000-4000-8000-000000000009","utterance":"Book a haircut appointment"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > 90%+ utterances correctly classified (intent matches expected)
+{"ts":"2026-05-29T20:49:24.496Z","level":"info","message":"Executing intent","intent":"PROTECT_BLOCK","requestId":"req-a1000010-0000-4000-8000-000000000010","utterance":"block 9 am to 10 am all weekdays for next four weeks. name the event 'Ten-user s","eventTitle":"Ten-user smoke block"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > 90%+ utterances correctly classified (intent matches expected)
+{"ts":"2026-05-29T20:49:24.496Z","level":"info","message":"Executing intent","intent":"OFFER_SPECIFIC","requestId":"req-a1000010-0000-4000-8000-000000000010","utterance":"Find me 2 slots to meet with Alex next week"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > 90%+ utterances correctly classified (intent matches expected)
+{"ts":"2026-05-29T20:49:24.498Z","level":"info","message":"Executing intent","intent":"MODIFY_EVENT","requestId":"req-a1000010-0000-4000-8000-000000000010","utterance":"Move my 3pm to tomorrow"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > 90%+ utterances correctly classified (intent matches expected)
+{"ts":"2026-05-29T20:49:24.504Z","level":"info","message":"Executing intent","intent":"PIVOT_ASYNC","requestId":"req-a1000010-0000-4000-8000-000000000010","utterance":"Tell John I can't do a call, send him Loom instead"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > 90%+ utterances correctly classified (intent matches expected)
+{"ts":"2026-05-29T20:49:24.504Z","level":"info","message":"Executing intent","intent":"SHAPE_RULES","requestId":"req-a1000010-0000-4000-8000-000000000010","utterance":"I don't want any meetings before 9am ever"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > 90%+ utterances correctly classified (intent matches expected)
+{"ts":"2026-05-29T20:49:24.509Z","level":"info","message":"Executing intent","intent":"GATEKEEP_RULE","requestId":"req-a1000010-0000-4000-8000-000000000010","utterance":"Treat anything from sarah@enterprise.com as high priority"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > 90%+ utterances correctly classified (intent matches expected)
+{"ts":"2026-05-29T20:49:24.511Z","level":"info","message":"Executing intent","intent":"RESOLVE_MANUAL","requestId":"req-a1000010-0000-4000-8000-000000000010","utterance":"My Thursday is a mess, help"}
+
+stdout | tests/system/ten-user-sim.test.ts > 10-User Simulation > 90%+ utterances correctly classified (intent matches expected)
+{"ts":"2026-05-29T20:49:24.511Z","level":"info","message":"Executing intent","intent":"OFFER_SPECIFIC","requestId":"req-a1000010-0000-4000-8000-000000000010","utterance":"Book a haircut appointment"}
+
+ ✓ tests/system/ten-user-sim.test.ts (4 tests) 127ms
+ ✓ tests/unit/conversation-context.test.ts (1 test) 15ms
+stdout | tests/integration/orchestrator.test.ts > Orchestrator > bounded PROTECT_BLOCK applies without blast confirmation
+{"ts":"2026-06-08T12:00:00.000Z","level":"info","message":"Executing intent","intent":"PROTECT_BLOCK","requestId":"test-req","utterance":"protect"}
+
+stdout | tests/integration/orchestrator.test.ts > Orchestrator > QUERY_CALENDAR > lists events from Google Calendar response
+{"ts":"2026-04-26T15:00:00.000Z","level":"info","message":"Executing intent","intent":"QUERY_CALENDAR","requestId":"test-req","utterance":"What's on my calendar today?"}
+
+ ✓ tests/unit/safety.test.ts (9 tests) 12ms
+stdout | tests/integration/orchestrator.test.ts > Orchestrator > QUERY_CALENDAR > returns clear-calendar message when no events found
+{"ts":"2026-04-26T15:00:00.000Z","level":"info","message":"Executing intent","intent":"QUERY_CALENDAR","requestId":"test-req","utterance":"q"}
+
+stdout | tests/integration/orchestrator.test.ts > Orchestrator > QUERY_CALENDAR > returns reconnect message when OAuth is missing
+{"ts":"2026-04-26T15:00:00.000Z","level":"info","message":"Executing intent","intent":"QUERY_CALENDAR","requestId":"test-req","utterance":"q"}
+
+stdout | tests/integration/orchestrator.test.ts > Orchestrator > QUERY_CALENDAR > returns graceful error when Google Calendar read fails
+{"ts":"2026-04-26T15:00:00.000Z","level":"info","message":"Executing intent","intent":"QUERY_CALENDAR","requestId":"test-req","utterance":"q"}
+
+ ✓ tests/integration/orchestrator.test.ts (6 tests) 70ms
+ ✓ tests/jobs/improvement-loop.test.ts (2 tests) 9ms
+ ✓ tests/unit/gcal-time.test.ts (2 tests) 8ms
+ ✓ tests/unit/notifications.test.ts (2 tests) 7ms
+ ✓ tests/security/red-team.test.ts (4 tests) 98ms
+
+ Test Files  12 passed (12)
+      Tests  80 passed (80)
+   Start at  02:19:22
+   Duration  3.15s (transform 2.08s, setup 0ms, collect 7.43s, tests 455ms, environment 5ms, prepare 4.84s)
+

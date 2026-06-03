@@ -1,0 +1,31 @@
+AGENT 1 STT Test Case Summary
+
+1) detects speech support when constructor is missing vs present
+   - File: tests/unit/speech-input.test.ts
+
+2) maps known and unknown speech errors to friendly messages
+   - File: tests/unit/speech-input.test.ts
+
+3) routes interim text to onInterim and final text to onFinal
+   - File: tests/unit/speech-input.test.ts
+
+4) toggles start then stop during listening lifecycle
+   - File: tests/unit/speech-input.test.ts
+
+5) resolves language from navigator.language and falls back to en-US
+   - File: tests/unit/speech-input.test.ts
+
+6) maps recognition onerror values to user-facing messages
+   - File: tests/unit/speech-input.test.ts
+
+7) keeps review-first behavior: onFinal fills input without auto-posting /voice
+   - File: tests/unit/voice-ui-stt.test.ts
+
+8) blocks form submit while listening
+   - File: tests/unit/voice-ui-stt.test.ts
+
+9) disables mic while busy after submit starts
+   - File: tests/unit/voice-ui-stt.test.ts
+
+10) hides mic on unsupported browsers and shows fallback message on click
+    - File: tests/unit/voice-ui-stt.test.ts

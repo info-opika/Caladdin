@@ -114,3 +114,9 @@ export async function getGoogleUserInfo(accessToken: string): Promise<{ email: s
   const { data } = await oauth2.userinfo.get();
   return { email: data.email!, name: data.name ?? undefined };
 }
+
+export function getAuthService() {
+  return {
+    getClientForUser: getOAuthClientForUser,
+  };
+}
