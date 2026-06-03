@@ -13,6 +13,29 @@ const CONFIRM_RE = /^(yes|yeah|yep|correct|that's right|that is right|confirm|ok
 const REJECT_RE = /^(no|nope|wrong|incorrect|not right)\b/i;
 const SPELL_RE = /\b(spell|spelled|spelt)\b/i;
 
+/** Short replies during the voice email-confirm step — not general chat. */
+export function isEmailConfirmationReply(utterance: string): boolean {
+  const t = utterance.trim();
+  return CONFIRM_RE.test(t) || REJECT_RE.test(t) || SPELL_RE.test(t);
+}
+
+export function selectPrimaryEmail(utterance: string, emails: string[]): string {
+  if (emails.length === 0) return '';
+  if (emails.length === 1) return emails[0];
+  return emails.reduce((best, e) => {
+    const idx = utterance.toLowerCase().lastIndexOf(e);
+    const bestIdx = utterance.toLowerCase().lastIndexOf(best);
+    return idx >= bestIdx ? e : best;
+  });
+}
+
+function emailConfirmPrompt(email: string, source: 'voice' | 'text'): string {
+  if (source === 'text') {
+    return `You entered ${email} — is that correct? Reply yes or no.`;
+  }
+  return `I heard ${email} — is that correct? Say yes, no, or spell it out.`;
+}
+
 export function collectEmailsFromIntent(parsed: ParsedIntent): string[] {
   const fromUtterance = extractEmails(parsed.rawUtterance);
   const params = parsed.params;
@@ -35,13 +58,37 @@ export function intentNeedsEmailConfirmation(parsed: ParsedIntent): boolean {
   return false;
 }
 
+/** Voice spelled email only — not full sentences like "send a link to user@x.com". */
 function spellOutEmail(utterance: string): string | null {
-  const spelled = utterance
+  const trimmed = utterance.trim();
+  const extracted = extractEmails(trimmed);
+  if (extracted.length === 1 && !/\b(at|dot)\b/i.test(trimmed)) {
+    return null;
+  }
+  if (!/\b(at|dot)\b/i.test(trimmed)) {
+    return null;
+  }
+  const spelled = trimmed
     .replace(/\s+at\s+/gi, '@')
     .replace(/\s+dot\s+/gi, '.')
     .replace(/\s/g, '');
   if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(spelled)) return spelled.toLowerCase();
   return null;
+}
+
+function mergePrimaryEmailIntoParsed(parsed: ParsedIntent, email: string): ParsedIntent {
+  const params = { ...parsed.params };
+  if (parsed.intent === 'CREATE_EVENT') {
+    params.participants = [email];
+  } else if (parsed.intent === 'MODIFY_EVENT') {
+    params.addInvitees = [email];
+  } else if (parsed.intent === 'OFFER_SPECIFIC') {
+    params.recipientEmail = email;
+  } else if (parsed.intent === 'INVITE_PLATFORM') {
+    params.inviteeEmail = email;
+    params.email = email;
+  }
+  return ParsedIntentSchema.parse({ ...parsed, params });
 }
 
 export async function handleEmailConfirmationGate(
@@ -71,7 +118,9 @@ export async function handleEmailConfirmationGate(
           intent: pending.originalIntent as ParsedIntent['intent'],
           success: false,
           requiresConfirmation: false,
-          messageToUser: 'No problem. Please spell out the email address or type it in the chat.',
+          messageToUser: source === 'text'
+            ? 'No problem. Type the correct email address.'
+            : 'No problem. Please spell out the email address or type it in the chat.',
           schemaVersion: 1,
         },
       };
@@ -89,22 +138,14 @@ export async function handleEmailConfirmationGate(
           intent: pending.originalIntent as ParsedIntent['intent'],
           success: false,
           requiresConfirmation: false,
-          messageToUser: `I heard ${spelled} — is that correct? Say yes or no.`,
+          messageToUser: emailConfirmPrompt(spelled, source),
           schemaVersion: 1,
         },
       };
     }
 
-    return {
-      proceed: false,
-      result: {
-        intent: pending.originalIntent as ParsedIntent['intent'],
-        success: false,
-        requiresConfirmation: false,
-        messageToUser: `I heard ${pending.email} — is that correct? Say yes, no, or spell it out.`,
-        schemaVersion: 1,
-      },
-    };
+    // Unrelated request (e.g. login calendar query) — drop stale pending and continue.
+    await clearPendingEmailConfirmation(userId);
   }
 
   if (source === 'text' && !parsed.rawUtterance.includes('@')) {
@@ -116,8 +157,12 @@ export async function handleEmailConfirmationGate(
   }
 
   const emails = collectEmailsFromIntent(parsed);
-  const primary = emails[0];
+  const primary = selectPrimaryEmail(parsed.rawUtterance, emails);
   if (!primary) return { proceed: true, parsed };
+
+  if (source === 'text') {
+    return { proceed: true, parsed: mergePrimaryEmailIntoParsed(parsed, primary) };
+  }
 
   await savePendingEmailConfirmation(userId, {
     email: primary,
@@ -132,7 +177,7 @@ export async function handleEmailConfirmationGate(
       intent: parsed.intent,
       success: false,
       requiresConfirmation: false,
-      messageToUser: `I heard ${primary} — is that correct? Say yes, no, or spell it out.`,
+      messageToUser: emailConfirmPrompt(primary, source),
       schemaVersion: 1,
     },
   };

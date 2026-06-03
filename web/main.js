@@ -180,7 +180,7 @@ function clearWelcomeParam() {
   }
 }
 
-async function sendVoiceMessage(utterance, { showUserMessage = true, busyMessage = 'Working on it…' } = {}) {
+async function sendVoiceMessage(utterance, { showUserMessage = true, busyMessage = 'Working on it…', source = 'voice' } = {}) {
   if (showUserMessage) addMessage(utterance, 'user');
   confirmCard?.classList.add('hidden');
   pendingConfirmationToken = null;
@@ -189,7 +189,7 @@ async function sendVoiceMessage(utterance, { showUserMessage = true, busyMessage
   try {
     const { res, data } = await api('/voice', {
       method: 'POST',
-      body: JSON.stringify({ utterance }),
+      body: JSON.stringify({ utterance, source }),
     });
 
     if (res.status === 401) {
@@ -316,7 +316,7 @@ form?.addEventListener('submit', async (e) => {
   const utterance = utteranceInput.value.trim();
   if (!utterance) return;
   utteranceInput.value = '';
-  await sendVoiceMessage(utterance, { busyMessage: 'Thinking…' });
+  await sendVoiceMessage(utterance, { busyMessage: 'Thinking…', source: 'text' });
 });
 
 micBtn?.addEventListener('click', () => {

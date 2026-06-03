@@ -13,7 +13,16 @@ import {
 } from './adts.js';
 import { insertFailureLog } from '../db/failures.js';
 import { logger } from '../logger.js';
-import { enrichCreateParams, enrichModifyParams, enrichFlushParams, hasActionableParams, isCalendarInviteUtterance } from './param-extract.js';
+import {
+  enrichCreateParams,
+  enrichModifyParams,
+  enrichFlushParams,
+  extractEmails,
+  hasActionableParams,
+  isCalendarInviteUtterance,
+  isSchedulingLinkUtterance,
+} from './param-extract.js';
+import { isEmailConfirmationReply } from './email-confirmation.js';
 
 const client = new Anthropic({ apiKey: config.anthropicApiKey || 'sk-placeholder' });
 
@@ -23,6 +32,8 @@ const KEYWORD_INTENTS: Array<{ re: RegExp; intent: string; params?: Record<strin
   { re: /\bam i free|free (on|at|thursday|friday|monday)\b/i, intent: 'QUERY_CALENDAR' },
   { re: /\bblock\b/i, intent: 'PROTECT_BLOCK' },
   { re: /\bfind (time|slot)|schedule (time|with)\b/i, intent: 'OFFER_SPECIFIC' },
+  { re: /\b(booking|scheduling)\s+link\b/i, intent: 'OFFER_SPECIFIC' },
+  { re: /\bsend\b.+\blink\b/i, intent: 'OFFER_SPECIFIC' },
   { re: /\bput |add |create |schedule an event|dinner at\b/i, intent: 'CREATE_EVENT' },
   { re: /\binvite|invitee|guest|attendee|add .+@/i, intent: 'MODIFY_EVENT' },
   { re: /\brename|retitle|change the name\b/i, intent: 'MODIFY_EVENT' },
@@ -37,8 +48,12 @@ function enrichParamsForIntent(intent: string, params: Record<string, unknown>, 
   if (intent === 'MODIFY_EVENT') return enrichModifyParams(params, utterance);
   if (intent === 'FLUSH_RANGE') return enrichFlushParams(params, utterance);
   if (intent === 'INVITE_PLATFORM') {
-    const emails = utterance.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g);
-    if (emails?.[0]) return { ...params, inviteeEmail: emails[0].toLowerCase(), email: emails[0].toLowerCase() };
+    const emails = extractEmails(utterance);
+    if (emails[0]) return { ...params, inviteeEmail: emails[0], email: emails[0] };
+  }
+  if (intent === 'OFFER_SPECIFIC') {
+    const emails = extractEmails(utterance);
+    if (emails[0]) return { ...params, recipientEmail: emails[0] };
   }
   return params;
 }
@@ -64,6 +79,13 @@ function degradedParse(utterance: string): ParsedIntent {
     mappingMethod: 'resolve_manual',
     rawUtterance: utterance,
   });
+}
+
+/** Keyword classification for scheduling-link requests (bypasses LLM mislabels). */
+export function parseSchedulingLinkIntent(utterance: string): ParsedIntent | null {
+  if (!isSchedulingLinkUtterance(utterance)) return null;
+  const parsed = degradedParse(utterance);
+  return parsed.intent !== 'RESOLVE_MANUAL' ? parsed : null;
 }
 
 function applyConfidenceRouting(raw: {
@@ -116,14 +138,16 @@ export function warmRedirectResult(utterance: string): ParsedIntent {
   return offTopicResult(utterance);
 }
 
-const STRONG_CALENDAR_RE = /\b(calendar|meetings?|schedule|block|free|busy|appointments?|cancel|move|protect|undo|decline|slots?|standup|deep work|book|reschedule|availability|invite|invitee|guest|attendee)\b/i;
+const STRONG_CALENDAR_RE = /\b(calendar|meetings?|schedule|block|free|busy|appointments?|cancel|move|protect|undo|decline|slots?|standup|deep work|book|reschedule|availability|invite|invitee|guest|attendee|(?:booking|scheduling)\s+link)\b/i;
 
 export function isCalendarRelated(utterance: string): boolean {
   return STRONG_CALENDAR_RE.test(utterance) || CALENDAR_TOPIC_RE.test(utterance);
 }
 
 export function isOffTopic(utterance: string): boolean {
+  if (isEmailConfirmationReply(utterance)) return false;
   if (isCalendarInviteUtterance(utterance)) return false;
+  if (isSchedulingLinkUtterance(utterance)) return false;
   const strongCalendar = STRONG_CALENDAR_RE.test(utterance);
   if (OFF_TOPIC_RE.test(utterance) && !strongCalendar) return true;
   if (GENERAL_KNOWLEDGE_RE.test(utterance) && !strongCalendar) return true;
@@ -142,6 +166,14 @@ export async function parseIntent(
 
   if (isOffTopic(trimmed)) {
     return offTopicResult(trimmed);
+  }
+
+  // Keyword path before LLM — Haiku often mislabels "send a booking link to …" as off-domain.
+  if (isSchedulingLinkUtterance(trimmed)) {
+    const scheduling = degradedParse(trimmed);
+    if (scheduling.intent !== 'RESOLVE_MANUAL') {
+      return scheduling;
+    }
   }
 
   if (!config.anthropicApiKey || config.anthropicApiKey === 'sk-placeholder') {
@@ -181,6 +213,7 @@ Rules:
 - FLUSH_RANGE for remove/delete/cancel ONE named event: set params.eventTitle to the event name (e.g. "Remove the Test event" → eventTitle: "Test"). Do NOT use MODIFY_EVENT for deletions.
 - FLUSH_RANGE for bulk cancel (tomorrow, clear my afternoon): set params.rangeStart and params.rangeEnd.
 - MODIFY_EVENT to add invitees: set params.addInvitees (email strings) and params.eventTitle when named. Examples: "invite kanthatbww@gmail.com", "add john@example.com to the meeting".
+- OFFER_SPECIFIC for scheduling links and slot offers: set params.recipientEmail when an email is given. Examples: "send a booking link to alex@example.com", "find 2 slots for jane@example.com next week".
 - Descriptive corrections ("The event is 1 hour starting at 8 AM...") are MODIFY_EVENT, not RESOLVE_MANUAL.
 - QUERY_CALENDAR: read-only; optional rangeStart/rangeEnd.
 - Use confidence >= 0.85 when intent and params are clear. Never below 0.7 if you extracted times or a title.
@@ -204,8 +237,17 @@ Utterance: "${trimmed}"`,
     };
 
     IntentEnum.parse(input.intent);
-    if (isOffTopic(trimmed) || (input.intent === 'RESOLVE_MANUAL' && input.confidence < 0.3)) {
+    if (isOffTopic(trimmed)) {
       return offTopicResult(trimmed);
+    }
+    if (input.intent === 'RESOLVE_MANUAL' && input.confidence < 0.3) {
+      const rescued = degradedParse(trimmed);
+      if (rescued.intent !== 'RESOLVE_MANUAL') {
+        return rescued;
+      }
+      if (!isSchedulingLinkUtterance(trimmed) && !isCalendarRelated(trimmed)) {
+        return offTopicResult(trimmed);
+      }
     }
     const enrichedParams = enrichParamsForIntent(input.intent, input.params ?? {}, trimmed);
     return applyConfidenceRouting({ ...input, params: enrichedParams }, trimmed, destructive);

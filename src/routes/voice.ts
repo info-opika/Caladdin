@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import { parseIntent } from '../core/parser.js';
+import { parseIntent, parseSchedulingLinkIntent } from '../core/parser.js';
 import { orchestrate } from '../core/orchestrator.js';
 import { validateUserId, validateUtterance } from '../core/safety.js';
 import { WARM_REDIRECT_MESSAGE } from '../core/parser.js';
@@ -9,7 +9,7 @@ import { getPolicy, getUserById } from '../db/users.js';
 import { config } from '../config.js';
 import { getOAuthClientForUser } from '../services/auth_service.js';
 import { approvePendingConfirmation, rejectPendingConfirmation } from '../core/confirmation-actions.js';
-import { getConversationContext } from '../db/conversation-context.js';
+import { getConversationContext, getPendingEmailConfirmation } from '../db/conversation-context.js';
 import { applyConversationContext } from '../core/conversation-context.js';
 import { handleEmailConfirmationGate } from '../core/email-confirmation.js';
 
@@ -46,7 +46,17 @@ voiceRouter.post('/', requireSession, async (req: Request, res: Response) => {
     }
 
     const conversationContext = await getConversationContext(userId);
+    const pendingEmail = await getPendingEmailConfirmation(userId);
     let parsed = await parseIntent(utterance, userId, requestId);
+
+    if (parsed._warmRedirect) {
+      const scheduling = parseSchedulingLinkIntent(utterance);
+      if (scheduling) {
+        parsed = scheduling;
+      } else if (pendingEmail) {
+        parsed = { ...parsed, _warmRedirect: undefined, _offTopic: undefined };
+      }
+    }
 
     if (parsed._warmRedirect) {
       res.setHeader('x-request-id', requestId);

@@ -21,6 +21,7 @@ import { importEventsFromGCal } from '../services/calendar_api.js';
 import { startOfWeek, addDays } from '../core/date-utils.js';
 import { recordUsageEvent } from '../db/usage_events.js';
 import { getPlatformInviteByToken, markPlatformInviteAccepted } from '../db/platform_invites.js';
+import { clearPendingEmailConfirmation } from '../db/conversation-context.js';
 
 export const authRouter = Router();
 
@@ -78,6 +79,7 @@ authRouter.get('/callback', async (req: Request, res: Response) => {
     const user = await upsertUser({ email: info.email, display_name: info.name });
     await persistTokensForUser(user.id, tokens);
     await ensureDefaultPolicy(user.id);
+    await clearPendingEmailConfirmation(user.id);
 
     const cal = await getOAuthClientForUser(user.id);
     if (cal) {

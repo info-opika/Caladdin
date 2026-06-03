@@ -31,6 +31,15 @@ export function isCalendarInviteUtterance(utterance: string): boolean {
   return isInviteUtterance(utterance) || (extractEmails(utterance).length > 0 && /\b(invite|guest|attendee|add)\b/i.test(utterance));
 }
 
+/** Scheduling / fax-effect link requests (OFFER_SPECIFIC), e.g. "send a booking link to …". */
+export function isSchedulingLinkUtterance(utterance: string): boolean {
+  if (/\b(booking|scheduling)\s+link\b/i.test(utterance)) return true;
+  const hasEmail = extractEmails(utterance).length > 0;
+  if (hasEmail && /\b(send|email)\b.*\blink\b/i.test(utterance)) return true;
+  if (hasEmail && /\blink\b.*\b(to|for)\b/i.test(utterance)) return true;
+  return false;
+}
+
 /** User is asking to create/schedule a brand-new event (not modify an existing one). */
 export function isCreateEventUtterance(utterance: string): boolean {
   return /\b(create|schedule|book|set up)\s+(?:a\s+)?(?:new\s+)?event\b/i.test(utterance)
@@ -344,7 +353,9 @@ export function hasActionableParams(intent: string, params: Record<string, unkno
       );
     case 'QUERY_CALENDAR':
     case 'PROTECT_BLOCK':
+      return Boolean(params.eventTitle || params.rangeStart);
     case 'OFFER_SPECIFIC':
+      return Boolean(params.recipientEmail || params.eventTitle || params.rangeStart || params.durationMinutes);
     case 'FLUSH_RANGE':
       return Boolean(params.eventTitle || params.rangeStart);
     case 'UNDO':

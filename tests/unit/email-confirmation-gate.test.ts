@@ -35,6 +35,7 @@ import {
   handleEmailConfirmationGate,
   intentNeedsEmailConfirmation,
   collectEmailsFromIntent,
+  isEmailConfirmationReply,
 } from '../../src/core/email-confirmation.js';
 
 const USER = 'user-1111-1111-4111-8111-111111111111';
@@ -57,6 +58,15 @@ describe('handleEmailConfirmationGate', () => {
     vi.clearAllMocks();
   });
 
+  describe('isEmailConfirmationReply', () => {
+    it('recognizes short confirm/deny replies', () => {
+      expect(isEmailConfirmationReply('Yes')).toBe(true);
+      expect(isEmailConfirmationReply('okay')).toBe(true);
+      expect(isEmailConfirmationReply('no')).toBe(true);
+      expect(isEmailConfirmationReply('The weather is great')).toBe(false);
+    });
+  });
+
   describe('new confirmation prompt', () => {
     it('prompts for voice when intent needs email confirmation', async () => {
       const result = await handleEmailConfirmationGate(intent(), USER, null, 'voice');
@@ -72,6 +82,28 @@ describe('handleEmailConfirmationGate', () => {
       const parsed = intent({ rawUtterance: 'Schedule a meeting tomorrow' });
       const result = await handleEmailConfirmationGate(parsed, USER, null, 'text');
       expect(result.proceed).toBe(true);
+    });
+
+    it('skips voice-style confirm for typed email and merges params', async () => {
+      const parsed = intent({
+        intent: 'OFFER_SPECIFIC',
+        params: { recipientEmail: 'aniket@opika.co' },
+        rawUtterance: 'Send a booking link to aniket@opika.co',
+      });
+      const result = await handleEmailConfirmationGate(parsed, USER, null, 'text');
+      expect(result.proceed).toBe(true);
+      if (result.proceed) {
+        expect(result.parsed.params.recipientEmail).toBe('aniket@opika.co');
+      }
+      expect(pendingStore.value).toBeNull();
+    });
+
+    it('uses "I heard" copy for voice email confirm', async () => {
+      const result = await handleEmailConfirmationGate(intent(), USER, null, 'voice');
+      expect(result.proceed).toBe(false);
+      if (!result.proceed) {
+        expect(result.result.messageToUser).toMatch(/I heard alex@example.com/i);
+      }
     });
 
     it('skips gate when intent does not need confirmation', async () => {
@@ -168,19 +200,58 @@ describe('handleEmailConfirmationGate', () => {
   });
 
   describe('pending — ambiguous reply', () => {
-    it('re-prompts when utterance is neither yes nor no nor spell', async () => {
+    it('clears stale pending on unrelated voice utterance', async () => {
       pendingStore.value = {
         email: 'x@y.com',
         originalIntent: 'MODIFY_EVENT',
         originalParams: { addInvitees: ['x@y.com'] },
         originalUtterance: 'add x@y.com',
       };
-      const result = await handleEmailConfirmationGate(intent({ rawUtterance: 'maybe tomorrow' }), USER, null, 'voice');
-      expect(result.proceed).toBe(false);
-      if (!result.proceed) {
-        expect(result.result.messageToUser).toMatch(/x@y.com/i);
-        expect(result.result.messageToUser).toMatch(/yes, no, or spell/i);
+      const parsed = intent({
+        intent: 'QUERY_CALENDAR',
+        params: {},
+        rawUtterance: 'maybe tomorrow',
+      });
+      const result = await handleEmailConfirmationGate(parsed, USER, null, 'voice');
+      expect(result.proceed).toBe(true);
+      expect(pendingStore.value).toBeNull();
+    });
+
+    it('clears stale pending when login calendar query runs', async () => {
+      pendingStore.value = {
+        email: 'sendabookinglinktoaniket@opika.co',
+        originalIntent: 'OFFER_SPECIFIC',
+        originalParams: { recipientEmail: 'sendabookinglinktoaniket@opika.co' },
+        originalUtterance: 'Send a booking link to aniket@opika.co',
+      };
+      const parsed = intent({
+        intent: 'QUERY_CALENDAR',
+        params: {},
+        rawUtterance: "What's on my calendar?",
+      });
+      const result = await handleEmailConfirmationGate(parsed, USER, null, 'voice');
+      expect(result.proceed).toBe(true);
+      expect(pendingStore.value).toBeNull();
+    });
+
+    it('does not mash a typed sentence into one bogus email while pending', async () => {
+      pendingStore.value = {
+        email: 'aniketde9@gmial.com',
+        originalIntent: 'OFFER_SPECIFIC',
+        originalParams: { recipientEmail: 'aniketde9@gmial.com' },
+        originalUtterance: 'Find 2 slots for aniketde9@gmial.com next week',
+      };
+      const parsed = intent({
+        intent: 'OFFER_SPECIFIC',
+        params: { recipientEmail: 'aniket@opika.co' },
+        rawUtterance: 'Send a booking link to aniket@opika.co',
+      });
+      const result = await handleEmailConfirmationGate(parsed, USER, null, 'text');
+      expect(result.proceed).toBe(true);
+      if (result.proceed) {
+        expect(result.parsed.params.recipientEmail).toBe('aniket@opika.co');
       }
+      expect(pendingStore.value).toBeNull();
     });
   });
 
