@@ -51,7 +51,11 @@ async function resolveTargetForModify(
 
   const events = await listEvents(ctx.userId);
   const titleMatch = params.eventTitle as string | undefined;
-  let target = findTargetEvent(events, titleMatch, utterance);
+  let target: Awaited<ReturnType<typeof listEvents>>[number] | undefined = findTargetEvent(
+    events,
+    titleMatch,
+    utterance,
+  );
 
   if (!target && useSession && sessionEvent) {
     if (sessionEvent.id) {

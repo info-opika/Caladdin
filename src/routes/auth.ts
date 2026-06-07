@@ -11,6 +11,8 @@ import {
 } from '../services/auth_service.js';
 import { upsertUser, ensureDefaultPolicy } from '../db/users.js';
 import { createSession, setSessionCookie, clearSessionCookie, destroySession, requireSession } from '../middleware/session.js';
+import { generateCsrfToken, setCsrfCookie, clearCsrfCookie } from '../middleware/csrf.js';
+import { auditSensitiveOperation } from '../middleware/sensitiveAudit.js';
 import { logger } from '../logger.js';
 import {
   checkPilotCapacity,
@@ -96,8 +98,9 @@ authRouter.get('/callback', async (req: Request, res: Response) => {
       await recordUsageEvent(user.id, 'platform_invite_signup', { inviteToken: stateMeta.invite });
     }
 
-    const sessionToken = createSession(user.id, user.email);
+    const sessionToken = await createSession(user.id, user.email);
     setSessionCookie(res, sessionToken);
+    setCsrfCookie(res, generateCsrfToken());
     res.redirect('/?welcome=1');
   } catch (err) {
     logger.error('OAuth callback failed', {
@@ -107,10 +110,13 @@ authRouter.get('/callback', async (req: Request, res: Response) => {
   }
 });
 
-authRouter.delete('/session', requireSession, (req: Request, res: Response) => {
+authRouter.delete('/session', requireSession, async (req: Request, res: Response) => {
+  const session = (req as Request & { session: { userId: string } }).session;
   const token = req.cookies?.caladdin_session;
-  if (token) destroySession(token);
+  if (token) await destroySession(token);
+  await auditSensitiveOperation(req, session.userId, 'LOGOUT', 'success');
   clearSessionCookie(res);
+  clearCsrfCookie(res);
   res.json({ ok: true });
 });
 

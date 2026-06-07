@@ -3,74 +3,343 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Caladdin</title>
-  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;600&family=Fraunces:wght@600&display=swap" rel="stylesheet" />
+  <title>Caladdin — Voice-first calendar scheduling</title>
+  <meta name="description" content="Caladdin protects your time with voice scheduling, smart availability, and effortless guest booking." />
+  <meta property="og:title" content="Caladdin — Voice-first calendar scheduling" />
+  <meta property="og:description" content="Talk to your calendar. Share booking links. Skip the back-and-forth." />
+  <meta property="og:type" content="website" />
+  <meta name="theme-color" content="#d97706" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23d97706'/%3E%3Ctext x='16' y='22' text-anchor='middle' fill='white' font-family='Georgia,serif' font-size='18' font-weight='600'%3EC%3C/text%3E%3C/svg%3E" />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=Fraunces:wght@600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/tokens.css" />
   <link rel="stylesheet" href="/styles.css" />
 </head>
 <body>
+  <a href="#app" class="skip-link">Skip to main content</a>
+  <div id="toast-root" class="toast-root" aria-live="polite" aria-relevant="additions"></div>
+  <div id="confirm-dialog-root"></div>
+  <div id="app-error-boundary" class="app-error-boundary hidden" role="alert"></div>
+
   <div id="app">
-    <section id="landing" class="screen">
-      <h1>Talk to your calendar like you talk to a smart friend.</h1>
-      <p class="subtitle">Caladdin protects your time and makes scheduling effortless.</p>
-      <a href="/auth/start" class="btn primary" id="signup-btn">Sign in with Google</a>
-      <p class="hint">We recommend using a test Google account for your first try.</p>
-      <div id="waitlist-panel" class="hidden">
+    <section id="landing" class="screen screen-landing">
+      <header class="landing-header">
+        <div class="brand-mark" aria-hidden="true">C</div>
+        <p class="brand-name">Caladdin</p>
+      </header>
+
+      <div id="pilot-paused-banner" class="pilot-paused-banner hidden" role="alert">
+        <strong>Caladdin is temporarily paused</strong>
+        New sign-ups are unavailable while we perform maintenance. Try again soon.
+      </div>
+
+      <h1 class="hero-title">Your calendar, on your terms.</h1>
+      <p class="subtitle">Schedule by voice, share polished booking links, and protect focus time — without the email ping-pong.</p>
+
+      <div class="feature-grid" aria-hidden="true">
+        <article class="feature-card">
+          <h3>Voice scheduling</h3>
+          <p>Ask what's on your calendar or book meetings in plain language.</p>
+        </article>
+        <article class="feature-card">
+          <h3>Two-slot booking</h3>
+          <p>Guests pick from curated times — no overwhelming grids.</p>
+        </article>
+        <article class="feature-card">
+          <h3>Privacy tiers</h3>
+          <p>Control who sees what on your shared availability.</p>
+        </article>
+      </div>
+
+      <a href="/auth/start" class="btn primary" id="signup-btn" aria-label="Sign in with Google">Sign in with Google</a>
+      <p class="hint">We recommend a test Google account for your first try.</p>
+
+      <div id="waitlist-panel" class="panel hidden">
         <h2>Pilot full</h2>
-        <p>The Caladdin pilot is at capacity. Join the waitlist and we will notify you when a spot opens.</p>
+        <p>The Caladdin pilot is at capacity. Join the waitlist and we'll notify you when a spot opens.</p>
         <form id="waitlist-form">
-          <input type="email" id="waitlist-email" placeholder="your@email.com" required />
+          <input type="email" id="waitlist-email" placeholder="your@email.com" required aria-label="Email address" />
           <button type="submit" class="btn primary">Join waitlist</button>
         </form>
-        <p id="waitlist-msg" class="hint"></p>
+        <p id="waitlist-msg" class="hint" role="status"></p>
       </div>
     </section>
 
     <section id="onboarding" class="screen hidden">
-      <h2>You're connected</h2>
-      <label>Timezone <input id="timezone" type="text" value="America/Chicago" /></label>
-      <fieldset>
-        <legend>Privacy</legend>
-        <label><input type="radio" name="privacy" value="private" checked /> Private</label>
-        <label><input type="radio" name="privacy" value="trusted" /> Trusted</label>
-        <label><input type="radio" name="privacy" value="open" /> Open</label>
-      </fieldset>
-      <button id="finish-onboarding" class="btn primary">Get started</button>
+      <div class="onboarding-card">
+        <h2>You're connected</h2>
+        <p class="onboarding-lead">Set your timezone and privacy preferences so Caladdin schedules accurately.</p>
+
+        <div class="form-field">
+          <label for="timezone">Timezone</label>
+          <select id="timezone" aria-describedby="timezone-hint"></select>
+          <p id="timezone-hint" class="hint">Detected from your browser. Change if needed.</p>
+        </div>
+
+        <fieldset class="privacy-options">
+          <legend>Who can see your calendar details?</legend>
+          <label class="privacy-option">
+            <input type="radio" name="privacy" value="private" checked />
+            <span class="privacy-option-text">
+              <strong>Private</strong>
+              <span>Only you see event titles and details.</span>
+            </span>
+          </label>
+          <label class="privacy-option">
+            <input type="radio" name="privacy" value="trusted" />
+            <span class="privacy-option-text">
+              <strong>Trusted</strong>
+              <span>Close contacts see more context on shared links.</span>
+            </span>
+          </label>
+          <label class="privacy-option">
+            <input type="radio" name="privacy" value="open" />
+            <span class="privacy-option-text">
+              <strong>Open</strong>
+              <span>Guests see titles on your public availability view.</span>
+            </span>
+          </label>
+        </fieldset>
+
+        <button id="finish-onboarding" class="btn primary" type="button">Get started</button>
+        <p id="onboarding-error" class="hint hidden" role="alert" style="color: var(--color-error);"></p>
+      </div>
     </section>
 
     <section id="chat" class="screen hidden">
-      <header>
+      <header class="app-header">
         <h2>Caladdin</h2>
-        <button id="logout" class="btn ghost">Sign out</button>
+        <nav class="app-nav" aria-label="Host navigation">
+          <a href="#" id="nav-chat" class="app-nav-link is-active" aria-current="page">Chat</a>
+          <a href="#" id="nav-event-types" class="app-nav-link">Booking links</a>
+          <a href="#" id="nav-settings" class="app-nav-link">Settings</a>
+        </nav>
+        <div class="app-header-actions">
+          <label class="theme-toggle" title="Color theme">
+            <span class="sr-only">Color theme</span>
+            <select id="theme-select" data-theme-select aria-label="Color theme">
+              <option value="system">System</option>
+              <option value="light">Light</option>
+              <option value="dark">Dark</option>
+            </select>
+          </label>
+          <button id="logout" class="btn ghost" type="button" aria-label="Sign out">Sign out</button>
+        </div>
       </header>
-      <div id="reconnect-banner" class="banner hidden">
-        Your calendar connection needs to be refreshed.
-        <a href="/auth/start">Reconnect</a>
+
+      <div id="reconnect-banner" class="banner hidden" role="alert">
+        <span>Your calendar connection needs to be refreshed.</span>
+        <a href="/auth/start">Reconnect Google Calendar</a>
       </div>
-      <div id="messages" class="messages"></div>
-      <div id="confirm-card" class="confirm-card hidden">
+
+      <div id="messages" class="messages" aria-live="polite" aria-relevant="additions">
+        <div id="empty-state" class="empty-state">
+          <div class="empty-state-icon" aria-hidden="true">
+            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false">
+              <rect x="3" y="4" width="18" height="18" rx="2" stroke="currentColor" stroke-width="1.5"/>
+              <path d="M3 9h18M8 2v4M16 2v4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+            </svg>
+          </div>
+          <h3>Ready when you are</h3>
+          <p>Ask about your schedule or try one of these:</p>
+          <div class="suggestion-chips" role="group" aria-label="Suggested prompts">
+            <button type="button" class="chip" data-prompt="What's on my calendar today?">Today's agenda</button>
+            <button type="button" class="chip" data-prompt="What meetings do I have this week?">This week</button>
+            <button type="button" class="chip" data-prompt="Find time for a 30 minute call next week">Find a slot</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="confirm-card" class="confirm-card hidden" role="dialog" aria-labelledby="confirm-heading">
+        <h3 id="confirm-heading">Confirm action</h3>
         <p id="confirm-text"></p>
         <div class="confirm-actions">
           <button type="button" id="confirm-approve" class="btn primary">Approve</button>
           <button type="button" id="confirm-reject" class="btn ghost">Reject</button>
         </div>
       </div>
+
       <div id="status-bar" class="status-bar hidden" role="status" aria-live="polite">
         <span class="status-spinner" aria-hidden="true"></span>
         <span id="status-text"></span>
       </div>
+
       <form id="chat-form" class="chat-form">
         <button type="button" id="mic-btn" class="btn mic-btn" title="Speak" aria-label="Start voice input" aria-pressed="false">
           <svg class="mic-icon" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
             <path fill="currentColor" d="M12 14a3 3 0 0 0 3-3V5a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V21h2v-3.08A7 7 0 0 0 19 11h-2z"/>
           </svg>
         </button>
-        <input id="utterance" type="text" placeholder="What's on my calendar today?" autocomplete="off" />
-        <button type="submit" id="send-btn" class="btn primary">Send</button>
+        <input id="utterance" type="text" placeholder="Ask about your calendar…" autocomplete="off" aria-label="Message to Caladdin" />
+        <button type="submit" id="send-btn" class="btn primary" aria-label="Send message">Send</button>
       </form>
       <p id="voice-hint" class="voice-hint hidden">Tap the mic, speak, then review and Send.</p>
+
       <div class="feedback-row">
-        <button type="button" id="thumbs-up" class="btn ghost" title="Good">👍</button>
-        <button type="button" id="thumbs-down" class="btn ghost" title="Bad">👎</button>
+        <span class="feedback-label">Was this helpful?</span>
+        <button type="button" id="thumbs-up" class="btn ghost" aria-label="Good response">Helpful</button>
+        <button type="button" id="thumbs-down" class="btn ghost" aria-label="Bad response">Not helpful</button>
+      </div>
+    </section>
+
+    <section id="event-types" class="screen screen-wide hidden">
+      <header class="app-header">
+        <h2>Booking links</h2>
+        <nav class="app-nav" aria-label="Host navigation">
+          <a href="#" id="nav-chat-et" class="app-nav-link">Chat</a>
+          <a href="#" id="nav-event-types-et" class="app-nav-link is-active" aria-current="page">Booking links</a>
+          <a href="#" id="nav-settings-et" class="app-nav-link">Settings</a>
+        </nav>
+        <div class="app-header-actions">
+          <label class="theme-toggle" title="Color theme">
+            <span class="sr-only">Color theme</span>
+            <select data-theme-select aria-label="Color theme">
+              <option value="system">System</option>
+              <option value="light">Light</option>
+              <option value="dark">Dark</option>
+            </select>
+          </label>
+          <button id="logout-et" class="btn ghost" type="button" aria-label="Sign out">Sign out</button>
+        </div>
+      </header>
+
+      <p class="screen-lead">Create shareable booking pages for guests. Each link has its own duration and availability window.</p>
+
+      <div id="et-list-view">
+        <div class="et-toolbar">
+          <button type="button" id="et-new" class="btn primary et-new-btn">New booking link</button>
+          <label class="et-toggle">
+            <input type="checkbox" id="et-show-inactive" />
+            <span>Show inactive</span>
+          </label>
+        </div>
+        <p id="et-list-error" class="hint hidden" role="alert" style="color: var(--color-error);"></p>
+        <div id="et-list" class="et-list" role="list"></div>
+        <div id="et-list-empty" class="et-empty hidden">
+          <p>No booking links yet. Create one to share a public scheduling page.</p>
+        </div>
+
+        <div class="panel availability-panel">
+          <h3>Default working hours</h3>
+          <p>Set your weekly availability. New booking links inherit these hours.</p>
+          <div id="global-weekly-hours" aria-label="Weekly availability editor"></div>
+          <button type="button" id="save-global-hours" class="btn primary et-save-global">Save defaults</button>
+          <p id="global-hours-error" class="hint hidden" role="alert" style="color: var(--color-error);"></p>
+        </div>
+      </div>
+
+      <div id="et-form-view" class="hidden">
+        <div class="onboarding-card et-form-card">
+          <h3 id="et-form-title">New booking link</h3>
+          <form id="et-form">
+            <div class="form-field">
+              <label for="et-name">Name</label>
+              <input type="text" id="et-name" required placeholder="30-min Intro Call" autocomplete="off" />
+            </div>
+            <div class="form-field">
+              <label for="et-slug">URL slug</label>
+              <input type="text" id="et-slug" placeholder="intro-call" pattern="[a-z0-9]+(?:-[a-z0-9]+)*" autocomplete="off" />
+              <p class="hint">Lowercase letters, numbers, and hyphens. Auto-generated from name if left blank.</p>
+            </div>
+            <div class="form-field">
+              <label for="et-duration">Duration (minutes)</label>
+              <input type="number" id="et-duration" min="1" max="480" value="30" required />
+            </div>
+            <div class="form-field">
+              <label for="et-description">Description (optional)</label>
+              <textarea id="et-description" rows="2" placeholder="What is this meeting for?"></textarea>
+            </div>
+            <fieldset class="availability-fieldset">
+              <legend>Availability for this link</legend>
+              <p class="hint">Override your defaults for this specific booking page.</p>
+              <div id="et-weekly-hours" aria-label="Event type weekly availability"></div>
+            </fieldset>
+            <div id="et-public-url" class="form-field hidden">
+              <label for="et-public-url-input">Public URL</label>
+              <div class="url-copy-row">
+                <input type="text" id="et-public-url-input" readonly />
+                <button type="button" id="et-copy-url" class="btn ghost">Copy</button>
+              </div>
+            </div>
+            <p id="et-form-error" class="hint hidden" role="alert" style="color: var(--color-error);"></p>
+            <div class="et-form-actions">
+              <button type="submit" id="et-save" class="btn primary">Save</button>
+              <button type="button" id="et-cancel" class="btn ghost">Cancel</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </section>
+
+    <section id="settings" class="screen screen-wide hidden">
+      <header class="app-header">
+        <h2>Settings</h2>
+        <nav class="app-nav" aria-label="Host navigation">
+          <a href="#" id="nav-chat-st" class="app-nav-link">Chat</a>
+          <a href="#" id="nav-event-types-st" class="app-nav-link">Booking links</a>
+          <a href="#" id="nav-settings-st" class="app-nav-link is-active" aria-current="page">Settings</a>
+        </nav>
+        <div class="app-header-actions">
+          <label class="theme-toggle" title="Color theme">
+            <span class="sr-only">Color theme</span>
+            <select data-theme-select aria-label="Color theme">
+              <option value="system">System</option>
+              <option value="light">Light</option>
+              <option value="dark">Dark</option>
+            </select>
+          </label>
+          <button id="logout-st" class="btn ghost" type="button" aria-label="Sign out">Sign out</button>
+        </div>
+      </header>
+
+      <p class="screen-lead">Manage your timezone, privacy, and weekly availability.</p>
+
+      <div class="settings-grid">
+        <div class="panel settings-panel">
+          <h3>Timezone</h3>
+          <div class="form-field">
+            <label for="settings-timezone">Your timezone</label>
+            <select id="settings-timezone" aria-describedby="settings-tz-hint"></select>
+            <p id="settings-tz-hint" class="hint">Used for scheduling and booking link slot display.</p>
+          </div>
+          <button type="button" id="save-settings-tz" class="btn primary settings-save">Save timezone</button>
+        </div>
+
+        <div class="panel settings-panel">
+          <h3>Privacy</h3>
+          <fieldset class="privacy-options">
+            <legend class="sr-only">Calendar privacy</legend>
+            <label class="privacy-option">
+              <input type="radio" name="settings-privacy" value="private" checked />
+              <span class="privacy-option-text">
+                <strong>Private</strong>
+                <span>Only you see event titles and details.</span>
+              </span>
+            </label>
+            <label class="privacy-option">
+              <input type="radio" name="settings-privacy" value="trusted" />
+              <span class="privacy-option-text">
+                <strong>Trusted</strong>
+                <span>Close contacts see more context on shared links.</span>
+              </span>
+            </label>
+            <label class="privacy-option">
+              <input type="radio" name="settings-privacy" value="open" />
+              <span class="privacy-option-text">
+                <strong>Open</strong>
+                <span>Guests see titles on your public availability view.</span>
+              </span>
+            </label>
+          </fieldset>
+          <button type="button" id="save-settings-privacy" class="btn primary settings-save">Save privacy</button>
+        </div>
+
+        <div class="panel settings-panel settings-panel-wide">
+          <h3>Weekly availability</h3>
+          <p>These hours apply to voice scheduling and default booking link availability.</p>
+          <div id="settings-weekly-hours" aria-label="Settings weekly availability"></div>
+          <button type="button" id="save-settings-hours" class="btn primary settings-save">Save availability</button>
+          <p id="settings-hours-error" class="hint hidden" role="alert" style="color: var(--color-error);"></p>
+        </div>
       </div>
     </section>
   </div>

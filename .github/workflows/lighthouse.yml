@@ -1,0 +1,54 @@
+name: Lighthouse
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'web/**'
+      - '.github/workflows/lighthouse.yml'
+
+# Perf budget check for booking + host SPA shells.
+# Full Lighthouse in CI requires a running server + Chrome; this workflow documents
+# the manual baseline and runs a lightweight static asset size gate instead.
+
+jobs:
+  static-budget:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+      - run: npm run build
+
+      - name: Web bundle size gate (proxy for perf budget)
+        run: |
+          MAX_KB=120
+          TOTAL=0
+          for f in web/dist/assets/*.js; do
+            [ -f "$f" ] || continue
+            SIZE=$(wc -c < "$f")
+            TOTAL=$((TOTAL + SIZE))
+            echo "$(basename "$f"): $((SIZE / 1024)) KB"
+          done
+          TOTAL_KB=$((TOTAL / 1024))
+          echo "Total JS: ${TOTAL_KB} KB (budget ${MAX_KB} KB)"
+          if [ "$TOTAL_KB" -gt "$MAX_KB" ]; then
+            echo "::error::JS bundle ${TOTAL_KB}KB exceeds ${MAX_KB}KB budget"
+            exit 1
+          fi
+
+      - name: Lighthouse note (headless)
+        run: |
+          cat <<'EOF'
+          Full Lighthouse (target ≥90 performance) is not run headlessly in CI yet.
+          Run locally after deploy:
+            npx lighthouse https://YOUR-STAGING/book/USERNAME/SLUG --preset=desktop --output=html
+            npx lighthouse https://YOUR-STAGING/ --preset=desktop --output=html
+          Attach reports to docs/production-readiness/lighthouse/ before CEO sign-off.
+          EOF

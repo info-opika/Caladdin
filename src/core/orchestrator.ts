@@ -6,6 +6,7 @@ import { sendConfirmationRequest } from '../services/notifications.js';
 import { getOAuthClientForUser } from '../services/auth_service.js';
 import { ensureDefaultPolicy } from '../db/users.js';
 import { logger } from '../logger.js';
+import { checkOperationAllowed } from '../pilot/pilot_controls.js';
 import { prepareParsedForExecution, normalizeStoredParsed } from './param-extract.js';
 import { getConversationContext } from '../db/conversation-context.js';
 
@@ -78,7 +79,18 @@ export async function orchestrate(
     };
   }
 
-  const rate = checkRateLimit(userId, parsed.intent);
+  const pilotGate = await checkOperationAllowed('voice_mutation');
+  if (!pilotGate.allowed) {
+    return {
+      intent: parsed.intent,
+      success: false,
+      requiresConfirmation: false,
+      messageToUser: pilotGate.message ?? 'Caladdin is temporarily unavailable.',
+      schemaVersion: 1,
+    };
+  }
+
+  const rate = await checkRateLimit(userId, parsed.intent);
   if (!rate.allowed) {
     return {
       intent: parsed.intent,

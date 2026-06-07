@@ -49,17 +49,19 @@ describe('red team', () => {
   });
 
   it('ATTACK 3: utterance too long returns 400', async () => {
-    const token = createSession(validUUID, 'test@test.com');
+    const token = await createSession(validUUID, 'test@test.com');
+    const csrf = 'test-csrf-token';
     const res = await request(app)
       .post('/voice')
-      .set('Cookie', `caladdin_session=${token}`)
+      .set('Cookie', `caladdin_session=${token}; caladdin_csrf=${csrf}`)
+      .set('x-csrf-token', csrf)
       .send({ utterance: 'a'.repeat(1001) });
     expect(res.status).toBe(400);
     expect(res.body.error).toMatch(/too long/i);
   });
 
   it('ATTACK 5: invalid userId in body when session mismatch returns 403', async () => {
-    const token = createSession(validUUID, 'test@test.com');
+    const token = await createSession(validUUID, 'test@test.com');
     const res = await request(app)
       .post('/voice')
       .set('Cookie', `caladdin_session=${token}`)

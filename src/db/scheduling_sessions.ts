@@ -37,7 +37,7 @@ export interface SchedulingSessionRow {
   selected_slot: CandidateSlot | null;
   google_event_id: string | null;
   proposed_alternatives: unknown[];
-  status: 'pending' | 'confirmed' | 'open' | 'booked' | 'expired';
+  status: 'pending' | 'confirmed' | 'open' | 'booked' | 'expired' | 'cancelled';
   expires_at: string;
   created_at: string;
   updated_at: string;
@@ -66,6 +66,7 @@ function rowFromDb(data: Record<string, unknown>): SchedulingSessionRow {
     expires_at: data.expires_at as string,
     created_at: (data.created_at as string) ?? new Date().toISOString(),
     updated_at: (data.updated_at as string) ?? new Date().toISOString(),
+    posture: (data.posture as string) ?? 'mutual',
   };
 }
 
@@ -80,6 +81,7 @@ export async function createSchedulingSession(entry: {
   slots: Array<{ start: string; end: string; score?: number }>;
   hostName?: string;
   context?: string;
+  posture?: string;
   proposedEventIds?: string[];
   inviteeEmail?: string;
   hostTimezone?: string;
@@ -103,6 +105,7 @@ export async function createSchedulingSession(entry: {
       offered_slots: offered,
       host_name: entry.hostName,
       context: entry.context,
+      posture: entry.posture ?? 'mutual',
       proposed_event_ids: entry.proposedEventIds ?? [],
       invitee_email: entry.inviteeEmail,
       host_timezone: entry.hostTimezone ?? 'America/Chicago',
@@ -131,6 +134,17 @@ export async function getSchedulingSessionByToken(token: string): Promise<Schedu
     .from('scheduling_sessions')
     .select('*')
     .eq('token', token)
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) return null;
+  return rowFromDb(data as Record<string, unknown>);
+}
+
+export async function getSchedulingSessionById(id: string): Promise<SchedulingSessionRow | null> {
+  const { data, error } = await getSupabase()
+    .from('scheduling_sessions')
+    .select('*')
+    .eq('id', id)
     .maybeSingle();
   if (error) throw error;
   if (!data) return null;
@@ -223,11 +237,45 @@ export async function listSessionsForHost(hostUserId: string): Promise<Schedulin
   return (data ?? []) as SchedulingSession[];
 }
 
-export async function expireOpenSessions(): Promise<void> {
-  const { error } = await getSupabase()
+export async function expireOpenSessions(): Promise<number> {
+  const { data, error } = await getSupabase()
     .from('scheduling_sessions')
     .update({ status: 'expired' })
     .in('status', ['open', 'pending'])
-    .lt('expires_at', new Date().toISOString());
+    .lt('expires_at', new Date().toISOString())
+    .select('id');
   if (error) throw error;
+  return data?.length ?? 0;
+}
+
+/** Service role — guest cancel flow. */
+export async function cancelConfirmedSession(token: string): Promise<boolean> {
+  const { data, error } = await getSupabase()
+    .from('scheduling_sessions')
+    .update({ status: 'cancelled' })
+    .eq('token', token)
+    .eq('status', 'confirmed')
+    .select('id')
+    .maybeSingle();
+  if (error) throw error;
+  return Boolean(data);
+}
+
+/** Service role — guest reschedule flow. */
+export async function rescheduleConfirmedSession(opts: {
+  token: string;
+  slot: CandidateSlot;
+}): Promise<boolean> {
+  const { data, error } = await getSupabase()
+    .from('scheduling_sessions')
+    .update({
+      selected_slot: opts.slot,
+      status: 'confirmed',
+    })
+    .eq('token', opts.token)
+    .eq('status', 'confirmed')
+    .select('id')
+    .maybeSingle();
+  if (error) throw error;
+  return Boolean(data);
 }

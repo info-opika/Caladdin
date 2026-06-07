@@ -5,6 +5,8 @@ web/dist/
 *.log
 coverage/
 .DS_Store
+__MACOSX/
 IMPROVEMENT_REPORT.md
 supabase/.temp/
 supabase/.branches/
+tests/tests/

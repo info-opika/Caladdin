@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Book a meeting — Caladdin</title>
+  <meta name="description" content="Pick a time that works for you." />
+  <meta name="theme-color" content="#d97706" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23d97706'/%3E%3Ctext x='16' y='22' text-anchor='middle' fill='white' font-family='Georgia,serif' font-size='18' font-weight='600'%3EC%3C/text%3E%3C/svg%3E" />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=Fraunces:wght@600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/tokens.css" />
+  <link rel="stylesheet" href="/booking.css" />
+</head>
+<body class="booking-page">
+  <a href="#booking-main" class="skip-link">Skip to booking</a>
+  <div id="toast-root" class="toast-root" aria-live="polite" aria-relevant="additions"></div>
+
+  <div class="booking-shell">
+    <header class="booking-topbar">
+      <div class="booking-brand">
+        <div class="booking-brand-mark" aria-hidden="true">C</div>
+        <p class="booking-brand-name">Caladdin</p>
+      </div>
+      <div class="booking-topbar-actions">
+        <label class="theme-toggle" title="Color theme">
+          <span class="sr-only">Color theme</span>
+          <select id="theme-select" aria-label="Color theme">
+            <option value="system">System</option>
+            <option value="light">Light</option>
+            <option value="dark">Dark</option>
+          </select>
+        </label>
+      </div>
+    </header>
+
+    <main id="booking-main">
+      <div id="booking-root" class="book-flow" aria-live="polite">
+        <div id="booking-loading" class="book-loading" role="status" aria-busy="true" aria-label="Loading booking page">
+          <div class="book-layout-skeleton">
+            <div class="book-sidebar-skeleton">
+              <div class="skeleton skeleton-title"></div>
+              <div class="skeleton skeleton-line"></div>
+              <div class="skeleton skeleton-line short"></div>
+            </div>
+            <div class="book-calendar-skeleton">
+              <div class="skeleton skeleton-calendar"></div>
+              <div class="skeleton-grid">
+                <div class="skeleton skeleton-slot"></div>
+                <div class="skeleton skeleton-slot"></div>
+                <div class="skeleton skeleton-slot"></div>
+                <div class="skeleton skeleton-slot"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <div id="confirm-dialog-root"></div>
+  <script type="module" src="/book-page.js"></script>
+</body>
+</html>

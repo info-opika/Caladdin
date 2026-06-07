@@ -25,6 +25,20 @@ vi.mock('../../src/db/scheduling_sessions.js', () => ({
   appendProposedAlternative: (...a: unknown[]) => mockAppendAlt(...a),
 }));
 
+vi.mock('../../src/db/booking_responses.js', () => ({
+  upsertBookingResponse: vi.fn().mockResolvedValue({ id: 'br-1' }),
+  validateGuestIntake: (guest: { name?: string; email?: string } | undefined) => {
+    if (!guest?.name?.trim()) return 'name_required';
+    if (!guest?.email?.trim()) return 'email_required';
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(guest.email.trim())) return 'email_invalid';
+    return null;
+  },
+}));
+
+vi.mock('../../src/db/booking_reminders.js', () => ({
+  enqueueRemindersForSession: vi.fn().mockResolvedValue(undefined),
+}));
+
 vi.mock('../../src/services/auth_service.js', () => ({
   getAuthService: () => ({ getClientForUser: mockGetAuth }),
 }));
@@ -35,6 +49,35 @@ vi.mock('../../src/services/calendar.js', () => ({
 
 vi.mock('../../src/services/gcal.js', () => ({
   gcalDeleteEvent: (...a: unknown[]) => mockGcalDelete(...a),
+}));
+
+const mockCheckOperationAllowed = vi.fn();
+const mockGetPolicy = vi.fn();
+const mockListEvents = vi.fn();
+
+vi.mock('../../src/db/users.js', () => ({
+  getPolicy: (...args: unknown[]) => mockGetPolicy(...args),
+  getUserById: vi.fn().mockResolvedValue({ id: '22222222-2222-4222-8222-222222222222', email: 'host@test.com' }),
+}));
+
+vi.mock('../../src/db/events.js', () => ({
+  listEvents: (...args: unknown[]) => mockListEvents(...args),
+}));
+
+vi.mock('../../src/services/notifications.js', () => ({
+  sendHostBookingNotification: vi.fn().mockResolvedValue(undefined),
+}));
+
+vi.mock('../../src/services/webhooks.js', () => ({
+  dispatchBookingWebhooks: vi.fn().mockResolvedValue(undefined),
+}));
+
+vi.mock('../../src/db/usage_events.js', () => ({
+  recordUsageEvent: vi.fn().mockResolvedValue(undefined),
+}));
+
+vi.mock('../../src/pilot/pilot_controls.js', () => ({
+  checkOperationAllowed: (...args: unknown[]) => mockCheckOperationAllowed(...args),
 }));
 
 function app() {
@@ -74,11 +117,19 @@ function baseSession(over: Partial<SchedulingSessionRow> = {}): SchedulingSessio
   };
 }
 
+const selectBody = {
+  slotIndex: 0,
+  guest: { name: 'Guest User', email: 'guest@example.com' },
+};
+
 describe('Public scheduling routes', () => {
   let store: { row: SchedulingSessionRow };
 
   beforeEach(() => {
     vi.clearAllMocks();
+    mockCheckOperationAllowed.mockResolvedValue({ allowed: true });
+    mockGetPolicy.mockResolvedValue({ shareAvailabilityOnInvite: true });
+    mockListEvents.mockResolvedValue([]);
     store = { row: baseSession() };
     mockGetAuth.mockResolvedValue({ request: vi.fn() });
     mockCreateEvent.mockResolvedValue({ id: 'gcal-event-99' });
@@ -167,14 +218,28 @@ describe('Public scheduling routes', () => {
   });
 
   it('POST /s/:token/select claims, creates calendar event, then finalizes', async () => {
-    const res = await request(app()).post('/s/tok123/select').send({ slotIndex: 0 });
+    const res = await request(app()).post('/s/tok123/select').send(selectBody);
     expect(res.status).toBe(200);
     expect(res.body.ok).toBe(true);
+    expect(mockCheckOperationAllowed).toHaveBeenCalledWith('calendar_write');
     expect(mockCreateEvent).toHaveBeenCalledTimes(1);
     expect(mockClaim).toHaveBeenCalled();
     expect(mockFinalize).toHaveBeenCalledWith(
       expect.objectContaining({ token: 'tok123', googleEventId: 'gcal-event-99' })
     );
+  });
+
+  it('POST /s/:token/select returns 503 when kill switch blocks calendar writes', async () => {
+    mockCheckOperationAllowed.mockResolvedValueOnce({
+      allowed: false,
+      reason: 'kill_switch_active',
+      message: 'Caladdin is temporarily paused. Calendar operations are unavailable.',
+    });
+    const res = await request(app()).post('/s/tok123/select').send(selectBody);
+    expect(res.status).toBe(503);
+    expect(res.body.error).toBe('paused');
+    expect(mockClaim).not.toHaveBeenCalled();
+    expect(mockCreateEvent).not.toHaveBeenCalled();
   });
 
   it('POST /s/:token/select is idempotent when already confirmed same slot', async () => {
@@ -185,7 +250,7 @@ describe('Public scheduling routes', () => {
       google_event_id: 'existing-id',
       offered_slots: [sel, slot(14)],
     });
-    const res = await request(app()).post('/s/tok123/select').send({ slotIndex: 0 });
+    const res = await request(app()).post('/s/tok123/select').send({ ...selectBody, slotIndex: 0 });
     expect(res.status).toBe(200);
     expect(res.body.idempotent).toBe(true);
     expect(mockCreateEvent).not.toHaveBeenCalled();
@@ -204,8 +269,8 @@ describe('Public scheduling routes', () => {
   it('POST /s/:token/select: parallel selects same slot only create one GCal event', async () => {
     const a = request(app());
     const [r1, r2] = await Promise.all([
-      a.post('/s/tok123/select').send({ slotIndex: 0 }),
-      a.post('/s/tok123/select').send({ slotIndex: 0 }),
+      a.post('/s/tok123/select').send(selectBody),
+      a.post('/s/tok123/select').send(selectBody),
     ]);
     const statuses = [r1.status, r2.status].sort();
     expect(statuses[0]).toBe(200);
@@ -220,7 +285,7 @@ describe('Public scheduling routes', () => {
 
   it('POST /s/:token/select: create failure after claim reverts and does not leave sentinel', async () => {
     mockCreateEvent.mockRejectedValueOnce(new Error('network'));
-    const res = await request(app()).post('/s/tok123/select').send({ slotIndex: 0 });
+    const res = await request(app()).post('/s/tok123/select').send({ ...selectBody, slotIndex: 0 });
     expect(res.status).toBe(502);
     expect(mockRevert).toHaveBeenCalled();
     expect(store.row.google_event_id).toBeNull();
@@ -260,7 +325,7 @@ describe('Public scheduling routes', () => {
 
   it('POST /s/:token/select returns 404 for invalid token', async () => {
     mockGetSession.mockResolvedValueOnce(null);
-    const res = await request(app()).post('/s/badtoken/select').send({ slotIndex: 0 });
+    const res = await request(app()).post('/s/badtoken/select').send(selectBody);
     expect(res.status).toBe(404);
     expect(res.body.error).toBe('not_found');
   });
@@ -273,5 +338,29 @@ describe('Public scheduling routes', () => {
     });
     expect(res.status).toBe(404);
     expect(res.body.error).toBe('not_found');
+  });
+
+  it('GET /s/:token/calendar returns 403 when host disabled shareAvailabilityOnInvite (B07)', async () => {
+    mockGetPolicy.mockResolvedValueOnce({ shareAvailabilityOnInvite: false });
+    const res = await request(app()).get('/s/tok123/calendar');
+    expect(res.status).toBe(403);
+    expect(res.text).toMatch(/Calendar view unavailable/i);
+    expect(mockListEvents).not.toHaveBeenCalled();
+  });
+
+  it('GET /s/:token/calendar renders host events when sharing enabled', async () => {
+    mockListEvents.mockResolvedValueOnce([
+      {
+        start: new Date(Date.now() + 86400000).toISOString(),
+        end: new Date(Date.now() + 90000000).toISOString(),
+        status: 'confirmed',
+        tier: 2,
+        title: 'Team sync',
+      },
+    ]);
+    const res = await request(app()).get('/s/tok123/calendar');
+    expect(res.status).toBe(200);
+    expect(res.text).toContain('Team sync');
+    expect(mockGetPolicy).toHaveBeenCalled();
   });
 });

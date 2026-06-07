@@ -121,6 +121,7 @@ describe('pilot controls — capacity (mocked DB)', () => {
     const result = await checkOperationAllowed('new_user_onboard');
     expect(result.allowed).toBe(false);
     if (!result.allowed) {
+      expect(result.reason).toBe('pilot_full');
       expect(result.message).toMatch(/waitlist/i);
     }
   });

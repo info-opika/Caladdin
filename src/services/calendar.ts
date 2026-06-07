@@ -25,4 +25,29 @@ export async function createCalendarEvent(
   return { id: res.data.id ?? '' };
 }
 
+export async function updateCalendarEvent(
+  cal: calendar_v3.Calendar,
+  eventId: string,
+  opts: {
+    summary?: string;
+    start: string;
+    end: string;
+    attendees?: string[];
+    description?: string;
+  },
+): Promise<void> {
+  await cal.events.patch({
+    calendarId: 'primary',
+    eventId,
+    sendUpdates: opts.attendees?.length ? 'all' : 'none',
+    requestBody: {
+      summary: opts.summary,
+      start: { dateTime: opts.start },
+      end: { dateTime: opts.end },
+      description: opts.description,
+      attendees: opts.attendees?.map((email) => ({ email })),
+    },
+  });
+}
+
 export type { CandidateSlot };

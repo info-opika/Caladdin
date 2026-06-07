@@ -17,6 +17,11 @@ vi.mock('../../src/services/calendar_api.js', () => ({
   listBusyFromGCal: (...a: unknown[]) => mockListBusy(...a),
 }));
 
+vi.mock('../../src/services/freebusy-cache.js', () => ({
+  getCachedBusyFromGCal: (_cal: unknown, userId: unknown, timeMin: unknown, timeMax: unknown) =>
+    mockListBusy(userId, timeMin, timeMax),
+}));
+
 vi.mock('../../src/db/users.js', () => ({
   getUserByEmail: (...a: unknown[]) => mockGetUserByEmail(...a),
 }));
@@ -25,7 +30,7 @@ vi.mock('../../src/services/auth_service.js', () => ({
   getOAuthClientForUser: (...a: unknown[]) => mockGetOAuthClient(...a),
 }));
 
-import { generateSlots } from '../../src/core/slot-scoring.js';
+import { generateSlots, generatePublicBookingSlots } from '../../src/core/slot-scoring.js';
 
 const BASE_POLICY: UserPolicyProfile = {
   userId: 'user-1',
@@ -139,14 +144,44 @@ describe('generateSlots — protected blocks', () => {
   it('includes recipient busy when recipientEmail resolves to user', async () => {
     mockGetUserByEmail.mockResolvedValueOnce({ id: 'guest-1', email: 'guest@example.com' });
     mockGetOAuthClient.mockResolvedValueOnce({});
-    mockListBusy.mockResolvedValueOnce([
-      { start: '2026-06-03T11:00:00-05:00', end: '2026-06-03T12:00:00-05:00' },
-    ]);
+    mockListBusy.mockImplementation((userId: unknown) => {
+      if (userId === 'guest-1') {
+        return Promise.resolve([
+          { start: '2026-06-03T11:00:00-05:00', end: '2026-06-03T12:00:00-05:00' },
+        ]);
+      }
+      return Promise.resolve([]);
+    });
     const slots = await generateSlots('user-1', BASE_POLICY, 60, 1, {
       recipientEmail: 'guest@example.com',
       cal: {} as import('googleapis').calendar_v3.Calendar,
+      posture: 'mutual',
     });
     expect(slots.every((s) => !s.start.includes('T11:00'))).toBe(true);
+  });
+
+  it('flexible posture skips recipient calendar lookup (B06)', async () => {
+    mockGetUserByEmail.mockResolvedValue({ id: 'guest-1', email: 'guest@example.com' });
+    mockGetOAuthClient.mockResolvedValue({});
+    mockListBusy.mockResolvedValue([
+      { start: '2026-06-03T14:00:00-05:00', end: '2026-06-03T15:00:00-05:00' },
+    ]);
+    await generateSlots('user-1', BASE_POLICY, 60, 1, {
+      recipientEmail: 'guest@example.com',
+      posture: 'mutual',
+    });
+    expect(mockGetUserByEmail).toHaveBeenCalled();
+    mockGetUserByEmail.mockClear();
+    await generateSlots('user-1', BASE_POLICY, 60, 1, {
+      recipientEmail: 'guest@example.com',
+      posture: 'flexible',
+    });
+    expect(mockGetUserByEmail).not.toHaveBeenCalled();
+  });
+
+  it('strict posture returns no slots without recipient email (B06)', async () => {
+    const slots = await generateSlots('user-1', BASE_POLICY, 60, 1, { posture: 'strict' });
+    expect(slots).toHaveLength(0);
   });
 
   it('returns at most 2 scored slots with Option labels', async () => {
@@ -177,5 +212,13 @@ describe('generateSlots — protected blocks', () => {
     const slots = await generateSlots('user-1', narrowPolicy, 60, 1);
     expect(slots.length).toBe(1);
     expect(Math.abs(new Date(slots[0]!.start).getTime() - localOnePm.getTime())).toBeLessThan(60 * 1000);
+  });
+
+  it('generatePublicBookingSlots returns many slots capped by maxSlots', async () => {
+    const slots = await generatePublicBookingSlots('user-1', BASE_POLICY, 30, 3, { maxSlots: 5 });
+    expect(slots.length).toBeGreaterThan(0);
+    expect(slots.length).toBeLessThanOrEqual(5);
+    expect(slots[0]).toHaveProperty('start');
+    expect(slots[0]).toHaveProperty('end');
   });
 });

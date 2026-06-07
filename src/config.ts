@@ -37,4 +37,8 @@ export const config = {
   llmTimeoutMs: 10000,
   rateLimitMax: 20,
   rateLimitWindowMs: 60 * 60 * 1000,
+  voiceHttpRateLimitMax: 30,
+  voiceHttpRateLimitWindowMs: 60 * 1000,
+  bookingSelectRateLimitMax: 10,
+  bookingSelectRateLimitWindowMs: 60 * 1000,
 };

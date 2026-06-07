@@ -35,6 +35,12 @@ vi.mock('../../src/services/calendar_api.js', () => ({
   createEventWithSync: mockCreateEventWithSync.mockResolvedValue(undefined),
 }));
 
+const mockCheckOperationAllowed = vi.fn();
+
+vi.mock('../../src/pilot/pilot_controls.js', () => ({
+  checkOperationAllowed: (...args: unknown[]) => mockCheckOperationAllowed(...args),
+}));
+
 const BASE_PROFILE: UserPolicyProfile = {
   userId: '8b616ceb-7e77-4886-9361-92a534374fac',
   schemaVersion: 1,
@@ -84,9 +90,11 @@ describe('Orchestrator', () => {
     mockGetOAuthClientForUser.mockReset();
     mockListEventsFromGCalSafe.mockReset();
     mockCreateEventWithSync.mockReset();
+    mockCheckOperationAllowed.mockReset();
     mockGetOAuthClientForUser.mockResolvedValue({} as any);
     mockListEventsFromGCalSafe.mockResolvedValue({ events: [] });
     mockCreateEventWithSync.mockResolvedValue(undefined);
+    mockCheckOperationAllowed.mockResolvedValue({ allowed: true });
   });
 
   it('bounded PROTECT_BLOCK applies without blast confirmation', async () => {
@@ -114,6 +122,20 @@ describe('Orchestrator', () => {
     expect(result.intent).toBe('WARM_REDIRECT');
     expect((result as { isWarmRedirect?: boolean }).isWarmRedirect).toBe(true);
     expect(result.messageToUser).toMatch(/scheduling|calendar/i);
+    expect(mockCheckOperationAllowed).not.toHaveBeenCalled();
+  });
+
+  it('blocks orchestration when kill switch is active', async () => {
+    mockCheckOperationAllowed.mockResolvedValueOnce({
+      allowed: false,
+      reason: 'kill_switch_active',
+      message: 'Caladdin is temporarily paused. Calendar operations are unavailable.',
+    });
+    const result = await orchestrate(makeIntent('CREATE_EVENT'), CTX);
+    expect(result.success).toBe(false);
+    expect(result.messageToUser).toMatch(/temporarily paused/i);
+    expect(mockCheckOperationAllowed).toHaveBeenCalledWith('voice_mutation');
+    expect(mockGetOAuthClientForUser).not.toHaveBeenCalled();
   });
 
   describe('QUERY_CALENDAR', () => {

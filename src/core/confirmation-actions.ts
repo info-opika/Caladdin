@@ -7,7 +7,7 @@ import { hashPayload, insertAuditLog } from '../db/audit.js';
 import { reExecuteFromConfirmation } from './orchestrator.js';
 import { logger } from '../logger.js';
 
-export type ConfirmationActionStatus = 200 | 403 | 404 | 409 | 410;
+export type ConfirmationActionStatus = 200 | 403 | 404 | 409 | 410 | 500;
 
 export interface ConfirmationActionResult {
   status: ConfirmationActionStatus;
@@ -49,24 +49,43 @@ export async function approvePendingConfirmation(
   try {
     const payload = row.payload as { parsed: unknown; requestId: string };
     const result = await reExecuteFromConfirmation(payload, row.user_id);
+    if (!result.success) {
+      await updateConfirmationStatus(token, 'pending');
+      logger.error('Confirmation re-exec failed', {
+        token,
+        intent: row.intent,
+        error: result.messageToUser ?? 'execution failed',
+      });
+      return {
+        status: 500,
+        body: {
+          success: false,
+          status: 'pending',
+          executionStatus: 'failed',
+          messageToUser: result.messageToUser,
+          reason: result.messageToUser,
+        },
+      };
+    }
     return {
       status: 200,
       body: {
         status: 'approved',
-        executionStatus: result.success ? 'success' : 'failed',
+        executionStatus: 'success',
         messageToUser: result.messageToUser,
-        reason: result.success ? undefined : result.messageToUser,
         result,
       },
     };
   } catch (e) {
-    logger.error('Confirmation re-exec failed', { token, error: String(e) });
+    await updateConfirmationStatus(token, 'pending');
+    logger.error('Confirmation re-exec failed', { token, intent: row.intent, error: String(e) });
     return {
-      status: 200,
+      status: 500,
       body: {
-        status: 'approved',
+        success: false,
+        status: 'pending',
         executionStatus: 'failed',
-        messageToUser: String(e),
+        messageToUser: 'Something went wrong processing that request. Please try again.',
         reason: String(e),
       },
     };

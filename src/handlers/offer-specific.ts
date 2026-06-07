@@ -18,10 +18,16 @@ export async function handleOfferSpecific(
   const duration = (parsed.params.durationMinutes as number) ?? 30;
   const recipientName = (parsed.params.recipientName as string) ?? 'Guest';
   const recipientEmail = (parsed.params.recipientEmail as string) ?? undefined;
+  const postureRaw = parsed.params.posture as string | undefined;
+  const posture =
+    postureRaw === 'strict' || postureRaw === 'flexible' || postureRaw === 'mutual'
+      ? postureRaw
+      : 'mutual';
 
   const slots = await generateSlots(ctx.userId, policy, duration, 7, {
     recipientEmail,
     cal,
+    posture,
   });
 
   if (slots.length === 0) {
@@ -52,6 +58,7 @@ export async function handleOfferSpecific(
     slots,
     hostName: user?.display_name ?? user?.email ?? 'Host',
     context: parsed.params.context as string | undefined,
+    posture,
     proposedEventIds: proposedIds,
     inviteeEmail: recipientEmail,
     hostTimezone: policy.timezone,

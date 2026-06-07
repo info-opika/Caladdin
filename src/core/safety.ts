@@ -72,7 +72,7 @@ export function isMutationIntent(intent: Intent): boolean {
   return MUTATION_INTENTS.includes(intent);
 }
 
-export function checkRateLimit(userId: string, intent: Intent): { allowed: boolean; retryAfterMs?: number } {
+export async function checkRateLimit(userId: string, intent: Intent): Promise<{ allowed: boolean; retryAfterMs?: number }> {
   if (!isMutationIntent(intent)) return { allowed: true };
   return globalRateLimiter.check(userId);
 }

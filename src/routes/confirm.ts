@@ -7,11 +7,11 @@ export const confirmRouter = Router();
 confirmRouter.use(requireApiKey);
 
 confirmRouter.post('/:token/approve', async (req: Request, res: Response) => {
-  const { status, body } = await approvePendingConfirmation(req.params.token);
+  const { status, body } = await approvePendingConfirmation(String(req.params.token));
   res.status(status).json(body);
 });
 
 confirmRouter.post('/:token/reject', async (req: Request, res: Response) => {
-  const { status, body } = await rejectPendingConfirmation(req.params.token);
+  const { status, body } = await rejectPendingConfirmation(String(req.params.token));
   res.status(status).json(body);
 });

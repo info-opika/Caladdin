@@ -137,6 +137,7 @@ function createDom() {
   }
 
   const documentStub = {
+    cookie: 'caladdin_csrf=test-csrf-token',
     getElementById(id: string) {
       return elements.get(id) ?? null;
     },
@@ -161,6 +162,7 @@ async function setupMainHarness(options: HarnessOptions) {
     options.fetchImpl ??
     (async (url: string) => {
       if (url === '/auth/me') return makeJsonResponse(401, {});
+      if (url === '/api/csrf-token') return makeJsonResponse(200, { csrfToken: 'test-csrf-token' });
       if (url === '/voice') return makeJsonResponse(200, { messageToUser: 'ok' });
       return makeJsonResponse(200, {});
     });
@@ -257,6 +259,7 @@ describe('voice UI STT integration', () => {
       speechSupported: true,
       fetchImpl: async (url: string) => {
         if (url === '/auth/me') return makeJsonResponse(401, {});
+        if (url === '/api/csrf-token') return makeJsonResponse(200, { csrfToken: 'test-csrf-token' });
         if (url === '/voice') return pendingVoice;
         return makeJsonResponse(200, {});
       },

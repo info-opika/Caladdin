@@ -12,7 +12,7 @@ export interface CapacityResult {
 
 export interface OperationResult {
   allowed: boolean;
-  reason?: 'kill_switch_active';
+  reason?: 'kill_switch_active' | 'pilot_full';
   message?: string;
 }
 
@@ -73,7 +73,7 @@ export async function checkOperationAllowed(operation: OperationType): Promise<O
     if (!cap.allowed) {
       return {
         allowed: false,
-        reason: 'kill_switch_active',
+        reason: cap.reason === 'pilot_full' ? 'pilot_full' : 'kill_switch_active',
         message: cap.message,
       };
     }

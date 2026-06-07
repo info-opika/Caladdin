@@ -1,0 +1,84 @@
+# Caladdin — Render Blueprint (staging / production)
+# Docs: docs/DEPLOYMENT.md
+#
+# Apply: Render Dashboard → Blueprints → New Blueprint Instance, or `render blueprint validate`
+
+envVarGroups:
+  - name: caladdin-core
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: "3000"
+      # Set in Dashboard (sync: false) — never commit secrets
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: GOOGLE_OAUTH_CLIENT_ID
+        sync: false
+      - key: GOOGLE_OAUTH_CLIENT_SECRET
+        sync: false
+      - key: GOOGLE_REDIRECT_URI
+        sync: false
+      - key: CALADDIN_BASE_URL
+        sync: false
+      - key: CALADDIN_API_KEY
+        sync: false
+      - key: SESSION_SECRET
+        sync: false
+      - key: OAUTH_STATE_SECRET
+        sync: false
+      - key: RESEND_API_KEY
+        sync: false
+      - key: EMAIL_FROM
+        sync: false
+      # Optional: Redis rate-limit backend (Postgres used when unset)
+      - key: REDIS_URL
+        sync: false
+      # Emergency mutation block — set to 1 in Dashboard
+      - key: CALADDIN_KILL_SWITCH
+        sync: false
+
+services:
+  - type: web
+    name: caladdin
+    runtime: docker
+    plan: starter
+    region: oregon
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - fromGroup: caladdin-core
+      - key: CALADDIN_SERVICE_NAME
+        value: caladdin-web
+      # Optional: override per environment in Dashboard (staging: caladdin-staging-web)
+
+  # Session expiry — every 15 minutes (same cadence as in-process worker fallback)
+  - type: cron
+    name: caladdin-session-expiry
+    runtime: node
+    plan: starter
+    region: oregon
+    schedule: "*/15 * * * *"
+    buildCommand: npm ci
+    startCommand: >-
+      node -e "fetch(process.env.CALADDIN_BASE_URL+'/jobs/session-expiry',{method:'POST',headers:{'x-api-key':process.env.CALADDIN_API_KEY}}).then(r=>r.text().then(t=>{if(!r.ok)throw new Error(r.status+' '+t);console.log(t)})).catch(e=>{console.error(e);process.exit(1)})"
+    envVars:
+      - fromGroup: caladdin-core
+
+  # Booking reminder emails — hourly
+  - type: cron
+    name: caladdin-reminders
+    runtime: node
+    plan: starter
+    region: oregon
+    schedule: "0 * * * *"
+    buildCommand: npm ci
+    startCommand: >-
+      node -e "fetch(process.env.CALADDIN_BASE_URL+'/jobs/reminders',{method:'POST',headers:{'x-api-key':process.env.CALADDIN_API_KEY}}).then(r=>r.text().then(t=>{if(!r.ok)throw new Error(r.status+' '+t);console.log(t)})).catch(e=>{console.error(e);process.exit(1)})"
+    envVars:
+      - fromGroup: caladdin-core

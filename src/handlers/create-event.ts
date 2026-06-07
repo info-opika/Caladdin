@@ -35,6 +35,7 @@ export async function handleCreateEvent(
     status: 'confirmed',
     participants,
     description,
+    isRecurring: false,
   });
 
   await recordLastEvent(ctx.userId, 'CREATE_EVENT', parsed.rawUtterance, {

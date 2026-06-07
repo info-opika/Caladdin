@@ -7,11 +7,17 @@ interface LogFields {
   [key: string]: unknown;
 }
 
+const logService =
+  process.env.RENDER_SERVICE_NAME ?? process.env.CALADDIN_SERVICE_NAME ?? 'caladdin';
+const logEnv = process.env.NODE_ENV ?? 'development';
+
 function log(level: LogLevel, message: string, fields?: LogFields): void {
   const entry = {
     ts: new Date().toISOString(),
     level,
     message,
+    service: logService,
+    env: logEnv,
     ...fields,
   };
   const line = JSON.stringify(entry);

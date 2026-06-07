@@ -1,40 +1,94 @@
 import { Request, Response, NextFunction } from 'express';
-import { timingSafeEqual } from 'crypto';
+import { createHmac, randomBytes, timingSafeEqual } from 'crypto';
 import { config } from '../config.js';
+import {
+  deleteAuthSessionByTokenHash,
+  getAuthSessionByTokenHash,
+  hashSessionToken,
+  insertAuthSession,
+} from '../db/sessions.js';
 
 const SESSION_COOKIE = 'caladdin_session';
+const SESSION_TTL_MS = 7 * 24 * 3600 * 1000;
 
 export interface SessionData {
   userId: string;
   email: string;
 }
 
-const sessions = new Map<string, SessionData>();
+function timingSafeEqualStr(a: string, b: string): boolean {
+  const ba = Buffer.from(a);
+  const bb = Buffer.from(b);
+  if (ba.length !== bb.length) return false;
+  return timingSafeEqual(ba, bb);
+}
 
-export function createSession(userId: string, email: string): string {
-  const token = Buffer.from(`${userId}:${Date.now()}:${Math.random()}`).toString('base64url');
-  sessions.set(token, { userId, email });
+export function signSessionToken(userId: string): string {
+  const ts = Date.now();
+  const nonce = randomBytes(16).toString('base64url');
+  const payload = Buffer.from(`${userId}:${ts}:${nonce}`).toString('base64url');
+  const sig = createHmac('sha256', config.sessionSecret).update(payload).digest('base64url');
+  return `${payload}.${sig}`;
+}
+
+export function verifySessionTokenSignature(token: string): boolean {
+  const parts = token.split('.');
+  if (parts.length !== 2) return false;
+  const expected = createHmac('sha256', config.sessionSecret).update(parts[0]).digest('base64url');
+  try {
+    return timingSafeEqualStr(parts[1], expected);
+  } catch {
+    return false;
+  }
+}
+
+export async function createSession(userId: string, email: string): Promise<string> {
+  const token = signSessionToken(userId);
+  const tokenHash = hashSessionToken(token);
+  const expiresAt = new Date(Date.now() + SESSION_TTL_MS).toISOString();
+
+  await insertAuthSession({
+    token_hash: tokenHash,
+    user_id: userId,
+    email,
+    expires_at: expiresAt,
+  });
+
   return token;
 }
 
-export function getSession(token: string | undefined): SessionData | null {
-  if (!token) return null;
-  return sessions.get(token) ?? null;
-}
+export async function getSession(token: string | undefined): Promise<SessionData | null> {
+  if (!token || !verifySessionTokenSignature(token)) return null;
 
-export function destroySession(token: string): void {
-  sessions.delete(token);
-}
+  const row = await getAuthSessionByTokenHash(hashSessionToken(token));
+  if (!row) return null;
 
-export function requireSession(req: Request, res: Response, next: NextFunction): void {
-  const token = req.cookies?.[SESSION_COOKIE] ?? req.headers.cookie?.match(/caladdin_session=([^;]+)/)?.[1];
-  const session = getSession(token);
-  if (!session) {
-    res.status(401).json({ error: 'Unauthorized' });
-    return;
+  if (new Date(row.expires_at).getTime() <= Date.now()) {
+    await deleteAuthSessionByTokenHash(row.token_hash);
+    return null;
   }
-  (req as Request & { session: SessionData }).session = session;
-  next();
+
+  return { userId: row.user_id, email: row.email };
+}
+
+export async function destroySession(token: string): Promise<void> {
+  if (!token) return;
+  await deleteAuthSessionByTokenHash(hashSessionToken(token));
+}
+
+export async function requireSession(req: Request, res: Response, next: NextFunction): Promise<void> {
+  const token = req.cookies?.[SESSION_COOKIE] ?? req.headers.cookie?.match(/caladdin_session=([^;]+)/)?.[1];
+  try {
+    const session = await getSession(token);
+    if (!session) {
+      res.status(401).json({ error: 'Unauthorized' });
+      return;
+    }
+    (req as Request & { session: SessionData }).session = session;
+    next();
+  } catch (err) {
+    next(err);
+  }
 }
 
 export function requireApiKey(req: Request, res: Response, next: NextFunction): void {
@@ -57,7 +111,7 @@ export function setSessionCookie(res: Response, token: string): void {
     httpOnly: true,
     secure: config.isProd,
     sameSite: 'lax',
-    maxAge: 7 * 24 * 3600 * 1000,
+    maxAge: SESSION_TTL_MS,
   });
 }
 

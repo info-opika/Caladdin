@@ -60,7 +60,9 @@ export function parseRelativeTime(utterance: string, ref = new Date()): { start:
   return { start: formatISO(day), end: formatISO(addDays(day, 7)) };
 }
 
-export { parseISO };
+export function parseISO(iso: string): Date {
+  return new Date(iso);
+}
 
 export function parseOptionalIso(value: unknown): Date | null {
   if (typeof value !== 'string') return null;

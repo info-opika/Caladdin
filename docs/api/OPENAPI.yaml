@@ -1,0 +1,1172 @@
+openapi: 3.1.0
+info:
+  title: Caladdin API
+  version: 1.0.0
+  description: |
+    HTTP API for Caladdin — AI scheduling assistant.
+
+    **Route groups covered:** `/api/*`, `/book/*`, `/s/*`, `/jobs/*`
+
+    **Authentication:**
+    - **Session cookie** (`caladdin_session`) — host-facing routes under `/api/*`
+    - **API key** (`x-api-key` header) — cron/worker routes under `/jobs/*`
+    - **Guest action token** (signed HMAC, query or body) — cancel/reschedule on `/s/:token/*`
+    - **Public** — `/book/*` metadata and `/s/:token` HTML pages (no auth)
+
+    Base URL is `CALADDIN_BASE_URL` (e.g. `https://caladdin.onrender.com`).
+
+servers:
+  - url: https://caladdin.onrender.com
+    description: Production (example)
+  - url: http://localhost:3000
+    description: Local development
+
+tags:
+  - name: Profile
+    description: Host profile and onboarding
+  - name: Event Types
+    description: Host-managed booking event types
+  - name: Sessions
+    description: Host scheduling session list
+  - name: Public Booking
+    description: Public booking page metadata
+  - name: Guest Scheduling
+    description: Guest lifecycle on signed scheduling links
+  - name: Webhooks
+    description: Host-managed outbound booking webhooks
+  - name: Calendar
+    description: Host calendar export
+
+components:
+  securitySchemes:
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: caladdin_session
+      description: HMAC-signed session cookie set by `GET /auth/callback`
+    apiKey:
+      type: apiKey
+      in: header
+      name: x-api-key
+      description: Value of `CALADDIN_API_KEY` env var
+
+  schemas:
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+      required: [error]
+
+    UserProfile:
+      type: object
+      properties:
+        userId:
+          type: string
+          format: uuid
+        email:
+          type: string
+          format: email
+        timezone:
+          type: string
+          example: America/Chicago
+        privacyMode:
+          type: string
+          enum: [private, trusted, open]
+        workingHoursStart:
+          type: string
+          pattern: '^\d{2}:\d{2}$'
+          example: '09:00'
+        workingHoursEnd:
+          type: string
+          pattern: '^\d{2}:\d{2}$'
+          example: '18:00'
+        onboardingComplete:
+          type: boolean
+        calendarConnected:
+          type: boolean
+
+    ProfilePatch:
+      type: object
+      properties:
+        timezone:
+          type: string
+          minLength: 1
+          maxLength: 64
+        privacyMode:
+          type: string
+          enum: [private, trusted, open]
+        workingHoursStart:
+          type: string
+          pattern: '^\d{2}:\d{2}$'
+        workingHoursEnd:
+          type: string
+          pattern: '^\d{2}:\d{2}$'
+      description: At least one field required
+
+    EventType:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        slug:
+          type: string
+          pattern: '^[a-z0-9]+(?:-[a-z0-9]+)*$'
+        durationMinutes:
+          type: integer
+          minimum: 1
+          maximum: 480
+        description:
+          type: string
+          nullable: true
+        availabilityRules:
+          type: object
+          additionalProperties: true
+          description: Weekly schedule, buffers, minimum notice (see PublicBookingEventType)
+        schedulingMode:
+          type: string
+          enum: [single, round_robin]
+        active:
+          type: boolean
+        publicUrl:
+          type: string
+          format: uri
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    EventTypeCreate:
+      type: object
+      required: [name, durationMinutes]
+      properties:
+        name:
+          type: string
+        slug:
+          type: string
+          description: Optional; auto-generated from name if omitted
+        durationMinutes:
+          type: integer
+          minimum: 1
+          maximum: 480
+        description:
+          type: string
+          nullable: true
+        availabilityRules:
+          type: object
+          additionalProperties: true
+
+    EventTypePatch:
+      type: object
+      properties:
+        name:
+          type: string
+        slug:
+          type: string
+        durationMinutes:
+          type: integer
+          minimum: 1
+          maximum: 480
+        description:
+          type: string
+          nullable: true
+        availabilityRules:
+          type: object
+          additionalProperties: true
+        active:
+          type: boolean
+
+    WebhookSubscription:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        url:
+          type: string
+          format: uri
+        events:
+          type: array
+          items:
+            type: string
+            enum: [booking.confirmed, booking.cancelled]
+        active:
+          type: boolean
+        secret:
+          type: string
+          description: HMAC signing secret (shown once on create)
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    SchedulingSession:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        token:
+          type: string
+        host_user_id:
+          type: string
+          format: uuid
+        slots:
+          type: array
+          items:
+            type: object
+            properties:
+              start:
+                type: string
+                format: date-time
+              end:
+                type: string
+                format: date-time
+              score:
+                type: number
+        host_name:
+          type: string
+          nullable: true
+        context:
+          type: string
+          nullable: true
+        posture:
+          type: string
+        status:
+          type: string
+        proposed_event_ids:
+          type: array
+          items:
+            type: string
+        expires_at:
+          type: string
+          format: date-time
+        invitee_email:
+          type: string
+          nullable: true
+        host_timezone:
+          type: string
+          nullable: true
+        duration_minutes:
+          type: integer
+          nullable: true
+        offered_slots:
+          type: array
+          nullable: true
+        selected_slot:
+          type: object
+          nullable: true
+        google_event_id:
+          type: string
+          nullable: true
+        proposed_alternatives:
+          type: array
+
+    PublicBookingHost:
+      type: object
+      properties:
+        name:
+          type: string
+        username:
+          type: string
+        timezone:
+          type: string
+
+    PublicBookingEventType:
+      type: object
+      properties:
+        name:
+          type: string
+        slug:
+          type: string
+        durationMinutes:
+          type: integer
+        description:
+          type: string
+          nullable: true
+        availabilityRules:
+          type: object
+          additionalProperties: true
+        schedulingMode:
+          type: string
+          enum: [single, round_robin]
+
+    GuestIntake:
+      type: object
+      required: [name, email]
+      properties:
+        name:
+          type: string
+        email:
+          type: string
+          format: email
+        notes:
+          type: string
+        answers:
+          type: object
+          additionalProperties: true
+
+    GuestActions:
+      type: object
+      properties:
+        cancelToken:
+          type: string
+        rescheduleToken:
+          type: string
+        cancelUrl:
+          type: string
+          format: uri
+        rescheduleUrl:
+          type: string
+          format: uri
+
+    CandidateSlot:
+      type: object
+      properties:
+        start:
+          type: string
+          format: date-time
+        end:
+          type: string
+          format: date-time
+        adjacentEventCount:
+          type: integer
+        energyScore:
+          type: number
+        createsFragment:
+          type: boolean
+
+    JobComplete:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [complete]
+
+paths:
+  /api/profile:
+    get:
+      tags: [Profile]
+      summary: Get host profile
+      security:
+        - sessionCookie: []
+      responses:
+        '200':
+          description: Profile view
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserProfile'
+        '401':
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    patch:
+      tags: [Profile]
+      summary: Update host profile (onboarding, timezone, hours)
+      security:
+        - sessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProfilePatch'
+      responses:
+        '200':
+          description: Updated profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserProfile'
+        '400':
+          description: Invalid or empty payload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Not authenticated
+        '500':
+          description: Save failed
+
+  /api/sessions:
+    get:
+      tags: [Sessions]
+      summary: List scheduling sessions for authenticated host
+      security:
+        - sessionCookie: []
+      responses:
+        '200':
+          description: Session list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  sessions:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/SchedulingSession'
+        '401':
+          description: Not authenticated
+
+  /api/event-types:
+    get:
+      tags: [Event Types]
+      summary: List event types for host
+      security:
+        - sessionCookie: []
+      parameters:
+        - name: includeInactive
+          in: query
+          schema:
+            type: boolean
+            default: false
+          description: Include deactivated event types when `true`
+      responses:
+        '200':
+          description: Event type list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  eventTypes:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/EventType'
+        '401':
+          description: Not authenticated
+    post:
+      tags: [Event Types]
+      summary: Create event type
+      security:
+        - sessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EventTypeCreate'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  eventType:
+                    $ref: '#/components/schemas/EventType'
+        '400':
+          description: Validation error
+        '401':
+          description: Not authenticated
+        '409':
+          description: Slug already exists
+
+  /api/event-types/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    get:
+      tags: [Event Types]
+      summary: Get event type by ID
+      security:
+        - sessionCookie: []
+      responses:
+        '200':
+          description: Event type
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  eventType:
+                    $ref: '#/components/schemas/EventType'
+        '401':
+          description: Not authenticated
+        '404':
+          description: Not found
+    patch:
+      tags: [Event Types]
+      summary: Update event type
+      security:
+        - sessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EventTypePatch'
+      responses:
+        '200':
+          description: Updated event type
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  eventType:
+                    $ref: '#/components/schemas/EventType'
+        '400':
+          description: Validation error
+        '401':
+          description: Not authenticated
+        '404':
+          description: Not found
+        '409':
+          description: Slug conflict
+    delete:
+      tags: [Event Types]
+      summary: Deactivate event type (soft delete)
+      security:
+        - sessionCookie: []
+      responses:
+        '200':
+          description: Deactivated event type
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  eventType:
+                    $ref: '#/components/schemas/EventType'
+        '401':
+          description: Not authenticated
+        '404':
+          description: Not found
+
+  /api/event-types/{id}/members:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    get:
+      tags: [Event Types]
+      summary: List round-robin team members for an event type
+      security:
+        - sessionCookie: []
+      responses:
+        '200':
+          description: Team member user IDs in rotation order
+        '401':
+          description: Not authenticated
+        '404':
+          description: Event type not found
+    put:
+      tags: [Event Types]
+      summary: Replace round-robin team members
+      security:
+        - sessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                memberUserIds:
+                  type: array
+                  items:
+                    type: string
+                    format: uuid
+      responses:
+        '200':
+          description: Updated members
+        '401':
+          description: Not authenticated
+        '404':
+          description: Event type not found
+
+  /api/webhooks:
+    get:
+      tags: [Webhooks]
+      summary: List webhook subscriptions
+      security:
+        - sessionCookie: []
+      responses:
+        '200':
+          description: Subscription list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  subscriptions:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/WebhookSubscription'
+        '401':
+          description: Not authenticated
+    post:
+      tags: [Webhooks]
+      summary: Create webhook subscription
+      security:
+        - sessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [url, events]
+              properties:
+                url:
+                  type: string
+                  format: uri
+                events:
+                  type: array
+                  items:
+                    type: string
+                    enum: [booking.confirmed, booking.cancelled]
+      responses:
+        '201':
+          description: Created subscription with secret
+        '400':
+          description: Invalid URL or events
+        '401':
+          description: Not authenticated
+
+  /api/webhooks/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    patch:
+      tags: [Webhooks]
+      summary: Update webhook subscription
+      security:
+        - sessionCookie: []
+      responses:
+        '200':
+          description: Updated
+        '404':
+          description: Not found
+    delete:
+      tags: [Webhooks]
+      summary: Delete webhook subscription
+      security:
+        - sessionCookie: []
+      responses:
+        '200':
+          description: Deleted
+        '404':
+          description: Not found
+
+  /api/calendar.ics:
+    get:
+      tags: [Calendar]
+      summary: Host ICS feed of confirmed bookings
+      description: Returns `text/calendar` attachment for authenticated host sessions.
+      security:
+        - sessionCookie: []
+      responses:
+        '200':
+          description: ICS calendar file
+          content:
+            text/calendar:
+              schema:
+                type: string
+        '401':
+          description: Not authenticated
+
+  /book/{username}/{slug}:
+    parameters:
+      - name: username
+        in: path
+        required: true
+        schema:
+          type: string
+        description: Host username (lowercase)
+      - name: slug
+        in: path
+        required: true
+        schema:
+          type: string
+        description: Event type slug (lowercase)
+    get:
+      tags: [Public Booking]
+      summary: Public booking page metadata
+      description: |
+        Returns host and event-type metadata for the public booking SPA (`web/booking.js`).
+        No authentication required.
+      responses:
+        '200':
+          description: Booking page data
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  host:
+                    $ref: '#/components/schemas/PublicBookingHost'
+                  eventType:
+                    $ref: '#/components/schemas/PublicBookingEventType'
+        '404':
+          description: Booking page not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /book/{username}/{slug}/slots:
+    get:
+      tags: [Public Booking]
+      summary: Available booking slots for event type
+      parameters:
+        - name: username
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: slug
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: daysAhead
+          in: query
+          schema:
+            type: integer
+            default: 14
+            maximum: 60
+      responses:
+        '200':
+          description: Slot list with assigned host for round-robin types
+        '404':
+          description: Booking page not found
+
+  /s/{token}:
+    parameters:
+      - name: token
+        in: path
+        required: true
+        schema:
+          type: string
+        description: Scheduling session token
+    get:
+      tags: [Guest Scheduling]
+      summary: Guest scheduling page (HTML)
+      description: |
+        Server-rendered HTML booking UI with offered time slots.
+        Returns 404 HTML when token is invalid.
+      responses:
+        '200':
+          description: HTML booking page
+          content:
+            text/html:
+              schema:
+                type: string
+        '404':
+          description: Invalid or expired link (HTML)
+
+  /s/{token}/calendar:
+    get:
+      tags: [Guest Scheduling]
+      summary: Read-only host calendar view (HTML)
+      description: Two-week read-only availability; private events shown as "Busy".
+      parameters:
+        - name: token
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: HTML calendar table
+          content:
+            text/html:
+              schema:
+                type: string
+        '404':
+          description: Invalid or expired session
+
+  /s/{token}/cancel:
+    get:
+      tags: [Guest Scheduling]
+      summary: Cancel confirmation page (HTML)
+      parameters:
+        - name: token
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: actionToken
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Signed guest action token for cancel
+      responses:
+        '200':
+          description: HTML cancel confirmation
+          content:
+            text/html:
+              schema:
+                type: string
+        '403':
+          description: Invalid action token (HTML)
+        '404':
+          description: Session not found or not cancellable
+    post:
+      tags: [Guest Scheduling]
+      summary: Cancel confirmed booking
+      description: |
+        Deletes Google Calendar event and marks session `cancelled`.
+        Requires signed `actionToken` (body or query).
+        Blocked when `CALADDIN_KILL_SWITCH=1` (503).
+      parameters:
+        - name: token
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                actionToken:
+                  type: string
+      responses:
+        '200':
+          description: Cancelled (or idempotent if already cancelled)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  idempotent:
+                    type: boolean
+        '403':
+          description: Invalid action token
+        '404':
+          description: Session not found
+        '409':
+          description: Not cancellable
+        '502':
+          description: Google Calendar API failure
+        '503':
+          description: Kill switch / pilot pause
+
+  /s/{token}/reschedule:
+    get:
+      tags: [Guest Scheduling]
+      summary: Reschedule page (HTML)
+      parameters:
+        - name: token
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: actionToken
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: HTML reschedule UI
+          content:
+            text/html:
+              schema:
+                type: string
+        '403':
+          description: Invalid action token
+        '404':
+          description: Session not found or not reschedulable
+    post:
+      tags: [Guest Scheduling]
+      summary: Reschedule confirmed booking
+      description: |
+        Updates Google Calendar event and session slot.
+        Provide either `slotIndex` (0 or 1 into offered_slots) or explicit `start`/`end` ISO timestamps.
+      parameters:
+        - name: token
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                actionToken:
+                  type: string
+                slotIndex:
+                  type: integer
+                  enum: [0, 1]
+                start:
+                  type: string
+                  format: date-time
+                end:
+                  type: string
+                  format: date-time
+      responses:
+        '200':
+          description: Rescheduled
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  idempotent:
+                    type: boolean
+                  slot:
+                    $ref: '#/components/schemas/CandidateSlot'
+        '400':
+          description: Invalid slot
+        '403':
+          description: Invalid action token
+        '404':
+          description: Session not found
+        '409':
+          description: Not reschedulable
+        '502':
+          description: Google Calendar failure
+        '503':
+          description: Kill switch
+
+  /s/{token}/select:
+    post:
+      tags: [Guest Scheduling]
+      summary: Guest selects a time slot and books
+      description: |
+        Claims slot, creates Google Calendar event, stores guest intake, enqueues reminders.
+        Rate-limited per token. Guest payload via `guest` object or top-level fields.
+      parameters:
+        - name: token
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [slotIndex]
+              properties:
+                slotIndex:
+                  type: integer
+                  enum: [0, 1]
+                  description: Index into session offered_slots
+                guest:
+                  $ref: '#/components/schemas/GuestIntake'
+                name:
+                  type: string
+                  description: Alternative top-level guest name
+                email:
+                  type: string
+                  format: email
+                notes:
+                  type: string
+      responses:
+        '200':
+          description: Booking confirmed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  idempotent:
+                    type: boolean
+                  actions:
+                    $ref: '#/components/schemas/GuestActions'
+        '400':
+          description: Guest validation failed (name_required, email_required, email_invalid)
+        '404':
+          description: Session not found
+        '409':
+          description: already_confirmed, unavailable, claim_failed, finalize_failed
+        '429':
+          description: Rate limit exceeded
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    enum: [rate_limit_exceeded]
+                  retryAfterMs:
+                    type: integer
+        '502':
+          description: Google Calendar failure
+        '503':
+          description: Kill switch
+
+  /s/{token}/propose:
+    post:
+      tags: [Guest Scheduling]
+      summary: Guest proposes alternative time
+      description: Appends to session proposed_alternatives and notifies host via email/ntfy.
+      parameters:
+        - name: token
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                proposedDate:
+                  type: string
+                proposedTimeWindow:
+                  type: string
+                note:
+                  type: string
+      responses:
+        '200':
+          description: Alternative recorded
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+        '404':
+          description: Session not found
+        '409':
+          description: already_confirmed or propose_failed
+
+  /jobs/session-expiry:
+    post:
+      tags: [Jobs]
+      summary: Expire open scheduling sessions
+      description: |
+        Render cron `caladdin-session-expiry` calls this every 15 minutes.
+        Also runs in-process on the web service as a fallback worker.
+      security:
+        - apiKey: []
+      responses:
+        '200':
+          description: Job complete
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/JobComplete'
+                  - type: object
+                    properties:
+                      expired:
+                        type: integer
+                        description: Number of sessions marked expired
+        '401':
+          description: Missing or invalid API key
+        '500':
+          description: Job failed
+
+  /jobs/reminders:
+    post:
+      tags: [Jobs]
+      summary: Send due booking reminder emails
+      description: Render cron `caladdin-reminders` calls this hourly.
+      security:
+        - apiKey: []
+      responses:
+        '200':
+          description: Job complete
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/JobComplete'
+                  - type: object
+                    properties:
+                      processed:
+                        type: integer
+                      sent:
+                        type: integer
+                      skipped:
+                        type: integer
+                      failed:
+                        type: integer
+        '401':
+          description: Missing or invalid API key
+        '500':
+          description: Job failed
+
+  /jobs/improvement-loop:
+    post:
+      tags: [Jobs]
+      summary: Analyze failures and emit improvement report
+      description: Optional manual/scheduled job; not in Render cron by default.
+      security:
+        - apiKey: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                lookbackDays:
+                  type: integer
+                  default: 7
+                minFailuresPerGroup:
+                  type: integer
+                  default: 3
+      responses:
+        '200':
+          description: Job complete
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/JobComplete'
+                  - type: object
+                    properties:
+                      failuresAnalyzed:
+                        type: integer
+                      groupsAnalyzed:
+                        type: integer
+                      reportPath:
+                        type: string
+                      ntfySent:
+                        type: boolean
+        '401':
+          description: Missing or invalid API key
+        '500':
+          description: Job failed

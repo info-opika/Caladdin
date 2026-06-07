@@ -1,14 +1,146 @@
 import { Router, Request, Response } from 'express';
+import { z } from 'zod';
 import { requireSession } from '../middleware/session.js';
+import { generateCsrfToken, setCsrfCookie, clearCsrfCookie } from '../middleware/csrf.js';
+import { auditSensitiveOperation } from '../middleware/sensitiveAudit.js';
 import { listSessionsForHost } from '../db/scheduling_sessions.js';
 import { insertFeedback } from '../db/feedback.js';
+import { getUserProfileView, updateUserProfile, getUserById } from '../db/users.js';
+import { exportUserData, deleteUserAccount } from '../db/user_data.js';
+import { getOAuthClientForUser } from '../services/auth_service.js';
+import { buildIcsCalendar } from '../services/ics.js';
 
 export const apiRouter = Router();
+
+const TIME_RE = /^\d{2}:\d{2}$/;
+
+const ProfilePatchSchema = z.object({
+  timezone: z.string().min(1).max(64).optional(),
+  privacyMode: z.enum(['private', 'trusted', 'open']).optional(),
+  workingHoursStart: z.string().regex(TIME_RE).optional(),
+  workingHoursEnd: z.string().regex(TIME_RE).optional(),
+});
+
+const UserDataDeleteSchema = z.object({
+  confirm: z.literal('DELETE'),
+});
+
+apiRouter.get('/csrf-token', requireSession, (req: Request, res: Response) => {
+  const token = generateCsrfToken();
+  setCsrfCookie(res, token);
+  res.json({ csrfToken: token });
+});
+
+apiRouter.get('/user/data', requireSession, async (req: Request, res: Response) => {
+  const session = (req as Request & { session: { userId: string } }).session;
+  try {
+    const data = await exportUserData(session.userId);
+    if (!data.user) {
+      res.status(404).json({ error: 'User not found' });
+      return;
+    }
+    await auditSensitiveOperation(req, session.userId, 'GDPR_EXPORT', 'success');
+    res.json(data);
+  } catch {
+    await auditSensitiveOperation(req, session.userId, 'GDPR_EXPORT', 'error');
+    res.status(500).json({ error: 'Could not export user data' });
+  }
+});
+
+apiRouter.delete('/user/data', requireSession, async (req: Request, res: Response) => {
+  const session = (req as Request & { session: { userId: string; email: string } }).session;
+  const parsed = UserDataDeleteSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: 'Send { "confirm": "DELETE" } to permanently delete your account' });
+    return;
+  }
+
+  try {
+    await auditSensitiveOperation(req, session.userId, 'GDPR_DELETE', 'requested', {
+      email: session.email,
+    });
+    await deleteUserAccount(session.userId);
+    clearCsrfCookie(res);
+    res.json({ ok: true, deleted: true });
+  } catch {
+    await auditSensitiveOperation(req, session.userId, 'GDPR_DELETE', 'error');
+    res.status(500).json({ error: 'Could not delete account' });
+  }
+});
+
+apiRouter.get('/profile', requireSession, async (req: Request, res: Response) => {
+  const session = (req as Request & { session: { userId: string } }).session;
+  const calendarConnected = Boolean(await getOAuthClientForUser(session.userId));
+  const profile = await getUserProfileView(session.userId, calendarConnected);
+  if (!profile) {
+    res.status(404).json({ error: 'User not found' });
+    return;
+  }
+  res.json(profile);
+});
+
+apiRouter.patch('/profile', requireSession, async (req: Request, res: Response) => {
+  const session = (req as Request & { session: { userId: string } }).session;
+  const parsed = ProfilePatchSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: 'Invalid profile payload', details: parsed.error.flatten() });
+    return;
+  }
+  if (
+    !parsed.data.timezone &&
+    !parsed.data.privacyMode &&
+    !parsed.data.workingHoursStart &&
+    !parsed.data.workingHoursEnd
+  ) {
+    res.status(400).json({ error: 'Provide timezone, privacyMode, and/or working hours' });
+    return;
+  }
+
+  try {
+    const updated = await updateUserProfile(session.userId, {
+      timezone: parsed.data.timezone,
+      privacyMode: parsed.data.privacyMode,
+      workingHoursStart: parsed.data.workingHoursStart,
+      workingHoursEnd: parsed.data.workingHoursEnd,
+      markOnboardingComplete: Boolean(parsed.data.timezone || parsed.data.privacyMode),
+    });
+    updated.calendarConnected = Boolean(await getOAuthClientForUser(session.userId));
+    await auditSensitiveOperation(req, session.userId, 'PROFILE_UPDATE', 'success', {
+      fields: Object.keys(parsed.data).filter((k) => parsed.data[k as keyof typeof parsed.data] !== undefined),
+    });
+    res.json(updated);
+  } catch {
+    await auditSensitiveOperation(req, session.userId, 'PROFILE_UPDATE', 'error');
+    res.status(500).json({ error: 'Could not save profile' });
+  }
+});
 
 apiRouter.get('/sessions', requireSession, async (req: Request, res: Response) => {
   const session = (req as Request & { session: { userId: string } }).session;
   const sessions = await listSessionsForHost(session.userId);
   res.json({ sessions });
+});
+
+apiRouter.get('/calendar.ics', requireSession, async (req: Request, res: Response) => {
+  const session = (req as Request & { session: { userId: string } }).session;
+  const user = await getUserById(session.userId);
+  const sessions = await listSessionsForHost(session.userId);
+
+  const events = sessions
+    .filter((s) => s.status === 'confirmed' && s.selected_slot)
+    .map((s) => ({
+      uid: `caladdin-session-${s.token}@caladdin.app`,
+      summary: s.host_name ? `Meeting with ${s.host_name}` : 'Caladdin booking',
+      description: s.context ?? undefined,
+      start: s.selected_slot!.start,
+      end: s.selected_slot!.end,
+      status: 'CONFIRMED' as const,
+    }));
+
+  const ics = buildIcsCalendar(events, user?.display_name ?? user?.email ?? 'Caladdin');
+  res.setHeader('Content-Type', 'text/calendar; charset=utf-8');
+  res.setHeader('Content-Disposition', 'attachment; filename="caladdin.ics"');
+  res.send(ics);
 });
 
 export const feedbackRouter = Router();
@@ -22,5 +154,6 @@ feedbackRouter.post('/', requireSession, async (req: Request, res: Response) => 
     intent: req.body.intent,
     comment: req.body.comment,
   });
+  await auditSensitiveOperation(req, session.userId, 'FEEDBACK', 'success');
   res.json({ ok: true });
 });

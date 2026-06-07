@@ -1,5 +1,7 @@
 import { config } from '../config.js';
 import { logger } from '../logger.js';
+import { sendEmail } from './email.js';
+import { getUserById } from '../db/users.js';
 
 /** ntfy HTTP headers must be ISO-8859-1 (ByteString); Unicode chars like em-dash break fetch(). */
 export function toNtfyHeaderValue(text: string): string {
@@ -62,9 +64,64 @@ export async function notifyBuild(message: string): Promise<boolean> {
   }
 }
 
-export async function sendHostBookingNotification(hostUserId: string, sessionToken: string): Promise<boolean> {
-  return sendNtfy(
-    'Caladdin - Meeting booked',
-    `Someone picked a time from your scheduling link (${sessionToken.slice(0, 8)}…).`,
-  );
+export type HostBookingNotificationKind = 'booked' | 'proposed' | 'cancelled' | 'rescheduled';
+
+export interface HostBookingNotificationInput {
+  hostUserId: string;
+  sessionToken: string;
+  kind: HostBookingNotificationKind;
+  proposedDate?: string;
+  proposedTimeWindow?: string;
+  note?: string;
+}
+
+function subjectForKind(kind: HostBookingNotificationKind): string {
+  switch (kind) {
+    case 'proposed':
+      return 'Caladdin — guest suggested another time';
+    case 'cancelled':
+      return 'Caladdin — meeting cancelled';
+    case 'rescheduled':
+      return 'Caladdin — meeting rescheduled';
+    default:
+      return 'Caladdin — guest booked a time';
+  }
+}
+
+function bodyForKind(input: HostBookingNotificationInput): string {
+  const link = `${config.baseUrl.replace(/\/$/, '')}/s/${input.sessionToken}`;
+  switch (input.kind) {
+    case 'proposed':
+      return `A guest suggested another time (${input.proposedDate ?? 'date TBD'}, ${input.proposedTimeWindow ?? 'flexible'}).${input.note ? ` Note: ${input.note}` : ''}\n\nView session: ${link}`;
+    case 'cancelled':
+      return `A guest cancelled their meeting.\n\nView session: ${link}`;
+    case 'rescheduled':
+      return `A guest rescheduled their meeting.\n\nView session: ${link}`;
+    default:
+      return `Someone picked a time from your scheduling link.\n\nView session: ${link}`;
+  }
+}
+
+export async function sendHostBookingNotification(input: HostBookingNotificationInput): Promise<boolean> {
+  const subject = subjectForKind(input.kind);
+  const text = bodyForKind(input);
+  const short = `${input.kind} (${input.sessionToken.slice(0, 8)}…)`;
+
+  logger.info('Host booking notification', {
+    hostUserId: input.hostUserId,
+    kind: input.kind,
+    sessionToken: input.sessionToken.slice(0, 8),
+  });
+
+  const host = await getUserById(input.hostUserId);
+  if (host?.email) {
+    await sendEmail({
+      to: host.email,
+      subject,
+      html: `<p>${text.replace(/\n/g, '<br/>')}</p>`,
+      text,
+    });
+  }
+
+  return sendNtfy(`Caladdin - ${subject}`, short);
 }

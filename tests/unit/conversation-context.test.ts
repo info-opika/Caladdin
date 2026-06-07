@@ -29,4 +29,50 @@ describe('applyConversationContext', () => {
     expect(parsed.params.addInvitees).toEqual(['kanthatbww@gmail.com']);
     expect(parsed.params._useSessionEvent).toBe(true);
   });
+
+  it('promotes create-event utterances with enriched params', () => {
+    const parsed = applyConversationContext(
+      {
+        intent: 'RESOLVE_MANUAL',
+        confidence: 0.4,
+        params: {},
+        mappingMethod: 'resolve_manual',
+        rawUtterance: 'create a new event for lunch tomorrow at noon',
+      },
+      null,
+    );
+    expect(parsed.intent).toBe('CREATE_EVENT');
+    expect(parsed.confidence).toBeGreaterThanOrEqual(0.85);
+  });
+
+  it('resolves referential modify against session event', () => {
+    const parsed = applyConversationContext(
+      {
+        intent: 'MODIFY_EVENT',
+        confidence: 0.8,
+        params: { newStart: '2026-06-10T12:00:00.000Z' },
+        mappingMethod: 'fuzzy',
+        rawUtterance: 'move it to noon',
+      },
+      {
+        updatedAt: new Date().toISOString(),
+        lastIntent: 'CREATE_EVENT',
+        lastUtterance: 'lunch tomorrow',
+        lastEvent: { title: 'Lunch', gcalEventId: 'ev-2' },
+      },
+    );
+    expect(parsed.params.eventTitle).toBe('Lunch');
+    expect(parsed.params._useSessionEvent).toBe(true);
+  });
+
+  it('returns parsed unchanged without session context', () => {
+    const input = {
+      intent: 'QUERY_CALENDAR' as const,
+      confidence: 0.9,
+      params: {},
+      mappingMethod: 'direct' as const,
+      rawUtterance: 'calendar today',
+    };
+    expect(applyConversationContext(input, null)).toEqual(input);
+  });
 });

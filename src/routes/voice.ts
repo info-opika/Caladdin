@@ -7,11 +7,13 @@ import { requireSession } from '../middleware/session.js';
 import { getRequestId } from '../middleware/requestId.js';
 import { getPolicy, getUserById } from '../db/users.js';
 import { config } from '../config.js';
+import { voiceHttpRateLimiter } from '../core/rate-limiter.js';
 import { getOAuthClientForUser } from '../services/auth_service.js';
 import { approvePendingConfirmation, rejectPendingConfirmation } from '../core/confirmation-actions.js';
 import { getConversationContext, getPendingEmailConfirmation } from '../db/conversation-context.js';
 import { applyConversationContext } from '../core/conversation-context.js';
 import { handleEmailConfirmationGate } from '../core/email-confirmation.js';
+import { logger } from '../logger.js';
 
 export const voiceRouter = Router();
 
@@ -38,15 +40,28 @@ voiceRouter.post('/', requireSession, async (req: Request, res: Response) => {
     return;
   }
 
+  const httpRate = await voiceHttpRateLimiter.check(session.userId);
+  if (!httpRate.allowed) {
+    res.status(429).json({
+      error: 'Rate limit exceeded',
+      retryAfterMs: httpRate.retryAfterMs,
+    });
+    return;
+  }
+
   try {
-    const policy = await getPolicy(userId);
+    const [policy, conversationContext, pendingEmail, oauthClient] = await Promise.all([
+      getPolicy(userId),
+      getConversationContext(userId),
+      getPendingEmailConfirmation(userId),
+      getOAuthClientForUser(userId),
+    ]);
+
     if (!policy && !(await getUserById(userId))) {
       res.status(404).json({ error: 'No policy found for user' });
       return;
     }
 
-    const conversationContext = await getConversationContext(userId);
-    const pendingEmail = await getPendingEmailConfirmation(userId);
     let parsed = await parseIntent(utterance, userId, requestId);
 
     if (parsed._warmRedirect) {
@@ -85,7 +100,6 @@ voiceRouter.post('/', requireSession, async (req: Request, res: Response) => {
     }
     parsed = emailGate.parsed;
 
-    const oauthClient = await getOAuthClientForUser(userId);
     const result = await orchestrate(parsed, {
       userId,
       requestId,
@@ -94,8 +108,9 @@ voiceRouter.post('/', requireSession, async (req: Request, res: Response) => {
     });
     res.setHeader('x-request-id', requestId);
     res.json(result);
-  } catch {
-    res.status(503).setHeader('Retry-After', '30').json({
+  } catch (err) {
+    logger.error('Voice pipeline failed', { requestId, userId, error: String(err) });
+    res.status(503).setHeader('Retry-After', '30').setHeader('x-request-id', requestId).json({
       error: 'Caladdin is temporarily unavailable. Try again in 30 seconds.',
     });
   }
@@ -103,12 +118,12 @@ voiceRouter.post('/', requireSession, async (req: Request, res: Response) => {
 
 voiceRouter.post('/confirm/:token/approve', requireSession, async (req: Request, res: Response) => {
   const session = (req as Request & { session: { userId: string } }).session;
-  const { status, body } = await approvePendingConfirmation(req.params.token, session.userId);
+  const { status, body } = await approvePendingConfirmation(String(req.params.token), session.userId);
   res.status(status).json(body);
 });
 
 voiceRouter.post('/confirm/:token/reject', requireSession, async (req: Request, res: Response) => {
   const session = (req as Request & { session: { userId: string } }).session;
-  const { status, body } = await rejectPendingConfirmation(req.params.token, session.userId);
+  const { status, body } = await rejectPendingConfirmation(String(req.params.token), session.userId);
   res.status(status).json(body);
 });

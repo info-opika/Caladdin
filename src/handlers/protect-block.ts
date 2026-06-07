@@ -76,6 +76,8 @@ export async function handleProtectBlock(
       end: end.toISOString(),
       tier: 0,
       status: 'confirmed',
+      participants: [],
+      isRecurring: false,
     });
   }
 

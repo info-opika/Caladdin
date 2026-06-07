@@ -59,6 +59,7 @@ export const UserPolicyProfileSchema = z.object({
   faxEffectConfig: FaxEffectConfigSchema.optional(),
   contactTiers: z.record(z.number()).default({}),
   shareAvailabilityOnInvite: z.boolean().default(true),
+  onboardingComplete: z.boolean().default(false),
 });
 
 export type UserPolicyProfile = z.infer<typeof UserPolicyProfileSchema>;
@@ -92,6 +93,7 @@ export function migratePolicy(raw: unknown): UserPolicyProfile {
   if (!obj.maxFragmentsPerDay) obj.maxFragmentsPerDay = 4;
   if (!obj.contactTiers) obj.contactTiers = {};
   if (obj.shareAvailabilityOnInvite === undefined) obj.shareAvailabilityOnInvite = true;
+  if (obj.onboardingComplete === undefined) obj.onboardingComplete = false;
   if (!obj.faxEffectConfig) {
     obj.faxEffectConfig = {
       targetSlotsPerOffer: 2,
