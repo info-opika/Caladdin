@@ -20,6 +20,7 @@ import {
   extractEmails,
   hasActionableParams,
   isCalendarInviteUtterance,
+  isNewEventInviteUtterance,
   isSchedulingLinkUtterance,
 } from './param-extract.js';
 import { isEmailConfirmationReply } from './email-confirmation.js';
@@ -34,7 +35,13 @@ const KEYWORD_INTENTS: Array<{ re: RegExp; intent: string; params?: Record<strin
   { re: /\bfind (time|slot)|schedule (time|with)\b/i, intent: 'OFFER_SPECIFIC' },
   { re: /\b(booking|scheduling)\s+link\b/i, intent: 'OFFER_SPECIFIC' },
   { re: /\bsend\b.+\blink\b/i, intent: 'OFFER_SPECIFIC' },
+  { re: /\bsend\s+(?:an?\s+)?invite\b/i, intent: 'CREATE_EVENT' },
+  { re: /\b(?:recurring|every\s+weekday|weekdays?\b|monday\s+to\s+friday)\b/i, intent: 'CREATE_EVENT' },
+  { re: /\bbook\b/i, intent: 'CREATE_EVENT' },
+  { re: /\bschedule\b/i, intent: 'CREATE_EVENT' },
+  { re: /\bset up\b/i, intent: 'CREATE_EVENT' },
   { re: /\bput |add |create |schedule an event|dinner at\b/i, intent: 'CREATE_EVENT' },
+  { re: /\binvite .+ to (?:the |my )?(?:meeting|event)\b/i, intent: 'MODIFY_EVENT' },
   { re: /\binvite|invitee|guest|attendee|add .+@/i, intent: 'MODIFY_EVENT' },
   { re: /\brename|retitle|change the name\b/i, intent: 'MODIFY_EVENT' },
   { re: /\bmove |push |update|correct|fix|starting at|ending at|\d+\s*hour|make it|should be\b/i, intent: 'MODIFY_EVENT' },
@@ -59,6 +66,17 @@ function enrichParamsForIntent(intent: string, params: Record<string, unknown>, 
 }
 
 function degradedParse(utterance: string): ParsedIntent {
+  if (isNewEventInviteUtterance(utterance)) {
+    const enriched = enrichParamsForIntent('CREATE_EVENT', {}, utterance);
+    return ParsedIntentSchema.parse({
+      intent: 'CREATE_EVENT',
+      confidence: 0.7,
+      params: enriched,
+      mappingMethod: 'fuzzy',
+      rawUtterance: utterance,
+      _destructivePreFilter: DESTRUCTIVE_VERB_RE.test(utterance),
+    });
+  }
   for (const { re, intent, params } of KEYWORD_INTENTS) {
     if (re.test(utterance)) {
       const enriched = enrichParamsForIntent(intent, params ?? {}, utterance);
@@ -176,6 +194,18 @@ export async function parseIntent(
     }
   }
 
+  // "Send an invite to X at 3 PM recurring weekdays" is CREATE_EVENT, not MODIFY_EVENT.
+  if (isNewEventInviteUtterance(trimmed)) {
+    const rescued = degradedParse(trimmed);
+    return ParsedIntentSchema.parse({
+      ...rescued,
+      intent: 'CREATE_EVENT',
+      confidence: Math.max(rescued.confidence, 0.85),
+      params: enrichCreateParams(rescued.params ?? {}, trimmed),
+      mappingMethod: 'direct',
+    });
+  }
+
   if (!config.anthropicApiKey || config.anthropicApiKey === 'sk-placeholder') {
     return degradedParse(trimmed);
   }
@@ -206,7 +236,11 @@ Today is ${new Date().toISOString().split('T')[0]} (use local-style ISO datetime
 
 Rules:
 - CREATE_EVENT: always set params.title, params.start, params.end. Parse times like "tomorrow at 8 AM" into ISO strings. If the user did not give a title, omit params.title (do NOT use placeholders like "<UNKNOWN>"). Set params.description when the user asks for event notes/description.
-- CREATE_EVENT with guests: set params.participants to email array when user says invite/include/add with emails. Utterances that say "create a new event" with invite emails are CREATE_EVENT, not MODIFY_EVENT.
+- CREATE_EVENT with guests: set params.participants to email array when user says invite/include/add/send invite with emails. Utterances that say "create a new event" or "send an invite" with invite emails are CREATE_EVENT, not MODIFY_EVENT.
+- CREATE_EVENT recurring: set params.isRecurring true and params.recurrence to RRULE strings when user says recurring/repeats/every weekday/Monday to Friday/every Tuesday. Weekdays → RRULE:FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR. Set params.timeZone to IANA (America/Chicago for Central Time, America/New_York for ET, America/Los_Angeles for PT).
+- CREATE_EVENT "send an invite to X at 3 PM" with a new event title is CREATE_EVENT (not MODIFY_EVENT). Set params.participants to the invitee email(s).
+- CREATE_EVENT recurring: when user says recurring/repeats/every weekday/Monday to Friday, set params.isRecurring true and params.recurrence to Google RRULE strings (weekdays: ["RRULE:FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR"]). Still set params.start to the first occurrence datetime.
+- CREATE_EVENT timezones: when user says Central Time/Eastern/Pacific, set params.timeZone to IANA (Central → America/Chicago, Eastern → America/New_York, Pacific → America/Los_Angeles) and interpret clock times in that zone.
 - MODIFY_EVENT for rename: set params.newTitle and params.eventTitle (existing name if mentioned). Do NOT set newStart/newEnd for renames.
 - MODIFY_EVENT for description: set params.newDescription when user adds or changes event notes/description.
 - MODIFY_EVENT for move/reschedule/correction: set params.newStart, params.newEnd, and params.eventTitle when the user names the event. Examples: "starting at 8 AM ending at 9 AM", "make it 1 hour starting at 8 AM Central".

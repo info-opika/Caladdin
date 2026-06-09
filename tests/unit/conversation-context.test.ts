@@ -65,6 +65,39 @@ describe('applyConversationContext', () => {
     expect(parsed.params._useSessionEvent).toBe(true);
   });
 
+  it('keeps CREATE_EVENT for new multi-attendee recurring invite despite session', () => {
+    const utterance =
+      "Send an invite to aniket@opika.co and kanth@opika.co at 3 PM Central Time for 30 minutes. The invite should be recurring every weekday (Monday to Friday) and name the event as 'Vibecoding'. Please add an event description Invited by Caladdin";
+    const parsed = applyConversationContext(
+      {
+        intent: 'CREATE_EVENT',
+        confidence: 0.9,
+        params: {},
+        mappingMethod: 'direct',
+        rawUtterance: utterance,
+      },
+      {
+        updatedAt: new Date().toISOString(),
+        lastIntent: 'CREATE_EVENT',
+        lastUtterance: 'prior invite',
+        lastEvent: {
+          title: 'Vibecoding',
+          gcalEventId: 'gcal-old',
+          start: '2026-06-09T20:00:00.000Z',
+          end: '2026-06-09T21:00:00.000Z',
+        },
+      },
+    );
+
+    expect(parsed.intent).toBe('CREATE_EVENT');
+    expect(parsed.params.participants).toEqual(
+      expect.arrayContaining(['aniket@opika.co', 'kanth@opika.co']),
+    );
+    expect(parsed.params.recurrence).toEqual(['RRULE:FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR']);
+    expect(parsed.params.description).toBe('Invited by Caladdin');
+    expect(parsed.params._useSessionEvent).toBeUndefined();
+  });
+
   it('returns parsed unchanged without session context', () => {
     const input = {
       intent: 'QUERY_CALENDAR' as const,

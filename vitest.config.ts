@@ -20,7 +20,7 @@ export default defineConfig({
 
       'tests/security/**/*.test.ts',
 
-      'tests/unit/{adts,conversation-context,email-confirmation,email-confirmation-gate,gcal-time,notifications,notifications-service,param-extract,parser,parser-llm,safety,safety-mutations,pilot-controls,pilot-controls-capacity,confirmation-actions,voice-route-errors,voice-route,waitlist-db,slot-scoring-protected-blocks,freebusy-cache,platform-invites-db,invite-platform-handler,fax-effect,fax-effect-messages,session-store,distributed-rate-limiter,guest-action-token,booking-responses,calendar-api,calendar-service,email-service,auth-service,gcal-service,graceful-failure,availability-engine,webhooks-ics,redis}.test.ts',
+      'tests/unit/{adts,conversation-context,email-confirmation,email-confirmation-gate,gcal-time,notifications,notifications-service,param-extract,parser,parser-llm,recurring-scheduling-user-scenarios,safety,safety-mutations,pilot-controls,pilot-controls-capacity,confirmation-actions,voice-route-errors,voice-route,waitlist-db,slot-scoring-protected-blocks,freebusy-cache,platform-invites-db,invite-platform-handler,fax-effect,fax-effect-messages,session-store,distributed-rate-limiter,guest-action-token,booking-responses,calendar-api,calendar-service,email-service,auth-service,gcal-service,graceful-failure,availability-engine,webhooks-ics,redis}.test.ts',
 
       'tests/unit/handlers/**/*.test.ts',
 

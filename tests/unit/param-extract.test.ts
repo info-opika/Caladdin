@@ -12,8 +12,11 @@ import {
   isDeleteUtterance,
   isInviteUtterance,
   isCreateEventUtterance,
+  isNewEventInviteUtterance,
+  extractRecurrenceFromUtterance,
   prepareParsedForExecution,
 } from '../../src/core/param-extract.js';
+import { extractTimezoneFromUtterance, formatZonedDateTime } from '../../src/core/date-utils.js';
 
 describe('param-extract', () => {
   it('extracts title from "Name it ..."', () => {
@@ -77,9 +80,9 @@ describe('param-extract', () => {
     expect(p.participants).toEqual(expect.arrayContaining(['kanthatbww@gmail.com', 'aniketde9@gmail.com']));
     expect(p.start).toBeTruthy();
     expect(p.end).toBeTruthy();
+    expect(formatZonedDateTime(p.start as string, 'America/Chicago')).toMatch(/T05:00:00/);
     const start = new Date(p.start as string);
     const end = new Date(p.end as string);
-    expect(start.getHours()).toBe(5);
     expect((end.getTime() - start.getTime()) / 60000).toBe(12);
   });
 
@@ -90,10 +93,8 @@ describe('param-extract', () => {
     );
     expect(p.newStart).toBeTruthy();
     expect(p.newEnd).toBeTruthy();
-    const start = new Date(p.newStart as string);
-    const end = new Date(p.newEnd as string);
-    expect(start.getHours()).toBe(8);
-    expect(end.getHours()).toBe(9);
+    expect(formatZonedDateTime(p.newStart as string, 'America/Chicago')).toMatch(/T08:00:00/);
+    expect(formatZonedDateTime(p.newEnd as string, 'America/Chicago')).toMatch(/T09:00:00/);
   });
 
   it('extracts event title from remove utterance', () => {
@@ -111,6 +112,32 @@ describe('param-extract', () => {
     expect(isInviteUtterance('invite kanthatbww@gmail.com')).toBe(true);
     const p = enrichModifyParams({}, 'invite kanthatbww@gmail.com');
     expect(p.addInvitees).toEqual(['kanthatbww@gmail.com']);
+  });
+
+  it('parses multi-attendee recurring weekday invite with duration and description', () => {
+    const utterance =
+      "Send an invite to aniket@opika.co and kanth@opika.co at 3 PM Central Time for 30 minutes. The invite should be recurring every weekday (Monday to Friday) and name the event as 'Vibecoding'. Please add an event description Invited by Caladdin";
+    expect(isNewEventInviteUtterance(utterance)).toBe(true);
+    expect(extractEmails(utterance)).toEqual(
+      expect.arrayContaining(['aniket@opika.co', 'kanth@opika.co']),
+    );
+    expect(extractTimezoneFromUtterance(utterance)).toBe('America/Chicago');
+    expect(extractRecurrenceFromUtterance(utterance)).toEqual([
+      'RRULE:FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR',
+    ]);
+    const p = enrichCreateParams({}, utterance);
+    expect(p.title).toBe('Vibecoding');
+    expect(p.participants).toEqual(expect.arrayContaining(['aniket@opika.co', 'kanth@opika.co']));
+    expect(p.description).toBe('Invited by Caladdin');
+    expect(p.isRecurring).toBe(true);
+    expect(p.recurrence).toEqual(['RRULE:FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR']);
+    expect(p.timeZone).toBe('America/Chicago');
+    expect(p.start).toBeTruthy();
+    expect(p.end).toBeTruthy();
+    expect(formatZonedDateTime(p.start as string, 'America/Chicago')).toMatch(/T15:00:00/);
+    const start = new Date(p.start as string);
+    const end = new Date(p.end as string);
+    expect((end.getTime() - start.getTime()) / 60000).toBe(30);
   });
 
   it('prepares delete utterance as FLUSH_RANGE for execution', () => {

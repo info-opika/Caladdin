@@ -76,19 +76,24 @@ function spellOutEmail(utterance: string): string | null {
   return null;
 }
 
-function mergePrimaryEmailIntoParsed(parsed: ParsedIntent, email: string): ParsedIntent {
+function mergeEmailsIntoParsed(parsed: ParsedIntent, emails: string[]): ParsedIntent {
+  const unique = [...new Set(emails.map((e) => e.toLowerCase()))];
   const params = { ...parsed.params };
   if (parsed.intent === 'CREATE_EVENT') {
-    params.participants = [email];
+    params.participants = unique;
   } else if (parsed.intent === 'MODIFY_EVENT') {
-    params.addInvitees = [email];
+    params.addInvitees = unique;
   } else if (parsed.intent === 'OFFER_SPECIFIC') {
-    params.recipientEmail = email;
+    params.recipientEmail = unique[0];
   } else if (parsed.intent === 'INVITE_PLATFORM') {
-    params.inviteeEmail = email;
-    params.email = email;
+    params.inviteeEmail = unique[0];
+    params.email = unique[0];
   }
   return ParsedIntentSchema.parse({ ...parsed, params });
+}
+
+function mergePrimaryEmailIntoParsed(parsed: ParsedIntent, email: string): ParsedIntent {
+  return mergeEmailsIntoParsed(parsed, [email]);
 }
 
 export async function handleEmailConfirmationGate(
@@ -160,6 +165,10 @@ export async function handleEmailConfirmationGate(
   const primary = selectPrimaryEmail(parsed.rawUtterance, emails);
   if (!primary) return { proceed: true, parsed };
 
+  if (source === 'text' && emails.length > 1) {
+    return { proceed: true, parsed: mergeEmailsIntoParsed(parsed, emails) };
+  }
+
   if (source === 'text') {
     return { proceed: true, parsed: mergePrimaryEmailIntoParsed(parsed, primary) };
   }
@@ -185,11 +194,19 @@ export async function handleEmailConfirmationGate(
 
 function applyConfirmedEmail(pending: PendingEmailConfirmation, parsed: ParsedIntent): ParsedIntent {
   const params = { ...parsed.params, ...pending.originalParams };
+  const utterance = pending.originalUtterance ?? parsed.rawUtterance;
+  const allEmails = collectEmailsFromIntent({
+    ...parsed,
+    intent: pending.originalIntent as ParsedIntent['intent'],
+    params: pending.originalParams ?? {},
+    rawUtterance: utterance,
+  });
+  const inviteEmails = allEmails.length > 1 ? allEmails : [pending.email];
 
   if (pending.originalIntent === 'CREATE_EVENT') {
-    params.participants = [pending.email];
+    params.participants = inviteEmails;
   } else if (pending.originalIntent === 'MODIFY_EVENT') {
-    params.addInvitees = [pending.email];
+    params.addInvitees = inviteEmails;
   } else if (pending.originalIntent === 'OFFER_SPECIFIC') {
     params.recipientEmail = pending.email;
   } else if (pending.originalIntent === 'INVITE_PLATFORM') {

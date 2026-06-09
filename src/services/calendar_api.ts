@@ -2,20 +2,28 @@ import { calendar_v3 } from 'googleapis';
 import { enqueueCompensation } from '../db/compensation_queue.js';
 import { insertEvent, updateEvent, listEvents, cancelEvent as dbCancelEvent } from '../db/events.js';
 import { CalendarEvent } from '../core/adts.js';
-import { gcalErrorMessage, normalizeGCalRange } from '../core/date-utils.js';
+import { formatZonedDateTime, gcalErrorMessage, normalizeGCalRange } from '../core/date-utils.js';
 import { logger } from '../logger.js';
 
 function gcalAttendees(participants: string[] | undefined) {
   return (participants ?? []).map((email) => ({ email }));
 }
 
+function eventDateTime(iso: string, timeZone?: string) {
+  if (timeZone) {
+    return { dateTime: formatZonedDateTime(iso, timeZone), timeZone };
+  }
+  return { dateTime: iso };
+}
+
 function eventRequestBody(event: CalendarEvent) {
   return {
     summary: event.title,
-    start: { dateTime: event.start },
-    end: { dateTime: event.end },
+    start: eventDateTime(event.start, event.timeZone),
+    end: eventDateTime(event.end, event.timeZone),
     ...(event.description ? { description: event.description } : {}),
     ...(event.participants?.length ? { attendees: gcalAttendees(event.participants) } : {}),
+    ...(event.recurrence?.length ? { recurrence: event.recurrence } : {}),
   };
 }
 
@@ -67,7 +75,12 @@ export async function createEventWithSync(
 ): Promise<CalendarEvent> {
   const inserted = await insertEvent(userId, event);
   if (cal) {
-    const gcalId = await syncEventToGCal(cal, userId, inserted, 'create');
+    const toSync: CalendarEvent = {
+      ...inserted,
+      recurrence: event.recurrence ?? inserted.recurrence,
+      timeZone: event.timeZone ?? inserted.timeZone,
+    };
+    const gcalId = await syncEventToGCal(cal, userId, toSync, 'create');
     if (gcalId && gcalId !== inserted.gcalEventId) {
       return updateEvent(inserted.id, { gcalEventId: gcalId });
     }

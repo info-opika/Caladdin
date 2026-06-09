@@ -1,4 +1,13 @@
-import { addDays, addMinutes, formatISO, startOfDay } from './date-utils.js';
+import {
+  addDays,
+  addMinutes,
+  extractTimezoneFromUtterance,
+  formatISO,
+  getLocalPartsInTimezone,
+  nextWeekdayOccurrence,
+  startOfDay,
+  zonedLocalToUtcDate,
+} from './date-utils.js';
 import { ParsedIntent, ParsedIntentSchema } from './adts.js';
 
 const EMAIL_RE = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
@@ -21,6 +30,52 @@ export function isInviteUtterance(utterance: string): boolean {
   const hasEmail = extractEmails(utterance).length > 0;
   if (!hasEmail) return false;
   return /\b(invite|invitee|guest|attendee|add\s+.+@|include\s+.+@|send\s+(?:an?\s+)?invite)\b/i.test(utterance);
+}
+
+/** Creating a new calendar event with invitees (not adding to an existing event). */
+export function isNewEventInviteUtterance(utterance: string): boolean {
+  if (!isInviteUtterance(utterance)) return false;
+  if (isRecurringCreateUtterance(utterance)) return true;
+  if (/\bsend\s+(?:an?\s+)?invite\b/i.test(utterance)) return true;
+  if (/\b(name|call)\s+(?:the\s+)?event\b/i.test(utterance)) return true;
+  if (/\b(at|for)\s+\d{1,2}(?::\d{2})?\s*(?:am|pm)?\b/i.test(utterance)) return true;
+  if (/\binvite .+ to (?:the |my )?(?:meeting|event)\b/i.test(utterance)) return false;
+  return isCreateEventUtterance(utterance);
+}
+
+export function isRecurringCreateUtterance(utterance: string): boolean {
+  return /\b(recurring|repeats?|every\s+weekday|weekdays?|monday\s+to\s+friday|mon(?:day)?\s*[-–]\s*fri(?:day)?|every\s+(?:monday|tuesday|wednesday|thursday|friday|mon|tue|wed|thu|fri))\b/i.test(utterance);
+}
+
+/** Build Google Calendar RRULE strings from natural language. */
+export function extractRecurrenceFromUtterance(utterance: string): string[] | undefined {
+  const lower = utterance.toLowerCase();
+  if (/\bevery\s+weekday|weekdays?\b|monday\s+to\s+friday|mon(?:day)?\s*[-–]\s*fri(?:day)?\b/.test(lower)) {
+    return ['RRULE:FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR'];
+  }
+  const dayTokenRe = /\b(?:every\s+)?(mondays?|tuesdays?|wednesdays?|thursdays?|fridays?|saturdays?|sundays?|mon|tue|wed|thu|fri|sat|sun)\b/g;
+  const dayMap: Record<string, string> = {
+    monday: 'MO', mon: 'MO', tuesday: 'TU', tue: 'TU', wednesday: 'WE', wed: 'WE',
+    thursday: 'TH', thu: 'TH', friday: 'FR', fri: 'FR', saturday: 'SA', sat: 'SA', sunday: 'SU', sun: 'SU',
+  };
+  const dayMatches = [...lower.matchAll(dayTokenRe)];
+  if (dayMatches.length > 0 && /\b(recurring|repeats?|every)\b/.test(lower)) {
+    const days = [...new Set(dayMatches.map((m) => dayMap[m[1].replace(/s$/, '')]).filter(Boolean))];
+    if (days.length) return [`RRULE:FREQ=WEEKLY;BYDAY=${days.join(',')}`];
+  }
+  if (/\bevery\s+day\b/.test(lower) || /\bdaily\s+(?:standup|meeting|sync|call)\b/.test(lower)
+    || (/\b(daily|every\s+day)\b/.test(lower) && /\b(recurring|repeats?)\b/.test(lower))) {
+    return ['RRULE:FREQ=DAILY'];
+  }
+  if (/\bbiweekly\b/.test(lower) || /\bevery\s+other\s+week\b/.test(lower)) {
+    const days = [...new Set(dayMatches.map((m) => dayMap[m[1].replace(/s$/, '')]).filter(Boolean))];
+    if (days.length) return [`RRULE:FREQ=WEEKLY;INTERVAL=2;BYDAY=${days.join(',')}`];
+    return ['RRULE:FREQ=WEEKLY;INTERVAL=2'];
+  }
+  if (/\bweekly\b/.test(lower) && /\b(recurring|repeats?|every)\b/.test(lower)) {
+    return ['RRULE:FREQ=WEEKLY'];
+  }
+  return undefined;
 }
 
 export function isReferentialUtterance(utterance: string): boolean {
@@ -49,8 +104,8 @@ export function isCreateEventUtterance(utterance: string): boolean {
 /** Pull event title from natural language (Name it X, called "X", etc.) */
 export function extractTitle(utterance: string): string | undefined {
   const patterns = [
-    /(?:name(?:\s+it)?(?:\s+as)?|named|call(?:\s+it)?(?:\s+as)?|title(?:\s+is)?)\s+['"]([^'"]+)['"]/i,
-    /(?:name(?:\s+it)?(?:\s+as)?|named|call(?:\s+it)?(?:\s+as)?|title(?:\s+is)?)\s+(.+?)(?:\s+and\s+(?:then\s+)?(?:invite|add|with|description)|\.?\s*$)/i,
+    /(?:name(?:\s+the)?\s+event(?:\s+as)?|name(?:\s+it)?(?:\s+as)?|named|call(?:\s+it)?(?:\s+as)?|title(?:\s+is)?)\s+['"]([^'"]+)['"]/i,
+    /(?:name(?:\s+the)?\s+event(?:\s+as)?|name(?:\s+it)?(?:\s+as)?|named|call(?:\s+it)?(?:\s+as)?|title(?:\s+is)?)\s+(.+?)(?:\s+and\s+(?:then\s+)?(?:invite|add|with|description)|\.?\s*$)/i,
   ];
   for (const re of patterns) {
     const m = utterance.match(re);
@@ -66,7 +121,7 @@ export function extractTitle(utterance: string): string | undefined {
 /** Pull event description/notes from natural language */
 export function extractDescription(utterance: string): string | undefined {
   const tail = utterance.match(
-    /(?:add (?:an? )?event description|with (?:an? )?(?:event )?description|(?:set )?(?:the )?event description|description)\s+(.+?)\.?\s*$/i,
+    /(?:please\s+)?(?:add (?:an? )?event description|with (?:an? )?(?:event )?description|(?:set )?(?:the )?event description|description)\s+(.+?)\.?\s*$/i,
   );
   if (tail?.[1]?.trim()) {
     let d = tail[1].trim();
@@ -166,7 +221,7 @@ export function isModifyUtterance(utterance: string): boolean {
 
 const TIME_RE = /\b(?:at|for)\s+(\d{1,2})(?::(\d{2}))?\s*(am|pm)?\b|\b(\d{1,2})(?::(\d{2}))?\s*(am|pm)\b/i;
 
-function parseClockMatch(match: RegExpMatchArray, base: Date): Date {
+function parseClockMatch(match: RegExpMatchArray, base: Date, timeZone?: string): Date {
   const hourStr = match[1] ?? match[4];
   const minuteStr = match[2] ?? match[5];
   const ampm = (match[3] ?? match[6])?.toLowerCase();
@@ -177,13 +232,30 @@ function parseClockMatch(match: RegExpMatchArray, base: Date): Date {
   if (ampm === 'am' && hour === 12) hour = 0;
   if (!ampm && hour >= 1 && hour <= 7) hour += 12;
 
+  if (timeZone) {
+    const local = getLocalPartsInTimezone(base, timeZone);
+    return zonedLocalToUtcDate(local.year, local.month, local.day, hour, minute, timeZone);
+  }
+
   const d = new Date(base);
   d.setHours(hour, minute, 0, 0);
   return d;
 }
 
-function dayBaseFromUtterance(utterance: string, ref: Date): Date {
+function dayBaseFromUtterance(utterance: string, ref: Date, timeZone?: string): Date {
   const lower = utterance.toLowerCase();
+  if (timeZone) {
+    const local = getLocalPartsInTimezone(ref, timeZone);
+    let year = local.year;
+    let month = local.month;
+    let day = local.day;
+    if (lower.includes('tomorrow')) {
+      const tomorrow = addDays(zonedLocalToUtcDate(year, month, day, 12, 0, timeZone), 1);
+      const t = getLocalPartsInTimezone(tomorrow, timeZone);
+      year = t.year; month = t.month; day = t.day;
+    }
+    return zonedLocalToUtcDate(year, month, day, 0, 0, timeZone);
+  }
   if (lower.includes('tomorrow')) return startOfDay(addDays(ref, 1));
   if (lower.includes('today')) return startOfDay(ref);
   return startOfDay(ref);
@@ -193,8 +265,10 @@ function dayBaseFromUtterance(utterance: string, ref: Date): Date {
 export function parseModifyTimeRange(
   utterance: string,
   ref = new Date(),
+  timeZone?: string,
 ): { newStart?: string; newEnd?: string } {
-  const base = dayBaseFromUtterance(utterance, ref);
+  const tz = timeZone ?? extractTimezoneFromUtterance(utterance);
+  const base = dayBaseFromUtterance(utterance, ref, tz);
   const startRe = /\bstarting(?:\s+at)?\s+(\d{1,2})(?::(\d{2}))?\s*(am|pm)?/i;
   const endRe = /\bending(?:\s+at)?\s+(\d{1,2})(?::(\d{2}))?\s*(am|pm)?/i;
 
@@ -202,8 +276,8 @@ export function parseModifyTimeRange(
   const em = utterance.match(endRe);
   const out: { newStart?: string; newEnd?: string } = {};
 
-  if (sm) out.newStart = formatISO(parseClockMatch(sm, base));
-  if (em) out.newEnd = formatISO(parseClockMatch(em, base));
+  if (sm) out.newStart = formatISO(parseClockMatch(sm, base, tz));
+  if (em) out.newEnd = formatISO(parseClockMatch(em, base, tz));
 
   const hourDur = utterance.match(/\b(\d+(?:\.\d+)?)\s*hour(?:\s+event)?\b/i);
   if (hourDur && out.newStart && !out.newEnd) {
@@ -212,7 +286,7 @@ export function parseModifyTimeRange(
   }
 
   if (!out.newStart && !out.newEnd) {
-    const single = parseStartEndFromUtterance(utterance, ref);
+    const single = parseStartEndFromUtterance(utterance, ref, 60, tz);
     if (single) {
       out.newStart = single.start;
       out.newEnd = single.end;
@@ -222,8 +296,10 @@ export function parseModifyTimeRange(
   return out;
 }
 
-/** Parse duration like "12 minutes duration" or "30 minute event" */
+/** Parse duration like "for 30 minutes", "12 minutes duration", or "30 minute event" */
 export function extractDurationMinutes(utterance: string): number | undefined {
+  const forMin = utterance.match(/\bfor\s+(\d+)\s*(?:minute|min)s?\b/i);
+  if (forMin) return parseInt(forMin[1], 10);
   const minDur = utterance.match(/\b(\d+)\s*(?:minute|min)s?\s+duration\b/i);
   if (minDur) return parseInt(minDur[1], 10);
   const andMin = utterance.match(/\band\s+(\d+)\s*(?:minute|min)s?\s+duration\b/i);
@@ -238,25 +314,34 @@ export function parseStartEndFromUtterance(
   utterance: string,
   ref = new Date(),
   durationMinutes = 60,
-): { start: string; end: string } | null {
+  timeZone?: string,
+): { start: string; end: string; timeZone?: string } | null {
+  const tz = timeZone ?? extractTimezoneFromUtterance(utterance);
   const lower = utterance.toLowerCase();
-  let base = startOfDay(ref);
-
-  if (lower.includes('tomorrow')) {
-    base = startOfDay(addDays(ref, 1));
-  } else if (lower.includes('today')) {
-    base = startOfDay(ref);
-  } else {
-    base = startOfDay(ref);
-  }
+  const base = dayBaseFromUtterance(utterance, ref, tz);
 
   const tm = utterance.match(TIME_RE);
   if (!tm) return null;
 
-  const start = parseClockMatch(tm, base);
-  const end = addMinutes(start, durationMinutes);
+  let hour = parseInt(tm[1] ?? tm[4], 10);
+  const minute = tm[2] ?? tm[5] ? parseInt(tm[2] ?? tm[5], 10) : 0;
+  const ampm = (tm[3] ?? tm[6])?.toLowerCase();
+  if (ampm === 'pm' && hour < 12) hour += 12;
+  if (ampm === 'am' && hour === 12) hour = 0;
+  if (!ampm && hour >= 1 && hour <= 7) hour += 12;
 
-  return { start: formatISO(start), end: formatISO(end) };
+  let start: Date;
+  if (tz && isRecurringCreateUtterance(utterance) && !/\b(tomorrow|today|monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/.test(lower)) {
+    start = nextWeekdayOccurrence(ref, hour, minute, tz);
+  } else if (tz) {
+    const local = getLocalPartsInTimezone(base, tz);
+    start = zonedLocalToUtcDate(local.year, local.month, local.day, hour, minute, tz);
+  } else {
+    start = parseClockMatch(tm, base, tz);
+  }
+
+  const end = addMinutes(start, durationMinutes);
+  return { start: formatISO(start), end: formatISO(end), ...(tz ? { timeZone: tz } : {}) };
 }
 
 /** Merge parsed clock time onto an existing event's calendar date */
@@ -271,22 +356,38 @@ export function mergeTimeOntoEventDate(isoTime: string, eventStartIso: string): 
 export function enrichCreateParams(
   params: Record<string, unknown>,
   utterance: string,
+  defaultTimezone?: string,
 ): Record<string, unknown> {
   const out = { ...params };
   out.title = sanitizeTitle(out.title as string | undefined)
     ?? sanitizeTitle(extractTitle(utterance));
+  const tz = (out.timeZone as string | undefined)
+    ?? extractTimezoneFromUtterance(utterance)
+    ?? defaultTimezone;
+  if (tz) out.timeZone = tz;
+
   const durationMinutes = extractDurationMinutes(utterance);
   if (!out.start || !out.end) {
-    const range = parseStartEndFromUtterance(utterance, new Date(), durationMinutes ?? 60);
+    const range = parseStartEndFromUtterance(utterance, new Date(), durationMinutes ?? 60, tz);
     if (range) {
       if (!out.start) out.start = range.start;
       if (!out.end) out.end = range.end;
+      if (range.timeZone && !out.timeZone) out.timeZone = range.timeZone;
     }
   } else if (durationMinutes && out.start) {
     out.end = formatISO(addMinutes(new Date(out.start as string), durationMinutes));
   }
+
+  const recurrence = (out.recurrence as string[] | undefined) ?? extractRecurrenceFromUtterance(utterance);
+  if (recurrence?.length) {
+    out.recurrence = recurrence;
+    out.isRecurring = true;
+  } else if (out.isRecurring === undefined && isRecurringCreateUtterance(utterance)) {
+    out.isRecurring = true;
+  }
+
   const emails = extractEmails(utterance);
-  if (emails.length && (/\b(invite|with|add|include|guest|attendee)\b/i.test(utterance) || isInviteUtterance(utterance))) {
+  if (emails.length && (/\b(invite|with|add|include|guest|attendee|send)\b/i.test(utterance) || isInviteUtterance(utterance))) {
     out.participants = [...new Set([...(out.participants as string[] | undefined ?? []), ...emails])];
   }
   if (!out.description) {
@@ -346,7 +447,7 @@ export function enrichModifyParams(
 export function hasActionableParams(intent: string, params: Record<string, unknown>): boolean {
   switch (intent) {
     case 'CREATE_EVENT':
-      return Boolean(params.title || params.start);
+      return Boolean(params.title || params.start || params.recurrence || params.isRecurring);
     case 'MODIFY_EVENT':
       return Boolean(
         params.newTitle || params.newStart || params.newEnd || params.eventTitle || params.addInvitees || params.newDescription,

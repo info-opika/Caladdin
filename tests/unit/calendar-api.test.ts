@@ -57,10 +57,37 @@ function mockCal(over: { insertId?: string; listItems?: unknown[]; fail?: boolea
 describe('calendar_api service', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockInsert.mockResolvedValue({ ...baseEvent, gcalEventId: null });
+    mockInsert.mockImplementation(async (_userId, event) => ({
+      ...baseEvent,
+      ...event,
+      id: 'ev-1',
+      gcalEventId: null,
+    }));
     mockUpdate.mockImplementation(async (_id, patch) => ({ ...baseEvent, ...patch }));
     mockCancel.mockResolvedValue(undefined);
     mockEnqueue.mockResolvedValue(undefined);
+  });
+
+  it('createEventWithSync passes recurrence and timezone to GCal', async () => {
+    const cal = mockCal({ insertId: 'gcal-rec' });
+    mockUpdate.mockResolvedValue({ ...baseEvent, gcalEventId: 'gcal-rec' });
+    await createEventWithSync(cal, 'user-1', {
+      title: 'Vibecoding',
+      start: '2026-06-09T20:00:00.000Z',
+      end: '2026-06-09T21:00:00.000Z',
+      tier: 2,
+      status: 'confirmed',
+      participants: ['aniket@opika.co'],
+      isRecurring: true,
+      recurrence: ['RRULE:FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR'],
+      timeZone: 'America/Chicago',
+    });
+    const insertCall = vi.mocked(cal.events.insert).mock.calls[0]?.[0];
+    expect(insertCall?.requestBody?.recurrence).toEqual(['RRULE:FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR']);
+    expect(insertCall?.requestBody?.start).toEqual(
+      expect.objectContaining({ timeZone: 'America/Chicago', dateTime: expect.stringMatching(/T15:00:00/) }),
+    );
+    expect(insertCall?.sendUpdates).toBe('all');
   });
 
   it('createEventWithSync inserts locally then syncs GCal id', async () => {
@@ -89,7 +116,7 @@ describe('calendar_api service', () => {
       participants: [],
       isRecurring: false,
     });
-    expect(result.title).toBe('Sync');
+    expect(result.title).toBe('Local only');
   });
 
   it('listEventsFromGCalSafe maps API items', async () => {

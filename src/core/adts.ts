@@ -116,6 +116,8 @@ export const CalendarEventSchema = z.object({
   participants: z.array(z.string()).default([]),
   tier: z.number().int().min(0).max(3).default(2),
   isRecurring: z.boolean().default(false),
+  recurrence: z.array(z.string()).optional(),
+  timeZone: z.string().optional(),
   status: z.enum(['confirmed', 'cancelled', 'proposed']).default('confirmed'),
   gcalEventId: z.string().optional().nullable(),
   proposedForSession: z.string().uuid().optional().nullable(),
@@ -177,11 +179,18 @@ export const CLASSIFY_INTENT_TOOL = {
       confidence: { type: 'number', minimum: 0, maximum: 1 },
       params: {
         type: 'object',
-        description: 'Intent-specific fields. CREATE_EVENT: title, start, end, participants? (emails), description? (event notes). MODIFY_EVENT: eventTitle?, newTitle?, newStart?, newEnd?, addInvitees? (emails), newDescription?. QUERY_CALENDAR: rangeStart?, rangeEnd?. FLUSH_RANGE: rangeStart?, rangeEnd?, eventTitle? (delete one event by title).',
+        description: 'Intent-specific fields. CREATE_EVENT: title, start, end, participants? (emails), description?, isRecurring?, recurrence? (RRULE strings), timeZone? (IANA). MODIFY_EVENT: eventTitle?, newTitle?, newStart?, newEnd?, addInvitees? (emails), newDescription?. QUERY_CALENDAR: rangeStart?, rangeEnd?. FLUSH_RANGE: rangeStart?, rangeEnd?, eventTitle? (delete one event by title).',
         properties: {
           title: { type: 'string', description: 'Event title for CREATE_EVENT' },
           start: { type: 'string', description: 'ISO 8601 start datetime' },
           end: { type: 'string', description: 'ISO 8601 end datetime' },
+          isRecurring: { type: 'boolean', description: 'True when user wants a recurring series (CREATE_EVENT)' },
+          recurrence: {
+            type: 'array',
+            items: { type: 'string' },
+            description: 'Google Calendar RRULE strings, e.g. RRULE:FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR for weekdays',
+          },
+          timeZone: { type: 'string', description: 'IANA timezone from user phrase (e.g. America/Chicago for Central Time)' },
           description: { type: 'string', description: 'Event description/notes for CREATE_EVENT or MODIFY_EVENT' },
           newDescription: { type: 'string', description: 'New description when updating an event' },
           participants: { type: 'array', items: { type: 'string' }, description: 'Guest emails for CREATE_EVENT' },
@@ -231,6 +240,7 @@ export const RESOLVE_MANUAL_MESSAGE =
 export interface OrchestratorContext {
   userId: string;
   requestId: string;
+  timezone?: string;
   oauthClient?: unknown;
   conversationContext?: import('../db/conversation-context.js').ConversationContext | null;
   _skipConfirmationGate?: boolean;

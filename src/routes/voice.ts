@@ -103,6 +103,7 @@ voiceRouter.post('/', requireSession, async (req: Request, res: Response) => {
     const result = await orchestrate(parsed, {
       userId,
       requestId,
+      timezone: policy?.timezone,
       oauthClient: oauthClient ?? undefined,
       conversationContext,
     });

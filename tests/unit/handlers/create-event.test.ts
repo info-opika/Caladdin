@@ -63,6 +63,70 @@ describe('handleCreateEvent', () => {
     );
   });
 
+  it('creates recurring weekday event with timezone and invitee', async () => {
+    const parsed = ParsedIntentSchema.parse({
+      intent: 'CREATE_EVENT',
+      confidence: 0.95,
+      params: {
+        title: 'Vibecoding',
+        start: '2026-06-09T20:00:00.000Z',
+        end: '2026-06-09T21:00:00.000Z',
+        participants: ['aniket@opika.co'],
+        isRecurring: true,
+        recurrence: ['RRULE:FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR'],
+        timeZone: 'America/Chicago',
+      },
+      mappingMethod: 'direct',
+      rawUtterance: 'send invite recurring weekdays',
+    });
+
+    const result = await handleCreateEvent(parsed, ctx, cal);
+    expect(result.success).toBe(true);
+    expect(result.messageToUser).toMatch(/repeats/i);
+    expect(mockCreateEventWithSync).toHaveBeenCalledWith(
+      cal,
+      'user-1',
+      expect.objectContaining({
+        title: 'Vibecoding',
+        isRecurring: true,
+        recurrence: ['RRULE:FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR'],
+        timeZone: 'America/Chicago',
+        participants: ['aniket@opika.co'],
+      }),
+    );
+  });
+
+  it('lists all invitees in success message', async () => {
+    mockCreateEventWithSync.mockResolvedValue({
+      id: 'ev-2',
+      title: 'Vibecoding',
+      start: '2026-06-09T20:00:00.000Z',
+      end: '2026-06-09T20:30:00.000Z',
+      gcalEventId: 'gcal-2',
+      participants: ['aniket@opika.co', 'kanth@opika.co'],
+    });
+    const parsed = ParsedIntentSchema.parse({
+      intent: 'CREATE_EVENT',
+      confidence: 0.95,
+      params: {
+        title: 'Vibecoding',
+        start: '2026-06-09T20:00:00.000Z',
+        end: '2026-06-09T20:30:00.000Z',
+        participants: ['aniket@opika.co', 'kanth@opika.co'],
+        description: 'Invited by Caladdin',
+        isRecurring: true,
+        recurrence: ['RRULE:FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR'],
+        timeZone: 'America/Chicago',
+      },
+      mappingMethod: 'direct',
+      rawUtterance: 'send invite to two people',
+    });
+
+    const result = await handleCreateEvent(parsed, ctx, cal);
+    expect(result.messageToUser).toMatch(/aniket@opika\.co/);
+    expect(result.messageToUser).toMatch(/kanth@opika\.co/);
+  });
+
   it('defaults start/end when missing', async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-06-08T12:00:00.000Z'));

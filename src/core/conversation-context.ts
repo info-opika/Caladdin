@@ -5,6 +5,7 @@ import {
   enrichCreateParams,
   extractEmails,
   isInviteUtterance,
+  isNewEventInviteUtterance,
   isReferentialUtterance,
   isRenameUtterance,
   isCreateEventUtterance,
@@ -17,7 +18,7 @@ export function applyConversationContext(
 ): ParsedIntent {
   const utterance = parsed.rawUtterance;
 
-  if (isCreateEventUtterance(utterance)) {
+  if (isCreateEventUtterance(utterance) || isNewEventInviteUtterance(utterance)) {
     return ParsedIntentSchema.parse({
       ...parsed,
       intent: 'CREATE_EVENT',
