@@ -1,4 +1,4 @@
-import type { OAuth2Client } from 'google-auth-library';
+import { calendar_v3 } from 'googleapis';
 import type { UserPolicyProfile } from '../core/adts.js';
 import {
   getSchedulingSessionByToken,
@@ -6,6 +6,7 @@ import {
   claimHostProposalForAccept,
   revertHostProposalAcceptClaim,
   PROPOSAL_ACCEPT_CLAIM_SENTINEL,
+  asProposedAlternative,
 } from '../db/scheduling_sessions.js';
 import { createCalendarEvent } from './calendar.js';
 import { gcalDeleteEvent } from './gcal.js';
@@ -45,7 +46,7 @@ export async function hostIgnoreProposal(
   if (proposalIndex < 0 || proposalIndex >= alts.length) {
     return { ok: false, code: 'bad_index', message: 'Invalid proposal index.' };
   }
-  const cur = alts[proposalIndex]!;
+  const cur = asProposedAlternative(alts[proposalIndex]);
   if (cur.status === 'ignored') {
     return { ok: true, idempotent: true, message: 'That proposal was already ignored.' };
   }
@@ -71,7 +72,7 @@ export async function hostAcceptProposal(
   token: string,
   proposalIndex: number,
   hostUserId: string,
-  oauth: OAuth2Client,
+  cal: calendar_v3.Calendar,
   profile: UserPolicyProfile
 ): Promise<HostProposalResult> {
   const session = await getSchedulingSessionByToken(token);
@@ -82,7 +83,7 @@ export async function hostAcceptProposal(
   if (proposalIndex < 0 || proposalIndex >= alts.length) {
     return { ok: false, code: 'bad_index', message: 'Invalid proposal index.' };
   }
-  const cur0 = alts[proposalIndex]!;
+  const cur0 = asProposedAlternative(alts[proposalIndex]);
   if (cur0.status === 'accepted' && cur0.google_event_id && cur0.google_event_id !== PROPOSAL_ACCEPT_CLAIM_SENTINEL) {
     return {
       ok: true,
@@ -96,7 +97,7 @@ export async function hostAcceptProposal(
   if (!claimed) {
     const again = await getSchedulingSessionByToken(token);
     const al = again?.proposed_alternatives || [];
-    const c = al[proposalIndex];
+    const c = asProposedAlternative(al[proposalIndex]);
     if (c?.status === 'accepted' && c.google_event_id && c.google_event_id !== PROPOSAL_ACCEPT_CLAIM_SENTINEL) {
       return {
         ok: true,
@@ -113,7 +114,7 @@ export async function hostAcceptProposal(
 
   const session2 = (await getSchedulingSessionByToken(token))!;
   const alts2 = session2.proposed_alternatives || [];
-  const cur = alts2[proposalIndex]!;
+  const cur = asProposedAlternative(alts2[proposalIndex]);
 
   const slot = parseProposalToStartEnd(
     cur.proposedDate,
@@ -132,20 +133,16 @@ export async function hostAcceptProposal(
 
   let eventId: string = '';
   try {
-    const created = await createCalendarEvent(
-      oauth,
-      {
-        title,
-        start: slot.start,
-        end: slot.end,
-        attendees: cur.email ? [cur.email] : session2.invitee_email ? [session2.invitee_email] : [],
-        description: cur.note ? `Invitee note: ${cur.note}` : undefined,
-      },
-      { timezone: session2.host_timezone || profile.timezone }
-    );
+    const created = await createCalendarEvent(cal, {
+      summary: title,
+      start: slot.start,
+      end: slot.end,
+      attendees: cur.email ? [cur.email] : session2.invitee_email ? [session2.invitee_email] : [],
+      description: cur.note ? `Invitee note: ${cur.note}` : undefined,
+    });
     eventId = created.id || '';
   } catch (err) {
-    logger.error({ err, token, proposalIndex }, 'hostAcceptProposal calendar insert failed');
+    logger.error('hostAcceptProposal calendar insert failed', { err: String(err), token, proposalIndex });
     await revertHostProposalAcceptClaim(token, proposalIndex);
     return {
       ok: false,
@@ -168,11 +165,11 @@ export async function hostAcceptProposal(
       proposalIndex,
     });
   } catch (err) {
-    logger.error({ err, token, eventId }, 'hostAcceptProposal DB finalize failed; deleting calendar orphan');
+    logger.error('hostAcceptProposal DB finalize failed; deleting calendar orphan', { err: String(err), token, eventId });
     try {
-      await gcalDeleteEvent(oauth, eventId);
+      await gcalDeleteEvent(cal, eventId);
     } catch (delErr) {
-      logger.error({ delErr, eventId }, 'Failed to delete orphan GCal event after DB failure');
+      logger.error('Failed to delete orphan GCal event after DB failure', { delErr: String(delErr), eventId });
     }
     await revertHostProposalAcceptClaim(token, proposalIndex);
     return { ok: false, code: 'calendar_error', message: 'Could not save acceptance. Please try again.' };
@@ -182,6 +179,6 @@ export async function hostAcceptProposal(
     ok: true,
     applied: true,
     googleEventId: eventId,
-    message: `Added to your calendar. Event id: ${eventId}.`,
+    message: `Accepted — added to your calendar (${eventId}).`,
   };
 }

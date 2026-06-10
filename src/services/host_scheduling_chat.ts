@@ -1,7 +1,7 @@
-import type { OAuth2Client } from 'google-auth-library';
+import { calendar_v3 } from 'googleapis';
 import type { UserPolicyProfile } from '../core/adts.js';
 import type { IntentResult } from '../core/adts.js';
-import type { SchedulingSessionRow } from '../db/scheduling_sessions.js';
+import { asProposedAlternative, type SchedulingSessionRow } from '../db/scheduling_sessions.js';
 import { listHostSessionsWithPendingProposals } from '../db/scheduling_sessions_queries.js';
 import { hostAcceptProposal, hostIgnoreProposal } from './proposal_host_actions.js';
 
@@ -29,7 +29,8 @@ export function parseHostProposalCommand(text: string): { kind: 'accept' | 'igno
 export function countPendingProposalEntries(sessions: SchedulingSessionRow[]): number {
   let n = 0;
   for (const s of sessions) {
-    for (const a of s.proposed_alternatives || []) {
+    for (const raw of s.proposed_alternatives || []) {
+      const a = asProposedAlternative(raw);
       if (a.status === 'pending' || a.status == null) n++;
     }
   }
@@ -48,7 +49,7 @@ export function formatPendingProposalsLines(sessions: SchedulingSessionRow[]): s
   const lines: string[] = [];
   for (const s of sessions) {
     for (let i = 0; i < (s.proposed_alternatives?.length || 0); i++) {
-      const alt = s.proposed_alternatives![i]!;
+      const alt = asProposedAlternative(s.proposed_alternatives![i]);
       if (alt.status && alt.status !== 'pending') continue;
       const who = alt.email || alt.name || 'Invitee';
       const meeting = s.invitee_email ? `meeting with ${s.invitee_email}` : 'your scheduling link';
@@ -98,7 +99,7 @@ function proposalResultToIntent(r: Awaited<ReturnType<typeof hostIgnoreProposal>
 export async function handleHostProposalCommand(
   text: string,
   userId: string,
-  oauth: OAuth2Client,
+  cal: calendar_v3.Calendar,
   profile: UserPolicyProfile
 ): Promise<IntentResult | null> {
   const cmd = parseHostProposalCommand(text);
@@ -109,7 +110,7 @@ export async function handleHostProposalCommand(
     return proposalResultToIntent(r, 'proposal_ignore');
   }
 
-  const r = await hostAcceptProposal(cmd.token, cmd.index, userId, oauth, profile);
+  const r = await hostAcceptProposal(cmd.token, cmd.index, userId, cal, profile);
   if (r.ok) {
     return proposalResultToIntent(r, 'proposal_accept');
   }
@@ -126,4 +127,3 @@ export async function handleHostProposalCommand(
   }
   return proposalResultToIntent(r, 'proposal_accept');
 }
-

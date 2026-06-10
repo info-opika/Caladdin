@@ -335,7 +335,7 @@ export async function mapVoiceUtteranceToIntent(
     classifiedRaw = await classifyIntent(t, { timezone: tz, userId: context.userId.trim() });
     meta.haikuCalled = true;
   } catch (classifyErr) {
-    logger.error({ err: classifyErr, utterance: t }, 'Voice Haiku classifier failed');
+    logger.error('Voice Haiku classifier failed', { err: String(classifyErr), utterance: t });
     return {
       intent: ParsedIntentSchema.parse({
         intent: 'RESOLVE_MANUAL',
@@ -378,7 +378,7 @@ export async function mapVoiceUtteranceToIntent(
       rawUtterance: t,
       attemptedIntent: draft.intent,
       confidence: classifiedRaw.confidence,
-      mappingMethod: 'fuzzy',
+      failureReason: 'low_confidence_fuzzy',
     });
   }
 

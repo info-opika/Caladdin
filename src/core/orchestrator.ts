@@ -150,11 +150,14 @@ export async function orchestrate(
       skipGate: _skipConfirmationGate,
     });
     const result = await handler(parsed, ctx, cal);
+    const eventsAffected = Array.isArray(result.eventsAffected)
+      ? result.eventsAffected.length
+      : (result.eventsAffected ?? 0);
     await insertAuditLog({
       userId,
       intent: parsed.intent,
       outcome: result.success ? 'success' : 'failed',
-      eventsAffected: result.eventsAffected ?? 0,
+      eventsAffected,
       requestId,
     });
     return result;

@@ -49,6 +49,6 @@ export async function resolveSystemMode(): Promise<SystemMode> {
   else if (!llmOk) mode = 'DEGRADED_LLM';
   else mode = 'DEGRADED_CALENDAR';
 
-  logger.info({ mode, llmOk, dbOk, calOk }, 'System mode resolved');
+  logger.info('System mode resolved', { mode, llmOk, dbOk, calOk });
   return mode;
 }

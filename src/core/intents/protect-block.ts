@@ -192,6 +192,16 @@ export async function protectBlock(
     });
     const updatedProfile = { ...profile, protectedBlocks: [...profile.protectedBlocks, block] };
 
+    if (!profile.userId) {
+      return {
+        success: false,
+        intent: 'PROTECT_BLOCK',
+        atomicOp: 'add_recurring_block',
+        eventsAffected: [],
+        requiresConfirmation: false,
+        failureReason: 'User policy missing user id.',
+      };
+    }
     await upsertUserPolicy(profile.userId, updatedProfile);
 
     const untilRfc = untilRruleFromRangeEnd(params.rangeEnd, zone);

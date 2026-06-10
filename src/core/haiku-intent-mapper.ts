@@ -117,7 +117,7 @@ export async function mapUtteranceWithHaiku(
   try {
     parsed = extractJsonObject(text);
   } catch (err) {
-    logger.warn({ err, utterancePreview: utterance.slice(0, 120) }, 'Haiku mapper JSON parse failed');
+    logger.warn('Haiku mapper JSON parse failed', { err: String(err), utterancePreview: utterance.slice(0, 120) });
     throw err;
   }
 

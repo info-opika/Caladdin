@@ -178,7 +178,7 @@ apiRouter.post('/sessions/:token/proposals/:index', requireSession, async (req: 
       message: r.message,
     });
   } catch (err) {
-    logger.error({ err, token }, 'proposal action failed');
+    logger.error('proposal action failed', { err: String(err), token });
     res.status(500).json({ error: 'failed' });
   }
 });

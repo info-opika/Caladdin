@@ -65,14 +65,14 @@ export function validateHaikuMapperOutput(
   raw: ClassifiedIntent | Record<string, unknown> | null | undefined
 ): ParsedIntent {
   if (!raw || typeof raw !== 'object') {
-    logger.warn({ utterancePreview: utterance.slice(0, 80) }, 'Haiku validator: empty mapper output');
+    logger.warn('Haiku validator: empty mapper output', { utterancePreview: utterance.slice(0, 80) });
     return resolveManual(utterance, 'haiku_mapper_invalid_output', 0);
   }
 
   const asRecord = raw as Record<string, unknown>;
   const { cleaned, strippedKeys } = stripUnknownTopLevel(asRecord);
   if (strippedKeys.length > 0) {
-    logger.warn({ strippedKeys, utterancePreview: utterance.slice(0, 80) }, 'Haiku validator stripped unknown top-level keys');
+    logger.warn('Haiku validator stripped unknown top-level keys', { strippedKeys, utterancePreview: utterance.slice(0, 80) });
   }
 
   const intentRaw = typeof cleaned.intent === 'string' ? cleaned.intent : '';

@@ -9,9 +9,15 @@ export type ProposedAlternative = {
   proposedDate: string;
   proposedTimeWindow: string;
   note?: string;
+  email?: string;
+  name?: string;
   status?: 'pending' | 'accepted' | 'ignored' | 'accepting';
   google_event_id?: string | null;
 };
+
+export function asProposedAlternative(alt: unknown): ProposedAlternative {
+  return alt as ProposedAlternative;
+}
 
 export interface SchedulingSession {
   id: string;

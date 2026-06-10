@@ -80,7 +80,7 @@ function buildSchedulingFromPending(
     windowEndHourLocal: window.endHour,
   };
   if (!schedulingKnownFieldsStructurallyComplete(merged)) {
-    logger.warn({ knownKeys: Object.keys(merged) }, 'Pending scheduling merge incomplete');
+    logger.warn('Pending scheduling merge incomplete', { knownKeys: Object.keys(merged) });
     return null;
   }
   if (window.startHour >= window.endHour) return null;
@@ -297,7 +297,7 @@ function buildProtectFromPending(
   }
   const z = ProtectBlockParamsSchema.safeParse(merged);
   if (!z.success) {
-    logger.warn({ issues: z.error.issues }, 'Pending protect merge failed schema');
+    logger.warn('Pending protect merge failed schema', { issues: z.error.issues });
     return null;
   }
   return ParsedIntentSchema.parse({

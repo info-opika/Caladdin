@@ -12,6 +12,9 @@ export async function listHostSessionsWithPendingProposals(hostUserId: string): 
   return rows.filter((r) => {
     const alts = r.proposed_alternatives;
     if (!Array.isArray(alts) || alts.length === 0) return false;
-    return alts.some((a: ProposedAlternative) => a.status === 'pending' || a.status == null);
+    return alts.some((raw) => {
+      const a = raw as ProposedAlternative;
+      return a.status === 'pending' || a.status == null;
+    });
   });
 }

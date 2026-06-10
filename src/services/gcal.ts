@@ -31,7 +31,7 @@ export async function gcalCreateRecurringEvent(
   },
 ): Promise<void> {
   if (isKillSwitchActive()) {
-    logger.error({ config }, 'KILL SWITCH: blocked recurring calendar write');
+    logger.error('KILL SWITCH: blocked recurring calendar write', { title: config.title });
     throw new Error('Calendar writes blocked: kill switch active');
   }
   const daysMap: Record<number, string> = { 0: 'SU', 1: 'MO', 2: 'TU', 3: 'WE', 4: 'TH', 5: 'FR', 6: 'SA' };
