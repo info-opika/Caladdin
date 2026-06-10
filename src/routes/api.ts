@@ -4,6 +4,9 @@ import { requireSession } from '../middleware/session.js';
 import { generateCsrfToken, setCsrfCookie, clearCsrfCookie } from '../middleware/csrf.js';
 import { auditSensitiveOperation } from '../middleware/sensitiveAudit.js';
 import { listSessionsForHost } from '../db/scheduling_sessions.js';
+import { ensureDefaultPolicy } from '../db/users.js';
+import { hostAcceptProposal, hostIgnoreProposal } from '../services/proposal_host_actions.js';
+import { logger } from '../logger.js';
 import { insertFeedback } from '../db/feedback.js';
 import { getUserProfileView, updateUserProfile, getUserById } from '../db/users.js';
 import { exportUserData, deleteUserAccount } from '../db/user_data.js';
@@ -119,6 +122,65 @@ apiRouter.get('/sessions', requireSession, async (req: Request, res: Response) =
   const session = (req as Request & { session: { userId: string } }).session;
   const sessions = await listSessionsForHost(session.userId);
   res.json({ sessions });
+});
+
+apiRouter.post('/sessions/:token/proposals/:index', requireSession, async (req: Request, res: Response) => {
+  const session = (req as Request & { session: { userId: string } }).session;
+  const token = String(req.params.token ?? '');
+  const index = Number(req.params.index);
+  const action = req.body?.action;
+  if (action !== 'accept' && action !== 'ignore') {
+    res.status(400).json({ error: 'action must be accept or ignore' });
+    return;
+  }
+  if (!Number.isInteger(index) || index < 0) {
+    res.status(400).json({ error: 'invalid index' });
+    return;
+  }
+  try {
+    const profile = await ensureDefaultPolicy(session.userId);
+    const oauth = await getOAuthClientForUser(session.userId);
+    if (!oauth) {
+      res.status(401).json({ error: 'Not authenticated' });
+      return;
+    }
+
+    if (action === 'ignore') {
+      const r = await hostIgnoreProposal(token, index, session.userId);
+      if (!r.ok) {
+        const status = r.code === 'not_found' ? 404 : r.code === 'bad_index' ? 400 : 409;
+        res.status(status).json({ error: r.code, message: r.message });
+        return;
+      }
+      res.json({
+        ok: true,
+        idempotent: 'idempotent' in r && r.idempotent === true,
+        message: r.message,
+      });
+      return;
+    }
+
+    const r = await hostAcceptProposal(token, index, session.userId, oauth, profile);
+    if (!r.ok) {
+      const status =
+        r.code === 'not_found' ? 404
+          : r.code === 'bad_index' ? 400
+            : r.code === 'race_lost' || r.code === 'in_progress' ? 409
+              : r.code === 'needs_clarification' ? 422
+                : 502;
+      res.status(status).json({ error: r.code, message: r.message });
+      return;
+    }
+    res.json({
+      ok: true,
+      idempotent: 'idempotent' in r && r.idempotent === true,
+      googleEventId: 'googleEventId' in r ? r.googleEventId : undefined,
+      message: r.message,
+    });
+  } catch (err) {
+    logger.error({ err, token }, 'proposal action failed');
+    res.status(500).json({ error: 'failed' });
+  }
 });
 
 apiRouter.get('/calendar.ics', requireSession, async (req: Request, res: Response) => {

@@ -3,6 +3,15 @@ import { config } from '../config.js';
 import type { CandidateSlot } from '../core/adts.js';
 
 export const GCAL_CLAIMING_SENTINEL = '__CALADDIN_GCAL_CLAIMING__';
+export const PROPOSAL_ACCEPT_CLAIM_SENTINEL = '__CALADDIN_PROPOSAL_CLAIM__';
+
+export type ProposedAlternative = {
+  proposedDate: string;
+  proposedTimeWindow: string;
+  note?: string;
+  status?: 'pending' | 'accepted' | 'ignored' | 'accepting';
+  google_event_id?: string | null;
+};
 
 export interface SchedulingSession {
   id: string;
@@ -155,6 +164,12 @@ export async function claimSessionSlotForGcal(opts: {
   token: string;
   slotIndex: 0 | 1;
 }): Promise<boolean> {
+  const { data, error } = await getSupabase().rpc('claim_scheduling_slot_for_gcal', {
+    p_token: opts.token,
+    p_slot_index: opts.slotIndex,
+  });
+  if (!error) return data === true;
+
   const session = await getSchedulingSessionByToken(opts.token);
   if (!session || session.status !== 'pending' || session.google_event_id != null) {
     return false;
@@ -162,7 +177,7 @@ export async function claimSessionSlotForGcal(opts: {
   const sel = session.offered_slots[opts.slotIndex];
   if (!sel) return false;
 
-  const { error } = await getSupabase()
+  const { error: updErr } = await getSupabase()
     .from('scheduling_sessions')
     .update({
       selected_slot: sel,
@@ -173,7 +188,7 @@ export async function claimSessionSlotForGcal(opts: {
     .eq('status', 'pending')
     .is('google_event_id', null);
 
-  return !error;
+  return !updErr;
 }
 
 export async function finalizeSessionAfterGcal(opts: {
@@ -204,6 +219,54 @@ export async function revertSessionClaim(token: string): Promise<void> {
     })
     .eq('token', token)
     .eq('google_event_id', GCAL_CLAIMING_SENTINEL);
+}
+
+export async function patchProposedAlternative(
+  token: string,
+  proposalIndex: number,
+  patch: Partial<Pick<ProposedAlternative, 'status' | 'google_event_id'>>,
+): Promise<void> {
+  const session = await getSchedulingSessionByToken(token);
+  if (!session) throw new Error('session not found');
+  const alts = [...(session.proposed_alternatives as ProposedAlternative[] || [])];
+  if (proposalIndex < 0 || proposalIndex >= alts.length) throw new Error('invalid proposal index');
+  alts[proposalIndex] = { ...alts[proposalIndex]!, ...patch };
+  const { error } = await getSupabase()
+    .from('scheduling_sessions')
+    .update({ proposed_alternatives: alts, updated_at: new Date().toISOString() })
+    .eq('token', token);
+  if (error) throw error;
+}
+
+export async function claimHostProposalForAccept(token: string, index: number): Promise<boolean> {
+  const session = await getSchedulingSessionByToken(token);
+  if (!session) return false;
+  const alts = [...(session.proposed_alternatives as ProposedAlternative[] || [])];
+  if (index < 0 || index >= alts.length) return false;
+  const cur = alts[index]!;
+  if (cur.status === 'accepted' || cur.status === 'ignored') return false;
+  if (cur.status === 'accepting') return false;
+  alts[index] = { ...cur, status: 'accepting', google_event_id: PROPOSAL_ACCEPT_CLAIM_SENTINEL };
+  const { error } = await getSupabase()
+    .from('scheduling_sessions')
+    .update({ proposed_alternatives: alts, updated_at: new Date().toISOString() })
+    .eq('token', token)
+    .eq('status', 'pending');
+  return !error;
+}
+
+export async function revertHostProposalAcceptClaim(token: string, index: number): Promise<void> {
+  const session = await getSchedulingSessionByToken(token);
+  if (!session) return;
+  const alts = [...(session.proposed_alternatives as ProposedAlternative[] || [])];
+  if (index < 0 || index >= alts.length) return;
+  const cur = alts[index]!;
+  if (cur.google_event_id !== PROPOSAL_ACCEPT_CLAIM_SENTINEL) return;
+  alts[index] = { ...cur, status: 'pending', google_event_id: null };
+  await getSupabase()
+    .from('scheduling_sessions')
+    .update({ proposed_alternatives: alts, updated_at: new Date().toISOString() })
+    .eq('token', token);
 }
 
 export async function appendProposedAlternative(

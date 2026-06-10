@@ -6,8 +6,7 @@ const mockGetPolicy = vi.fn();
 const mockGetUserById = vi.fn();
 const mockGetConversationContext = vi.fn();
 const mockGetPendingEmailConfirmation = vi.fn();
-const mockParseIntent = vi.fn();
-const mockParseSchedulingLinkIntent = vi.fn();
+const mockMapVoiceUtteranceToIntent = vi.fn();
 const mockOrchestrate = vi.fn();
 const mockHandleEmailConfirmationGate = vi.fn();
 const mockApplyConversationContext = vi.fn();
@@ -25,10 +24,16 @@ vi.mock('../../src/db/conversation-context.js', () => ({
   getPendingEmailConfirmation: (...args: unknown[]) => mockGetPendingEmailConfirmation(...args),
 }));
 
-vi.mock('../../src/core/parser.js', () => ({
-  parseIntent: (...args: unknown[]) => mockParseIntent(...args),
-  parseSchedulingLinkIntent: (...args: unknown[]) => mockParseSchedulingLinkIntent(...args),
-  WARM_REDIRECT_MESSAGE: 'I only handle calendar scheduling.',
+vi.mock('../../src/core/voice-intent-pipeline.js', () => ({
+  mapVoiceUtteranceToIntent: (...args: unknown[]) => mockMapVoiceUtteranceToIntent(...args),
+}));
+
+vi.mock('../../src/core/system-mode.js', () => ({
+  resolveSystemMode: vi.fn().mockResolvedValue('FULL'),
+}));
+
+vi.mock('../../src/core/voice-rate-limit-bucket.js', () => ({
+  classifyVoiceRateLimitBucket: vi.fn().mockReturnValue('mutation'),
 }));
 
 vi.mock('../../src/core/orchestrator.js', () => ({
@@ -100,8 +105,7 @@ describe('voice route — validation and happy path', () => {
     mockGetUserById.mockResolvedValue({ id: USER_ID, email: 'host@test.com' });
     mockGetConversationContext.mockResolvedValue(null);
     mockGetPendingEmailConfirmation.mockResolvedValue(null);
-    mockParseSchedulingLinkIntent.mockReturnValue(null);
-    mockApplyConversationContext.mockImplementation((_parsed, ctx) => _parsed);
+    mockApplyConversationContext.mockImplementation((_parsed) => _parsed);
     mockHandleEmailConfirmationGate.mockResolvedValue({
       proceed: true,
       parsed: { intent: 'QUERY_CALENDAR', params: {}, confidence: 0.9, mappingMethod: 'direct', rawUtterance: 'today' },
@@ -112,12 +116,15 @@ describe('voice route — validation and happy path', () => {
       messageToUser: 'You are free.',
       schemaVersion: 1,
     });
-    mockParseIntent.mockResolvedValue({
-      intent: 'QUERY_CALENDAR',
-      confidence: 0.9,
-      params: {},
-      mappingMethod: 'direct',
-      rawUtterance: 'what is on my calendar today',
+    mockMapVoiceUtteranceToIntent.mockResolvedValue({
+      intent: {
+        intent: 'QUERY_CALENDAR',
+        confidence: 0.9,
+        params: {},
+        mappingMethod: 'direct',
+        rawUtterance: 'what is on my calendar today',
+      },
+      meta: { haikuCalled: false, usedPendingTemplate: false, storedPendingTemplate: false, ambiguousFollowUpTime: false },
     });
   });
 
@@ -153,44 +160,51 @@ describe('voice route — validation and happy path', () => {
   });
 
   it('returns warm redirect for off-topic without pending email', async () => {
-    mockParseIntent.mockResolvedValue({
-      intent: 'RESOLVE_MANUAL',
-      _warmRedirect: true,
-      confidence: 1,
-      params: {},
-      mappingMethod: 'direct',
-      rawUtterance: 'tell me a joke',
+    mockMapVoiceUtteranceToIntent.mockResolvedValue({
+      intent: {
+        intent: 'WARM_REDIRECT',
+        confidence: 1,
+        params: {},
+        mappingMethod: 'direct',
+        rawUtterance: 'tell me a joke',
+      },
+      meta: { haikuCalled: false, usedPendingTemplate: false, storedPendingTemplate: false, ambiguousFollowUpTime: false },
     });
     const res = await request(app()).post('/voice').send({ utterance: 'tell me a joke' });
     expect(res.status).toBe(200);
-    expect(res.body.messageToUser).toMatch(/calendar scheduling/i);
+    expect(res.body.messageToUser).toMatch(/calendar/i);
     expect(mockOrchestrate).not.toHaveBeenCalled();
   });
 
-  it('rescues warm redirect when scheduling link keyword matches', async () => {
-    mockParseIntent.mockResolvedValue({
-      intent: 'RESOLVE_MANUAL',
-      _warmRedirect: true,
-      confidence: 1,
-      params: {},
-      mappingMethod: 'direct',
-      rawUtterance: 'send booking link',
+  it('rescues warm redirect when pending email confirmation exists', async () => {
+    mockGetPendingEmailConfirmation.mockResolvedValue({
+      email: 'guest@test.com',
+      originalIntent: 'OFFER_SPECIFIC',
+      originalParams: {},
+      originalUtterance: 'send booking link',
     });
-    mockParseSchedulingLinkIntent.mockReturnValue({
-      intent: 'OFFER_SPECIFIC',
-      confidence: 0.7,
-      params: { recipientEmail: 'guest@test.com' },
-      mappingMethod: 'fuzzy',
-      rawUtterance: 'send booking link to guest@test.com',
+    mockMapVoiceUtteranceToIntent.mockResolvedValue({
+      intent: {
+        intent: 'WARM_REDIRECT',
+        confidence: 1,
+        params: {},
+        mappingMethod: 'direct',
+        rawUtterance: 'yes',
+      },
+      meta: { haikuCalled: false, usedPendingTemplate: false, storedPendingTemplate: false, ambiguousFollowUpTime: false },
     });
     mockHandleEmailConfirmationGate.mockResolvedValue({
       proceed: true,
-      parsed: mockParseSchedulingLinkIntent.mock.results[0]?.value,
+      parsed: {
+        intent: 'OFFER_SPECIFIC',
+        confidence: 0.7,
+        params: { recipientEmail: 'guest@test.com' },
+        mappingMethod: 'fuzzy',
+        rawUtterance: 'yes',
+      },
     });
     mockOrchestrate.mockResolvedValue({ intent: 'OFFER_SPECIFIC', success: true, schemaVersion: 1 });
-    const res = await request(app())
-      .post('/voice')
-      .send({ utterance: 'send booking link to guest@test.com' });
+    const res = await request(app()).post('/voice').send({ utterance: 'yes', source: 'text' });
     expect(res.status).toBe(200);
     expect(mockOrchestrate).toHaveBeenCalled();
   });

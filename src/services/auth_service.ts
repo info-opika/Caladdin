@@ -65,7 +65,8 @@ export async function exchangeCodeForTokens(code: string): Promise<{
   };
 }
 
-export async function getOAuthClientForUser(userId: string): Promise<ReturnType<typeof google.calendar> | null> {
+/** Returns a refreshed OAuth2 client for direct GCal API calls (recurring events, etc.). */
+export async function getOAuth2AuthForUser(userId: string) {
   const stored = await getGoogleTokens(userId);
   if (!stored?.access_token) return null;
 
@@ -93,6 +94,12 @@ export async function getOAuthClientForUser(userId: string): Promise<ReturnType<
     return null;
   }
 
+  return auth;
+}
+
+export async function getOAuthClientForUser(userId: string): Promise<ReturnType<typeof google.calendar> | null> {
+  const auth = await getOAuth2AuthForUser(userId);
+  if (!auth) return null;
   return google.calendar({ version: 'v3', auth });
 }
 

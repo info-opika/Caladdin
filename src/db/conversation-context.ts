@@ -187,3 +187,144 @@ export async function savePendingClarification(
   });
   if (error) throw error;
 }
+
+/** LC12 voice pipeline — durable pending intent template (frame-based). */
+export const PENDING_FRAME_TTL_MS = config.conversationSessionMinutes * 60 * 1000;
+export const PENDING_INTENT_FRAME_TYPE = 'pending_intent';
+
+export type PendingIntentTemplate = {
+  pendingIntent: string;
+  knownFields: Record<string, unknown>;
+  missingFields: string[];
+  originalUtterance: string;
+  parseRisk?: string;
+  createdAt: string;
+  expiresAt: string;
+};
+
+export interface PendingFrameStorage {
+  upsertPendingFrame(userId: string, template: PendingIntentTemplate): Promise<void>;
+  getPendingFrame(userId: string): Promise<PendingIntentTemplate | null>;
+  clearPendingFrame(userId: string): Promise<void>;
+  upsertRawRow?(userId: string, row: Record<string, unknown>): Promise<void>;
+}
+
+function frameToPendingTemplate(frame: Record<string, unknown>): PendingIntentTemplate | null {
+  if (frame.type !== PENDING_INTENT_FRAME_TYPE) return null;
+  return {
+    pendingIntent: String(frame.pendingIntent ?? ''),
+    knownFields: (frame.knownFields as Record<string, unknown>) ?? {},
+    missingFields: Array.isArray(frame.missingFields)
+      ? frame.missingFields.filter((x): x is string => typeof x === 'string')
+      : [],
+    originalUtterance: String(frame.originalUtterance ?? ''),
+    ...(typeof frame.parseRisk === 'string' ? { parseRisk: frame.parseRisk } : {}),
+    createdAt: String(frame.createdAt ?? new Date().toISOString()),
+    expiresAt: String(frame.expiresAt ?? new Date().toISOString()),
+  };
+}
+
+export class SupabasePendingFrameStorage implements PendingFrameStorage {
+  async upsertPendingFrame(userId: string, template: PendingIntentTemplate): Promise<void> {
+    await clearPendingIntentFrame(userId);
+    const frame = {
+      type: PENDING_INTENT_FRAME_TYPE,
+      pendingIntent: template.pendingIntent,
+      knownFields: template.knownFields,
+      missingFields: template.missingFields,
+      originalUtterance: template.originalUtterance,
+      ...(template.parseRisk ? { parseRisk: template.parseRisk } : {}),
+      createdAt: template.createdAt,
+      expiresAt: template.expiresAt,
+    };
+    const { error } = await getSupabase().from('pending_clarification_frames').insert({
+      user_id: userId,
+      frame,
+      expires_at: template.expiresAt,
+    });
+    if (error) throw error;
+  }
+
+  async getPendingFrame(userId: string): Promise<PendingIntentTemplate | null> {
+    await expireConversationContexts();
+    const { data, error } = await getSupabase()
+      .from('pending_clarification_frames')
+      .select('frame, expires_at')
+      .eq('user_id', userId)
+      .gt('expires_at', new Date().toISOString())
+      .order('created_at', { ascending: false });
+    if (error) throw error;
+    for (const row of data ?? []) {
+      const tpl = frameToPendingTemplate(row.frame as Record<string, unknown>);
+      if (tpl) return tpl;
+    }
+    return null;
+  }
+
+  async clearPendingFrame(userId: string): Promise<void> {
+    await clearPendingIntentFrame(userId);
+  }
+}
+
+export class SharedInMemoryPendingFrameStorage implements PendingFrameStorage {
+  constructor(private readonly backing = new Map<string, PendingIntentTemplate>()) {}
+
+  async upsertPendingFrame(userId: string, template: PendingIntentTemplate): Promise<void> {
+    this.backing.set(userId, template);
+  }
+
+  async upsertRawRow(userId: string, row: Record<string, unknown>): Promise<void> {
+    const tpl = frameToPendingTemplate(row);
+    if (tpl) this.backing.set(userId, tpl);
+  }
+
+  async getPendingFrame(userId: string): Promise<PendingIntentTemplate | null> {
+    const tpl = this.backing.get(userId);
+    if (!tpl) return null;
+    if (Date.parse(tpl.expiresAt) < Date.now()) {
+      this.backing.delete(userId);
+      return null;
+    }
+    return tpl;
+  }
+
+  async clearPendingFrame(userId: string): Promise<void> {
+    this.backing.delete(userId);
+  }
+}
+
+const supabasePendingStorage = new SupabasePendingFrameStorage();
+let testPendingStorage: PendingFrameStorage | null = null;
+
+export function getPendingFrameStorage(): PendingFrameStorage {
+  return testPendingStorage ?? supabasePendingStorage;
+}
+
+export function _setPendingFrameStorageForTests(storage: PendingFrameStorage | null): void {
+  testPendingStorage = storage;
+}
+
+export async function clearPendingIntentFrame(userId: string): Promise<void> {
+  const { data, error } = await getSupabase()
+    .from('pending_clarification_frames')
+    .select('id, frame')
+    .eq('user_id', userId);
+  if (error) throw error;
+  for (const row of data ?? []) {
+    if ((row.frame as { type?: string }).type === PENDING_INTENT_FRAME_TYPE) {
+      await getSupabase().from('pending_clarification_frames').delete().eq('id', row.id);
+    }
+  }
+}
+
+export async function upsertPendingFrame(userId: string, template: PendingIntentTemplate): Promise<void> {
+  await getPendingFrameStorage().upsertPendingFrame(userId, template);
+}
+
+export async function getPendingFrame(userId: string): Promise<PendingIntentTemplate | null> {
+  return getPendingFrameStorage().getPendingFrame(userId);
+}
+
+export async function clearPendingFrame(userId: string): Promise<void> {
+  await getPendingFrameStorage().clearPendingFrame(userId);
+}

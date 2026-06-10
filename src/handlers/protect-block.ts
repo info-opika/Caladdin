@@ -1,8 +1,10 @@
-import { ParsedIntent, IntentResult, OrchestratorContext } from '../core/adts.js';
+import { ParsedIntent, IntentResult, OrchestratorContext, ProtectBlockParamsSchema } from '../core/adts.js';
 import { ensureDefaultPolicy, upsertPolicy } from '../db/users.js';
 import { createEventWithSync } from '../services/calendar_api.js';
 import { calendar_v3 } from 'googleapis';
 import { savePendingClarification } from '../db/conversation-context.js';
+import { protectBlock } from '../core/intents/protect-block.js';
+import { getOAuth2AuthForUser } from '../services/auth_service.js';
 
 export async function handleProtectBlock(
   parsed: ParsedIntent,
@@ -10,6 +12,27 @@ export async function handleProtectBlock(
   cal: calendar_v3.Calendar | null,
 ): Promise<IntentResult> {
   const policy = await ensureDefaultPolicy(ctx.userId);
+  const structured = ProtectBlockParamsSchema.safeParse({
+    ...parsed.params,
+    rawUtterance: parsed.rawUtterance,
+  });
+
+  if (structured.success) {
+    const oauth = await getOAuth2AuthForUser(ctx.userId);
+    const result = await protectBlock(
+      { ...parsed, params: structured.data },
+      { ...policy, userId: ctx.userId },
+      oauth,
+    );
+    return {
+      ...result,
+      schemaVersion: 1,
+      eventsAffected: Array.isArray(result.eventsAffected)
+        ? result.eventsAffected.length
+        : (result.eventsAffected ?? 0),
+    };
+  }
+
   const label = (parsed.params.label as string) ?? 'Protected time';
   let daysOfWeek = (parsed.params.daysOfWeek as number[]) ?? [];
   let startTime = (parsed.params.startTime as string) ?? '';

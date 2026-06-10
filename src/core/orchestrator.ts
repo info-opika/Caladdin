@@ -36,6 +36,7 @@ const HANDLERS: Record<string, HandlerFn> = {
   FLUSH_RANGE: handleFlushRange,
   MODIFY_EVENT: handleModifyEvent,
   OFFER_SPECIFIC: handleOfferSpecific,
+  SCHEDULING_LINK: handleOfferSpecific,
   SHAPE_RULES: handleShapeRules,
   GATEKEEP_RULE: handleGatekeepRule,
   PIVOT_ASYNC: handlePivotAsync,

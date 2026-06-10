@@ -1,18 +1,20 @@
 import { Router, Request, Response } from 'express';
-import { parseIntent, parseSchedulingLinkIntent } from '../core/parser.js';
+import { mapVoiceUtteranceToIntent } from '../core/voice-intent-pipeline.js';
 import { orchestrate } from '../core/orchestrator.js';
 import { validateUserId, validateUtterance } from '../core/safety.js';
-import { WARM_REDIRECT_MESSAGE } from '../core/parser.js';
+import { WARM_REDIRECT_MESSAGE } from '../core/adts.js';
 import { requireSession } from '../middleware/session.js';
 import { getRequestId } from '../middleware/requestId.js';
 import { getPolicy, getUserById } from '../db/users.js';
 import { config } from '../config.js';
 import { voiceHttpRateLimiter } from '../core/rate-limiter.js';
+import { classifyVoiceRateLimitBucket } from '../core/voice-rate-limit-bucket.js';
 import { getOAuthClientForUser } from '../services/auth_service.js';
 import { approvePendingConfirmation, rejectPendingConfirmation } from '../core/confirmation-actions.js';
 import { getConversationContext, getPendingEmailConfirmation } from '../db/conversation-context.js';
 import { applyConversationContext } from '../core/conversation-context.js';
 import { handleEmailConfirmationGate } from '../core/email-confirmation.js';
+import { resolveSystemMode } from '../core/system-mode.js';
 import { logger } from '../logger.js';
 
 export const voiceRouter = Router();
@@ -40,7 +42,9 @@ voiceRouter.post('/', requireSession, async (req: Request, res: Response) => {
     return;
   }
 
-  const httpRate = await voiceHttpRateLimiter.check(session.userId);
+  const bucket = classifyVoiceRateLimitBucket(utterance);
+  const rateKey = `${session.userId}:${bucket}`;
+  const httpRate = await voiceHttpRateLimiter.check(rateKey);
   if (!httpRate.allowed) {
     res.status(429).json({
       error: 'Rate limit exceeded',
@@ -50,39 +54,44 @@ voiceRouter.post('/', requireSession, async (req: Request, res: Response) => {
   }
 
   try {
-    const [policy, conversationContext, pendingEmail, oauthClient] = await Promise.all([
+    const [policy, conversationContext, pendingEmail, oauthClient, systemMode] = await Promise.all([
       getPolicy(userId),
       getConversationContext(userId),
       getPendingEmailConfirmation(userId),
       getOAuthClientForUser(userId),
+      resolveSystemMode(),
     ]);
+
+    if (systemMode === 'SAFE_MODE') {
+      res.status(503).setHeader('Retry-After', '30').setHeader('x-request-id', requestId).json({
+        error: 'Caladdin is in safe mode. Try again shortly.',
+      });
+      return;
+    }
 
     if (!policy && !(await getUserById(userId))) {
       res.status(404).json({ error: 'No policy found for user' });
       return;
     }
 
-    let parsed = await parseIntent(utterance, userId, requestId);
+    const tz = policy?.timezone ?? 'America/Chicago';
+    const { intent: pipelineIntent } = await mapVoiceUtteranceToIntent(utterance, { userId, timezone: tz });
+    let parsed = pipelineIntent;
 
-    if (parsed._warmRedirect) {
-      const scheduling = parseSchedulingLinkIntent(utterance);
-      if (scheduling) {
-        parsed = scheduling;
-      } else if (pendingEmail) {
-        parsed = { ...parsed, _warmRedirect: undefined, _offTopic: undefined };
+    if (parsed.intent === 'WARM_REDIRECT') {
+      if (pendingEmail) {
+        parsed = { ...parsed, intent: 'RESOLVE_MANUAL' as const, params: {} };
+      } else {
+        res.setHeader('x-request-id', requestId);
+        res.json({
+          intent: 'RESOLVE_MANUAL',
+          success: true,
+          requiresConfirmation: false,
+          messageToUser: WARM_REDIRECT_MESSAGE,
+          schemaVersion: 1,
+        });
+        return;
       }
-    }
-
-    if (parsed._warmRedirect) {
-      res.setHeader('x-request-id', requestId);
-      res.json({
-        intent: 'RESOLVE_MANUAL',
-        success: true,
-        requiresConfirmation: false,
-        messageToUser: WARM_REDIRECT_MESSAGE,
-        schemaVersion: 1,
-      });
-      return;
     }
 
     parsed = applyConversationContext(parsed, conversationContext);

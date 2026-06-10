@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-export const IntentEnum = z.enum([
+export const VALID_INTENTS = [
   'PROTECT_BLOCK',
   'OFFER_SPECIFIC',
   'CREATE_EVENT',
@@ -12,9 +12,12 @@ export const IntentEnum = z.enum([
   'QUERY_CALENDAR',
   'UNDO',
   'INVITE_PLATFORM',
+  'SCHEDULING_LINK',
   'RESOLVE_MANUAL',
   'WARM_REDIRECT',
-]);
+] as const;
+
+export const IntentEnum = z.enum(VALID_INTENTS);
 
 export type Intent = z.infer<typeof IntentEnum>;
 
@@ -30,6 +33,29 @@ export const ProtectedBlockSchema = z.object({
   startTime: z.string(),
   endTime: z.string(),
 });
+
+export const ProtectBlockParamsSchema = z.object({
+  label: z.string().min(1),
+  startTime: z.string().regex(/^\d{2}:\d{2}$/),
+  endTime: z.string().regex(/^\d{2}:\d{2}$/),
+  daysOfWeek: z.array(z.number().int().min(0).max(6)).min(1),
+  rangeEnd: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  timezone: z.string().optional(),
+  tier: z.number().int().min(0).max(3).default(1),
+  rawUtterance: z.string().optional(),
+});
+export type ProtectBlockParams = z.infer<typeof ProtectBlockParamsSchema>;
+
+export const RecurringBlockSchema = z.object({
+  label: z.string(),
+  startTime: z.string().regex(/^\d{2}:\d{2}$/),
+  endTime: z.string().regex(/^\d{2}:\d{2}$/),
+  daysOfWeek: z.array(z.number()),
+  rangeEnd: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  tier: z.number().default(1),
+});
+export type RecurringBlock = z.infer<typeof RecurringBlockSchema>;
 
 export const FaxEffectConfigSchema = z.object({
   targetSlotsPerOffer: z.number().int().default(2),
@@ -150,14 +176,16 @@ export const IntentResultSchema = z.object({
   intent: IntentEnum,
   success: z.boolean(),
   requiresConfirmation: z.boolean(),
-  messageToUser: z.string(),
+  messageToUser: z.string().optional(),
   confirmationToken: z.string().uuid().optional(),
   slots: z.array(SlotSchema).optional(),
-  eventsAffected: z.number().int().optional(),
+  eventsAffected: z.union([z.number().int(), z.array(z.unknown())]).optional(),
   schemaVersion: z.number().int().optional(),
   schedulingLink: z.string().url().optional(),
   executionStatus: z.enum(['success', 'failed']).optional(),
   isWarmRedirect: z.boolean().optional(),
+  atomicOp: z.string().optional(),
+  failureReason: z.string().optional(),
 });
 
 export type IntentResult = z.infer<typeof IntentResultSchema>;
