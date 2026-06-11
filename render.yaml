@@ -1,7 +1,11 @@
-# Caladdin — Render Blueprint (staging / production)
+# Caladdin — Render Blueprint (pilot / production)
 # Docs: docs/DEPLOYMENT.md
 #
-# Apply: Render Dashboard → Blueprints → New Blueprint Instance, or `render blueprint validate`
+# 1. Push to GitHub and connect the repo in Render
+# 2. New → Blueprint → select this file
+# 3. Fill sync: false secrets in Dashboard (caladdin-core env group)
+# 4. Set CALADDIN_BASE_URL + GOOGLE_REDIRECT_URI to your Render HTTPS URL
+# 5. Apply Supabase migrations: npm run db:push (from your machine)
 
 envVarGroups:
   - name: caladdin-core
@@ -10,6 +14,16 @@ envVarGroups:
         value: production
       - key: PORT
         value: "3000"
+      - key: MAX_PILOT_USERS
+        value: "20"
+      - key: CALADDIN_KILL_SWITCH
+        value: "0"
+      - key: NTFY_TOPIC
+        value: caladdin-agent
+      - key: NTFY_USER_TOPIC
+        value: caladdin-user
+      - key: EMAIL_FROM
+        value: Caladdin <onboarding@caladdin.app>
       # Set in Dashboard (sync: false) — never commit secrets
       - key: ANTHROPIC_API_KEY
         sync: false
@@ -33,13 +47,8 @@ envVarGroups:
         sync: false
       - key: RESEND_API_KEY
         sync: false
-      - key: EMAIL_FROM
-        sync: false
       # Optional: Redis rate-limit backend (Postgres used when unset)
       - key: REDIS_URL
-        sync: false
-      # Emergency mutation block — set to 1 in Dashboard
-      - key: CALADDIN_KILL_SWITCH
         sync: false
 
 services:
@@ -55,9 +64,8 @@ services:
       - fromGroup: caladdin-core
       - key: CALADDIN_SERVICE_NAME
         value: caladdin-web
-      # Optional: override per environment in Dashboard (staging: caladdin-staging-web)
 
-  # Session expiry — every 15 minutes (same cadence as in-process worker fallback)
+  # Session expiry — every 15 minutes (durable trigger; web also runs in-process fallback)
   - type: cron
     name: caladdin-session-expiry
     runtime: node

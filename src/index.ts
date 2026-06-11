@@ -2,9 +2,9 @@ import express from 'express';
 import compression from 'compression';
 import cookieParser from 'cookie-parser';
 import { readFileSync } from 'fs';
-import { join, dirname } from 'path';
-import { fileURLToPath } from 'url';
+import { join } from 'path';
 import { config } from './config.js';
+import { getProjectRoot, resolveWebRoot } from './project-paths.js';
 import { pingDb } from './db/client.js';
 import { pingRedis } from './services/redis.js';
 import { securityHeadersMiddleware } from './middleware/securityHeaders.js';
@@ -25,14 +25,18 @@ import { jobsRouter } from './routes/jobs.js';
 import { startCompensationWorker } from './jobs/compensation-worker.js';
 import { startSessionExpiryWorker } from './jobs/session-expiry.js';
 import { logger } from './logger.js';
+import { validateProductionConfig } from './validate-production.js';
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
 const app = express();
 const processStartMs = Date.now();
 
+if (config.isProd) {
+  app.set('trust proxy', 1);
+}
+
 function getAppVersion(): string {
   try {
-    const pkg = JSON.parse(readFileSync(join(__dirname, '..', 'package.json'), 'utf8')) as {
+    const pkg = JSON.parse(readFileSync(join(getProjectRoot(), 'package.json'), 'utf8')) as {
       version?: string;
     };
     return pkg.version ?? 'unknown';
@@ -81,9 +85,9 @@ app.use('/book', bookPublicRouter);
 app.use('/feedback', feedbackRouter);
 app.use('/jobs', jobsRouter);
 
-// In development serve web/ source so UI changes apply without running build:web.
-const webRoot = join(__dirname, '..', config.isProd ? 'web/dist' : 'web');
+const webRoot = resolveWebRoot();
 app.set('webRoot', webRoot);
+logger.info('Serving static assets', { webRoot, isProd: config.isProd });
 app.use(express.static(webRoot));
 
 app.get('/embed.js', (_req, res) => {
@@ -92,7 +96,10 @@ app.get('/embed.js', (_req, res) => {
 
 app.get('/', (_req, res) => {
   res.sendFile(join(webRoot, 'index.html'), (err) => {
-    if (err) res.redirect('/auth/start');
+    if (err) {
+      logger.error('Failed to serve index.html', { webRoot, error: err.message });
+      res.status(500).send('App UI not found. Run npm run build:web or use npm run dev.');
+    }
   });
 });
 
@@ -112,6 +119,7 @@ app.use(errorSanitizer);
 const isTest = process.env.VITEST === 'true' || process.env.NODE_ENV === 'test';
 
 if (!isTest) {
+  validateProductionConfig();
   startCompensationWorker();
   startSessionExpiryWorker();
   const server = app.listen(config.port, () => {

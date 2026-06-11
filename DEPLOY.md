@@ -1,28 +1,31 @@
 # Deployment
 
-## Environment variables
+**Full guide:** [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)  
+**Render pilot checklist:** [docs/RENDER_SETUP.md](docs/RENDER_SETUP.md)
 
-All variables from `.env.example` are required in production.
+## Quick start (Render)
 
-- `CALADDIN_BASE_URL` — HTTPS public URL (e.g. https://caladdin.app)
-- `GOOGLE_REDIRECT_URI` — `{CALADDIN_BASE_URL}/auth/callback`
-- `SESSION_SECRET` — strong random string
-- `CALADDIN_API_KEY` — for ntfy Action callbacks to `/confirm/*`
-
-## Hosting options
-
-1. **Render / Railway** — Node web service, `npm run build && npm start`
-2. **Split** — API on Render; static `web/dist` on Vercel/Cloudflare Pages (proxy API routes)
+1. `npm run db:push` — apply Supabase migrations
+2. Push to GitHub → Render **Blueprint** → [`render.yaml`](render.yaml)
+3. Set secrets in `caladdin-core` env group (see RENDER_SETUP.md)
+4. `CALADDIN_BASE_URL` = `https://<service>.onrender.com`
+5. `GOOGLE_REDIRECT_URI` = `{CALADDIN_BASE_URL}/auth/callback`
+6. Confirm `GET /health` returns `"status":"ok"`
 
 ## Production checklist
 
-- [ ] HTTPS only
-- [ ] Migrations applied
-- [ ] Google OAuth consent screen published (or test users added)
+- [ ] Migrations applied (`001`–`028`)
+- [ ] `SESSION_SECRET` / `OAUTH_STATE_SECRET` ≥ 32 chars
+- [ ] Google OAuth redirect URI matches Render HTTPS URL
+- [ ] `MAX_PILOT_USERS` set (default `10` in Blueprint)
 - [ ] `GET /health` monitored
-- [ ] ntfy Action URLs point to `{CALADDIN_BASE_URL}/confirm/.../approve` with `x-api-key` header
-- [ ] Cookie `Secure` flag (automatic when `NODE_ENV=production`)
 
-## Compensation worker
+## Local production smoke test
 
-Runs in-process every 60s via `startCompensationWorker()`. For scale, extract to a cron job calling an internal endpoint.
+```bash
+npm run build
+npm run start
+# or Docker:
+docker build -t caladdin .
+docker run --env-file .env -p 3000:3000 caladdin
+```

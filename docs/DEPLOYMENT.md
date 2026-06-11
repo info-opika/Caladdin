@@ -11,16 +11,17 @@ Production deployment target: **Render** (Blueprint: [`render.yaml`](../render.y
 
 ## Database migrations — apply order
 
-Phase 1+ migrations **019–024** must be applied in filename order (lexicographic sort matches numeric order):
+All files in `supabase/migrations/` must be applied in filename order. Key migrations for production:
 
-| Order | File | Purpose |
-|-------|------|---------|
-| 1 | `019_rls_policies.sql` | Row Level Security on user-scoped tables |
-| 2 | `020_sessions.sql` | Persistent auth sessions (`sessions` table) |
-| 3 | `021_rate_limits.sql` | Postgres-backed distributed rate limits |
-| 4 | `022_event_types.sql` | Event types + public booking slugs |
-| 5 | `023_booking_responses.sql` | Guest intake responses on bookings |
-| 6 | `024_booking_reminders.sql` | Reminder queue (T-24h, T-1h) |
+| File | Purpose |
+|------|---------|
+| `019_rls_policies.sql` | Row Level Security on user-scoped tables |
+| `020_sessions.sql` | Persistent auth sessions (`sessions` table) — **required for sign-in** |
+| `021_rate_limits.sql` | Postgres-backed distributed rate limits |
+| `022_event_types.sql` | Event types + public booking slugs |
+| `023_booking_responses.sql` | Guest intake responses on bookings |
+| `024_booking_reminders.sql` | Reminder queue (T-24h, T-1h) |
+| `025`–`028` | Indexes, webhooks, team scheduling, atomic slot claim |
 
 Earlier migrations (`001`–`018`) must already be applied on the project.
 
@@ -77,9 +78,11 @@ Copy local template: [`.env.example`](../.env.example)
 
 ## Render Blueprint deploy
 
+See **[RENDER_SETUP.md](./RENDER_SETUP.md)** for a full pilot checklist.
+
 1. Push repo to GitHub; connect in Render.
 2. **New → Blueprint** → point at `render.yaml`.
-3. Fill **sync: false** secrets in Dashboard for `caladdin-core`.
+3. Fill **sync: false** secrets in Dashboard for `caladdin-core` (`CALADDIN_BASE_URL`, `GOOGLE_REDIRECT_URI`, API keys, secrets).
 4. Deploy web service; confirm **Health Check** passes on `GET /health`:
 
    ```json

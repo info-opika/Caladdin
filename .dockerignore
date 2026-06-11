@@ -1,0 +1,14 @@
+node_modules
+dist
+web/dist
+.git
+.github
+coverage
+.env
+.env.*
+!.env.example
+*.md
+docs
+tests
+Caladdin-compare
+__MACOSX
