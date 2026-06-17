@@ -293,6 +293,41 @@ export function inferProtectBlockParams(utterance: string, profileTimezone: stri
   const zone = profileTimezone?.trim() || 'UTC';
 
   const DAY_WORD = `(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday)`;
+
+  /** "Block Tuesday morning from 9 AM Texas Time to 9:30 AM" */
+  const blockWeekdayFromTo = raw.match(
+    new RegExp(
+      `\\bblock\\s+(?:(?:on\\s+)?(?:next\\s+)?(${DAY_WORD}))\\b[\\s\\S]*?\\bfrom\\s+(\\d{1,2}(?::\\d{2})?\\s*(?:am|pm))(?:\\s+(?:(?:\\w+)\\s+)*time)?\\s+to\\s+(\\d{1,2}(?::\\d{2})?\\s*(?:am|pm))`,
+      'i',
+    ),
+  );
+  if (blockWeekdayFromTo) {
+    const dayName = blockWeekdayFromTo[1]!.toLowerCase();
+    const dow = DAY_NAME[dayName];
+    if (dow !== undefined) {
+      const a = parseSpokenClock('start', blockWeekdayFromTo[2]!.trim());
+      const b = parseSpokenClock('end', blockWeekdayFromTo[3]!.trim());
+      if (a && b && a.hh * 60 + a.mm < b.hh * 60 + b.mm) {
+        const explicitNextWeek = /\bnext\s+week\b/i.test(raw);
+        const targetDate = dateForWeekdayRequest(zone, dayName, explicitNextWeek);
+        const labelMatch = raw.match(/\b(?:called|named)\s+([^,.]+)/i);
+        const label = (labelMatch?.[1]?.trim() || 'Personal time').slice(0, 140);
+        return {
+          label,
+          startTime: padTime(a.hh, a.mm),
+          endTime: padTime(b.hh, b.mm),
+          daysOfWeek: [dow],
+          startDate: targetDate?.toISODate() ?? DateTime.now().setZone(zone).toISODate()!,
+          rangeEnd: defaultRangeEndYmd(zone),
+          timezone: zone,
+          tier: 1,
+          rawUtterance: raw,
+          source: 'infer_block_weekday_from_to',
+        };
+      }
+    }
+  }
+
   const lastBlockDay = [...raw.matchAll(new RegExp(`\\bblock\\s+(\\d{1,2})\\s*[-–]\\s*(\\d{1,2})\\s+(?:(next\\s+week)\\s+)?(${DAY_WORD})\\b`, 'gi'))].pop();
   if (lastBlockDay) {
     let h1 = parseInt(lastBlockDay[1]!, 10);

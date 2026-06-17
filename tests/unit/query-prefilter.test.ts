@@ -120,5 +120,14 @@ describe('query-prefilter canonical + phrase families', () => {
         expect(tryMatchQueryCalendar(u)).toBeNull();
       }
     );
+
+    it('does not treat protect/block utterances as calendar queries', () => {
+      expect(
+        tryMatchQueryCalendar(
+          'Block Tuesday Morning from 9 AM Texas Time to 9:30 AM Texas Time',
+        ),
+      ).toBeNull();
+      expect(tryMatchQueryCalendar('Block a personal time')).toBeNull();
+    });
   });
 });

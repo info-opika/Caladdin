@@ -28,7 +28,10 @@ import {
   buildGrantUrl,
   buildInviteMessageTemplate,
   buildSchedulingLink,
+  buildOfferedSlotsFromInviteInput,
   isMutualRecomputeAvailable,
+  normalizeSessionToken,
+  normalizeSlotPairs,
   resolveGrantStatus,
   sessionTokenFromSchedulingLink,
 } from './invite-helpers.js';
@@ -312,18 +315,27 @@ export async function executeSendInvite(
   }
 
   const input = parsed.data;
+  const duration = input.durationMinutes ?? ctx.policy.defaultMeetingLengthMinutes;
+  const offeredFromInput = buildOfferedSlotsFromInviteInput(input, duration);
+  if (!offeredFromInput.ok) {
+    return failure(offeredFromInput.error);
+  }
+
   const invitee = await lookupInviteeAvailability(input.inviteeEmail);
   const mutualChecked = true;
   const slotSource: 'mutual' | 'host-only' =
     invitee.isCaladdinUser && invitee.hasCalendarConnected ? 'mutual' : 'host-only';
+
+  const meetingLabel = input.meetingTitle ?? input.context;
 
   const intent = ParsedIntentSchema.parse({
     intent: 'OFFER_SPECIFIC',
     confidence: 1,
     params: {
       recipientEmail: input.inviteeEmail,
-      durationMinutes: input.durationMinutes ?? ctx.policy.defaultMeetingLengthMinutes,
-      context: input.context,
+      durationMinutes: duration,
+      context: meetingLabel,
+      offeredSlots: offeredFromInput.slots,
       posture: slotSource === 'mutual' ? 'mutual' : 'flexible',
     },
     mappingMethod: 'direct',
@@ -382,9 +394,14 @@ export async function executeGetInviteStatus(
   }
 
   const input = parsed.data;
-  let session = input.sessionToken
-    ? await getSchedulingSessionByToken(input.sessionToken)
+  const sessionToken = input.sessionToken
+    ? normalizeSessionToken(input.sessionToken)
     : null;
+  if (input.sessionToken && !sessionToken) {
+    return failure('Invalid sessionToken — use the bare token or full /s/... scheduling link');
+  }
+
+  let session = sessionToken ? await getSchedulingSessionByToken(sessionToken) : null;
 
   if (!session && input.inviteeEmail) {
     session = await getLatestOpenSessionForInvitee(ctx.userId, input.inviteeEmail);
@@ -434,7 +451,12 @@ export async function executeUpdateSessionSlots(
   }
 
   const input = parsed.data;
-  const session = await getSchedulingSessionByToken(input.sessionToken);
+  const sessionToken = normalizeSessionToken(input.sessionToken);
+  if (!sessionToken) {
+    return failure('Invalid sessionToken — use the bare token or full /s/... scheduling link');
+  }
+
+  const session = await getSchedulingSessionByToken(sessionToken);
   if (!session) {
     return failure('Scheduling session not found');
   }
@@ -445,15 +467,21 @@ export async function executeUpdateSessionSlots(
     return failure('Session is no longer open for slot updates');
   }
 
-  const updated = await replaceSessionOfferedSlots(input.sessionToken, input.slots);
+  const duration = session.duration_minutes ?? ctx.policy.defaultMeetingLengthMinutes;
+  const normalized = normalizeSlotPairs(input.slots, { defaultDurationMinutes: duration });
+  if (!normalized.ok) {
+    return failure(normalized.error);
+  }
+
+  const updated = await replaceSessionOfferedSlots(sessionToken, normalized.slots);
   if (!updated) {
     return failure('Could not update offered slots');
   }
 
   return success({
-    sessionToken: input.sessionToken,
-    slots: input.slots,
-    schedulingLink: buildSchedulingLink(input.sessionToken),
+    sessionToken,
+    slots: normalized.slots,
+    schedulingLink: buildSchedulingLink(sessionToken),
   });
 }
 

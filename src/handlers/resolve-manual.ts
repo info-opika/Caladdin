@@ -4,6 +4,13 @@ import { RESOLVE_MANUAL_MESSAGE } from '../core/adts.js';
 
 function resolveManualMessage(parsed: ParsedIntent): string {
   const reason = parsed.params?.['reason'];
+  if (
+    reason === 'vague_protect_timing' ||
+    reason === 'protect_block_incomplete' ||
+    reason === 'haiku_missing_fields'
+  ) {
+    return 'When should I block that time? For example: "Block Tuesday mornings from 9 AM to 9:30 AM" or "Block weekdays 12 to 1 PM for lunch".';
+  }
   if (reason === 'protect_followup_time_ambiguous') {
     const start = parsed.params?.['clarifyHourStart'];
     const end = parsed.params?.['clarifyHourEnd'];

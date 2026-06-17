@@ -143,6 +143,37 @@ describe('M3 agent tools', () => {
     expect(result.honesty?.mutualChecked).toBe(true);
   });
 
+  it('send_invite passes proposedSlots and meetingTitle to handleOfferSpecific', async () => {
+    const proposedSlots = [
+      { start: '2026-06-18T09:00:00-05:00', end: '2026-06-18T09:30:00-05:00' },
+      { start: '2026-06-18T09:30:00-05:00', end: '2026-06-18T10:00:00-05:00' },
+    ];
+
+    await executeAgentTool(
+      'send_invite',
+      {
+        inviteeEmail: 'ashes.kr.de@gmail.com',
+        meetingTitle: 'Tester',
+        proposedSlots,
+        durationMinutes: 30,
+      },
+      AGENT_CTX,
+    );
+
+    expect(mockHandleOfferSpecific).toHaveBeenCalledWith(
+      expect.objectContaining({
+        params: expect.objectContaining({
+          context: 'Tester',
+          offeredSlots: expect.arrayContaining([
+            expect.objectContaining({ start: expect.stringContaining('2026-06-18T09:00:00') }),
+          ]),
+        }),
+      }),
+      expect.any(Object),
+      AGENT_CTX.cal,
+    );
+  });
+
   it('get_invite_status reports grant active and mutual recompute', async () => {
     mockGetSession.mockResolvedValue({
       id: 'sess-1',
@@ -178,6 +209,7 @@ describe('M3 agent tools', () => {
       token: 'tok-invite',
       host_user_id: AGENT_CTX.userId,
       status: 'pending',
+      duration_minutes: 30,
     });
     mockReplaceSlots.mockResolvedValue(true);
 
@@ -193,6 +225,40 @@ describe('M3 agent tools', () => {
     );
 
     expect(result.ok).toBe(true);
-    expect(mockReplaceSlots).toHaveBeenCalledWith('tok-invite', slots);
+    expect(mockReplaceSlots).toHaveBeenCalledWith(
+      'tok-invite',
+      expect.arrayContaining([
+        expect.objectContaining({ start: expect.stringContaining('2026-06-19T10:00:00') }),
+      ]),
+    );
+  });
+
+  it('update_session_slots accepts full scheduling URL as sessionToken', async () => {
+    mockGetSession.mockResolvedValue({
+      id: 'sess-1',
+      token: 'a71b77b7-d3a9-4073-9719-52a1bb7efa0c',
+      host_user_id: AGENT_CTX.userId,
+      status: 'pending',
+      duration_minutes: 30,
+    });
+    mockReplaceSlots.mockResolvedValue(true);
+
+    const slots = [{ start: '2026-06-18T09:00:00-05:00' }];
+
+    const result = await executeAgentTool(
+      'update_session_slots',
+      {
+        sessionToken: 'http://localhost:3001/s/a71b77b7-d3a9-4073-9719-52a1bb7efa0c',
+        slots,
+      },
+      AGENT_CTX,
+    );
+
+    expect(result.ok).toBe(true);
+    expect(mockGetSession).toHaveBeenCalledWith('a71b77b7-d3a9-4073-9719-52a1bb7efa0c');
+    expect(mockReplaceSlots).toHaveBeenCalledWith(
+      'a71b77b7-d3a9-4073-9719-52a1bb7efa0c',
+      [{ start: '2026-06-18T09:00:00.000-05:00', end: '2026-06-18T09:30:00.000-05:00' }],
+    );
   });
 });

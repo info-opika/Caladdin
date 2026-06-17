@@ -48,11 +48,34 @@ export async function handleOfferSpecific(
     }
   }
 
-  const slots = await generateSlots(ctx.userId, policy, duration, 7, {
-    recipientEmail: mutualRecipientEmail,
-    cal,
-    posture: slotPosture,
-  });
+  const explicitRaw = parsed.params.offeredSlots;
+  const explicitSlots = Array.isArray(explicitRaw)
+    ? explicitRaw.filter(
+        (s): s is { start: string; end: string } =>
+          typeof s === 'object' &&
+          s !== null &&
+          typeof (s as { start?: unknown }).start === 'string' &&
+          typeof (s as { end?: unknown }).end === 'string',
+      )
+    : [];
+
+  let slots;
+  if (explicitSlots.length > 0) {
+    slots = explicitSlots.map((s) => ({
+      start: s.start,
+      end: s.end,
+      score: 1,
+      adjacentEventCount: 0,
+      energyScore: 0.5,
+      createsFragment: false,
+    }));
+  } else {
+    slots = await generateSlots(ctx.userId, policy, duration, 7, {
+      recipientEmail: mutualRecipientEmail,
+      cal,
+      posture: slotPosture,
+    });
+  }
 
   if (slots.length === 0) {
     return {
@@ -66,8 +89,11 @@ export async function handleOfferSpecific(
 
   const proposedIds: string[] = [];
   for (const slot of slots) {
+    const meetingLabel = (parsed.params.context as string | undefined)?.trim();
     const ev = await insertEvent(ctx.userId, {
-      title: `[Proposed] Slot for ${recipientName}`,
+      title: meetingLabel
+        ? `[Proposed] ${meetingLabel}`
+        : `[Proposed] Slot for ${recipientName}`,
       start: slot.start,
       end: slot.end,
       tier: 3,

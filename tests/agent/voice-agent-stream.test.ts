@@ -29,7 +29,7 @@ describe('voice agent stream', () => {
       toolCalls: [{ name: 'lookup_user', input: {}, result: { ok: true } }],
       rounds: 1,
       trace: {
-        model: 'claude-sonnet-4-20250514',
+        model: 'claude-sonnet-4-6',
         rounds: 1,
         totalLatencyMs: 5,
         tools: [{ name: 'lookup_user', latencyMs: 3, ok: true }],

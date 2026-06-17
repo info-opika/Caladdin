@@ -1,9 +1,23 @@
 import { z } from 'zod';
 
+function unwrapZodSchema(schema: z.ZodTypeAny): z.ZodTypeAny {
+  if (schema instanceof z.ZodEffects) {
+    return unwrapZodSchema(schema._def.schema as z.ZodTypeAny);
+  }
+  if (schema instanceof z.ZodOptional) {
+    return unwrapZodSchema(schema._def.innerType as z.ZodTypeAny);
+  }
+  if (schema instanceof z.ZodDefault) {
+    return unwrapZodSchema(schema._def.innerType as z.ZodTypeAny);
+  }
+  return schema;
+}
+
 /** Minimal Zod → JSON Schema for Anthropic tool definitions. */
 export function zodToJsonSchema(schema: z.ZodTypeAny): Record<string, unknown> {
-  if (schema instanceof z.ZodObject) {
-    const shape = schema.shape;
+  const root = unwrapZodSchema(schema);
+  if (root instanceof z.ZodObject) {
+    const shape = root.shape;
     const properties: Record<string, unknown> = {};
     const required: string[] = [];
 
@@ -21,10 +35,13 @@ export function zodToJsonSchema(schema: z.ZodTypeAny): Record<string, unknown> {
     };
   }
 
-  return zodTypeToJson(schema);
+  return zodTypeToJson(root);
 }
 
 function zodTypeToJson(schema: z.ZodTypeAny): Record<string, unknown> {
+  if (schema instanceof z.ZodEffects) {
+    return zodTypeToJson(schema._def.schema as z.ZodTypeAny);
+  }
   if (schema instanceof z.ZodOptional) {
     return zodTypeToJson(schema._def.innerType as z.ZodTypeAny);
   }

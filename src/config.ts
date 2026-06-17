@@ -19,9 +19,12 @@ export function parseAgentPilotUsers(raw: string | undefined): string[] {
   return raw.split(',').map((id) => id.trim()).filter(Boolean);
 }
 
-/** True when CALADDIN_AGENT_ENABLED=1 or userId is in CALADDIN_AGENT_PILOT_USERS. */
+/**
+ * True when the scheduling agent is on for this user.
+ * Default on (unset or CALADDIN_AGENT_ENABLED=1). When =0, only CALADDIN_AGENT_PILOT_USERS get the agent.
+ */
 export function agentEnabledFor(userId: string): boolean {
-  if (process.env.CALADDIN_AGENT_ENABLED === '1') return true;
+  if (process.env.CALADDIN_AGENT_ENABLED !== '0') return true;
   return parseAgentPilotUsers(process.env.CALADDIN_AGENT_PILOT_USERS).includes(userId);
 }
 
@@ -46,8 +49,8 @@ export const config = {
   conversationSessionMinutes: 10,
   schedulingSessionHours: 72,
   undoWindowMinutes: 10,
-  /** Global agent rollout flag (see also agentEnabledFor for per-user pilot). */
-  agentEnabled: process.env.CALADDIN_AGENT_ENABLED === '1',
+  /** Global agent rollout flag; false only when CALADDIN_AGENT_ENABLED=0 (see agentEnabledFor for pilot override). */
+  agentEnabled: process.env.CALADDIN_AGENT_ENABLED !== '0',
   get agentPilotUsers(): string[] {
     return parseAgentPilotUsers(process.env.CALADDIN_AGENT_PILOT_USERS);
   },

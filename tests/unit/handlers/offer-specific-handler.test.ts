@@ -205,4 +205,41 @@ describe('handleOfferSpecific', () => {
       expect.objectContaining({ slotSource: 'host_only_pending_grant' }),
     );
   });
+
+  it('skips generateSlots when offeredSlots are provided explicitly', async () => {
+    const explicit = [
+      { start: '2026-06-18T09:00:00-05:00', end: '2026-06-18T09:30:00-05:00' },
+      { start: '2026-06-18T09:30:00-05:00', end: '2026-06-18T10:00:00-05:00' },
+    ];
+    mockInsertEvent.mockImplementation(async (_uid, ev) => ({ id: `ev-${ev.title}`, ...ev, userId: 'user-1' }));
+    mockCreateSession.mockResolvedValue({ token: 'explicit-tok' });
+
+    const parsed = ParsedIntentSchema.parse({
+      intent: 'OFFER_SPECIFIC',
+      confidence: 0.9,
+      params: {
+        recipientEmail: 'guest@example.com',
+        context: 'Tester',
+        offeredSlots: explicit,
+      },
+      mappingMethod: 'direct',
+      rawUtterance: 'send two slots',
+    });
+    const result = await handleOfferSpecific(parsed, ctx, null);
+
+    expect(result.success).toBe(true);
+    expect(mockGenerateSlots).not.toHaveBeenCalled();
+    expect(mockCreateSession).toHaveBeenCalledWith(
+      expect.objectContaining({
+        context: 'Tester',
+        offeredSlots: expect.arrayContaining([
+          expect.objectContaining({ start: explicit[0]!.start }),
+        ]),
+      }),
+    );
+    expect(mockInsertEvent).toHaveBeenCalledWith(
+      'user-1',
+      expect.objectContaining({ title: '[Proposed] Tester' }),
+    );
+  });
 });

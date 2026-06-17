@@ -18,6 +18,8 @@ envVarGroups:
         value: "20"
       - key: CALADDIN_KILL_SWITCH
         value: "0"
+      - key: CALADDIN_AGENT_ENABLED
+        value: "1"
       - key: NTFY_TOPIC
         value: caladdin-agent
       - key: NTFY_USER_TOPIC

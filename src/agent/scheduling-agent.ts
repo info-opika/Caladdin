@@ -18,7 +18,7 @@ import type {
   ToolResult,
 } from './types.js';
 
-export const DEFAULT_AGENT_MODEL = 'claude-sonnet-4-20250514';
+export const DEFAULT_AGENT_MODEL = 'claude-sonnet-4-6';
 export const MAX_AGENT_ROUNDS = 5;
 
 export type AnthropicMessagesClient = {

@@ -21,7 +21,7 @@ const mockUpdateCommandLogParsed = vi.fn();
 const mockUpdateCommandLogAgentTrace = vi.fn();
 
 const mockAgentTrace = {
-  model: 'claude-sonnet-4-20250514',
+  model: 'claude-sonnet-4-6',
   rounds: 1,
   totalLatencyMs: 12,
   tools: [] as Array<{ name: string; latencyMs: number; ok: boolean }>,

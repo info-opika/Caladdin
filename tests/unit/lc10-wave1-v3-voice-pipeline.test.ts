@@ -277,4 +277,25 @@ describe('LC10 Wave 1 v3 — voice pipeline', () => {
     expect(p['windowEndHourLocal']).toBeUndefined();
     expect(typeof orchestrate).toBe('function');
   });
+
+  it('18. block weekday from/to with timezone words → PROTECT_BLOCK (not calendar dump)', async () => {
+    const { intent } = await mapVoiceUtteranceToIntent(
+      'Block Tuesday Morning from 9 AM Texas Time to 9:30 AM Texas Time',
+      { userId: UID, timezone: TZ },
+    );
+    expect(intent.intent).toBe('PROTECT_BLOCK');
+    expect((intent.params as { startTime?: string }).startTime).toBe('09:00');
+    expect((intent.params as { endTime?: string }).endTime).toBe('09:30');
+    expect(mockClassify).not.toHaveBeenCalled();
+  });
+
+  it('19. vague "block a personal time" stores protect pending without Haiku', async () => {
+    const { intent } = await mapVoiceUtteranceToIntent('Block a personal time', {
+      userId: UID,
+      timezone: TZ,
+    });
+    expect(intent.intent).toBe('RESOLVE_MANUAL');
+    expect((intent.params as { reason?: string }).reason).toBe('vague_protect_timing');
+    expect(mockClassify).not.toHaveBeenCalled();
+  });
 });

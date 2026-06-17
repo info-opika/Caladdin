@@ -41,10 +41,20 @@ export const CreateRecurringBlockInputSchema = z.object({
 });
 export type CreateRecurringBlockInput = z.infer<typeof CreateRecurringBlockInputSchema>;
 
+const slotPairSchema = z.object({
+  start: isoDateTimeSchema,
+  end: isoDateTimeSchema.optional(),
+});
+
 export const SendInviteInputSchema = z.object({
   inviteeEmail: emailSchema,
   durationMinutes: z.number().int().min(5).max(480).optional(),
+  /** Single proposed slot start (end = start + duration). Prefer proposedSlots for multiple times. */
   proposedStart: isoDateTimeSchema.optional(),
+  /** Explicit offered times (ISO start/end). Use when the user names specific slots. */
+  proposedSlots: z.array(slotPairSchema).min(1).max(5).optional(),
+  /** Meeting label shown on the scheduling session (e.g. "Tester"). */
+  meetingTitle: z.string().min(1).max(200).optional(),
   context: z.string().max(500).optional(),
 });
 export type SendInviteInput = z.infer<typeof SendInviteInputSchema>;
@@ -58,11 +68,6 @@ export const GetInviteStatusInputSchema = z
     message: 'Provide sessionToken or inviteeEmail',
   });
 export type GetInviteStatusInput = z.infer<typeof GetInviteStatusInputSchema>;
-
-const slotPairSchema = z.object({
-  start: isoDateTimeSchema,
-  end: isoDateTimeSchema,
-});
 
 export const UpdateSessionSlotsInputSchema = z.object({
   sessionToken: z.string().min(1),
@@ -135,11 +140,11 @@ const TOOL_DESCRIPTIONS: Record<ToolName, string> = {
   create_event: 'Create a single calendar event. Requires title and start time.',
   create_recurring_block:
     'Create a recurring personal time block (PROTECT_BLOCK). Requires label, daily times, weekdays, and end date.',
-  send_invite: 'Send a scheduling invite with grant link for mutual availability upgrade.',
+  send_invite: 'Send a scheduling invite with grant link. Pass proposedSlots when the user names specific times (ISO with timezone).',
   get_invite_status:
     'Check invite grant status, offered slots, and whether mutual slot recompute is available for a scheduling session.',
   update_session_slots:
-    'Replace offered slots on an open scheduling session after checking availability or finding alternatives.',
+    'Replace offered slots on an open scheduling session. sessionToken may be the bare token or full /s/... URL. Slots need ISO start (end optional — defaults to session duration).',
   lookup_user: 'Check if an email belongs to a Caladdin user with calendar connected.',
   get_calendar_summary: 'Read-only summary of calendar events for a day or week.',
   update_preferences: 'Update stored scheduling preferences (timezone, hours, default duration).',

@@ -314,12 +314,14 @@ export async function replaceSessionOfferedSlots(
     energyScore: 0.5,
     createsFragment: false,
   }));
-  const { error } = await getSupabase()
+  const { data, error } = await getSupabase()
     .from('scheduling_sessions')
     .update({ offered_slots: offered, updated_at: new Date().toISOString() })
     .eq('token', token)
-    .eq('status', 'pending');
-  return !error;
+    .eq('status', 'pending')
+    .select('id')
+    .maybeSingle();
+  return !error && Boolean(data);
 }
 
 export async function getLatestOpenSessionForInvitee(

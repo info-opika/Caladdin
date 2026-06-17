@@ -152,9 +152,16 @@ function matchTomorrowFamily(n: string): boolean {
   return /\btomorrow\b/.test(n) && TOMORROW_EXTRAS(n);
 }
 
-const AVAIL_SIGNAL = /\bfree\b|\bavailable\b|\bopen\b|\banything\b|conflicts?|\bany meetings\b|meetings at|\bbusy\b|\btime\b/;
+/** Block/protect requests must not route to calendar read (e.g. "Texas Time" falsely matches `\btime\b`). */
+const PROTECT_BLOCK_SIGNAL = /\b(block|protect|shield|reserve|hold|no-meeting)\b/i;
+
+const AVAIL_SIGNAL =
+  /\bfree\b|\bavailable\b|\bopen\b|\banything\b|conflicts?|\bany meetings\b|meetings at|\bbusy\b/;
 
 function matchAvailabilityFamily(utterance: string, n: string): QueryCalendarParams | null {
+  if (PROTECT_BLOCK_SIGNAL.test(utterance)) {
+    return null;
+  }
   if (/\bdon'?t want\b|\bnever want\b|\bshape\b|\brule\b|\bgatekeep\b/i.test(n)) {
     return null;
   }
@@ -235,6 +242,10 @@ export function stripLeadFiller(n: string): string {
 }
 
 export function tryMatchQueryCalendar(utterance: string): QueryCalendarParams | null {
+  if (PROTECT_BLOCK_SIGNAL.test(utterance)) {
+    return null;
+  }
+
   const weekRange = matchWeekMeetingListUtterance(utterance);
   if (weekRange) {
     return { ...weekRange };

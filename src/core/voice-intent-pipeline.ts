@@ -24,6 +24,7 @@ import {
   storePendingForClarification,
   tryCompletePendingIntent,
 } from './pending-intent-memory.js';
+import { tryProtectBlockFromInfer } from './protect-block-prefilter.js';
 
 const DESTRUCTIVE_VERB =
   /\b(delete|cancels?|remov(?:e|ing|ed|es)|clears?|flushes?|wipes?|erases?|moves?|reschedul(?:e|ing|es)|postpones?|shifts?)\b/i;
@@ -37,9 +38,14 @@ const EXPLICIT_TIME_OR_NUMERIC_RANGE = new RegExp(
 );
 
 function utteranceNeedsExplicitProtectTimes(utterance: string): ParsedIntent | null {
-  if (!VAGUE_SLOT_WORD.test(utterance)) return null;
   if (EXPLICIT_TIME_OR_NUMERIC_RANGE.test(utterance)) return null;
+  if (/\bfrom\s+\d/i.test(utterance)) return null;
   if (!/\b(block|protect|shield|reserve|hold|no-meeting)\b/i.test(utterance)) return null;
+  const vaguePersonal =
+    VAGUE_SLOT_WORD.test(utterance) ||
+    /\b(personal\s+time|focus\s+time|me\s+time|quiet\s+time)\b/i.test(utterance) ||
+    /\b(a|some)\s+(personal|focus|quiet)\b/i.test(utterance);
+  if (!vaguePersonal) return null;
   return ParsedIntentSchema.parse({
     intent: 'RESOLVE_MANUAL',
     rawUtterance: utterance,
@@ -280,6 +286,11 @@ export async function mapVoiceUtteranceToIntent(
   }
   if (destructive.use === 'intent') {
     return { intent: destructive.intent, meta };
+  }
+
+  const protectInfer = tryProtectBlockFromInfer(t, tz);
+  if (protectInfer) {
+    return { intent: protectInfer, meta };
   }
 
   const queryHit = tryMatchQueryCalendar(t);

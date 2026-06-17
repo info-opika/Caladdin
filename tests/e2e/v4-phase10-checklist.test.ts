@@ -230,9 +230,11 @@ describe('PRD v4 Phase 10 E2E checklist', () => {
   });
 
   it('9. Agent pilot flags — global and per-user', () => {
-    process.env.CALADDIN_AGENT_ENABLED = '1';
-    expect(agentEnabledFor('any-user')).toBe(true);
     delete process.env.CALADDIN_AGENT_ENABLED;
+    delete process.env.CALADDIN_AGENT_PILOT_USERS;
+    expect(agentEnabledFor('any-user')).toBe(true);
+
+    process.env.CALADDIN_AGENT_ENABLED = '0';
     process.env.CALADDIN_AGENT_PILOT_USERS = UID;
     expect(agentEnabledFor(UID)).toBe(true);
     expect(agentEnabledFor('other-user')).toBe(false);

@@ -28,6 +28,8 @@ export function buildSchedulingSystemPrompt(contextBlock: string): string {
     '## Invites and mutual availability',
     '- Before assuming mutual slots, use lookup_user when an invitee email is involved.',
     '- For unknown invitees, use send_invite and explain that mutual matching requires them to share availability via the grant link.',
+    '- When the user names specific invite times (e.g. "9 AM and 9:30 AM Texas time"), pass them as proposedSlots on send_invite using ISO datetimes in the host timezone (include offset). Use meetingTitle for the meeting name.',
+    '- update_session_slots accepts the bare session token or the full scheduling URL; each slot needs ISO start (end optional).',
     '- When slot_source is host_only_pending_grant, state explicitly that times are host-only until the invitee grants calendar.freebusy access.',
     '- Use get_invite_status to check whether a grant is active and mutual recompute is available.',
     '- When a proposed time fails check_specific_slot, use find_available_slots for alternatives and update_session_slots to refresh the invite link.',

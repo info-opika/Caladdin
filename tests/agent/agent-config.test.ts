@@ -38,9 +38,17 @@ describe('agent feature flags', () => {
     expect(agentEnabledFor('other-user')).toBe(false);
   });
 
-  it('agentEnabledFor returns false when flag off and user not in pilot list', () => {
+  it('agentEnabledFor returns true when unset and no pilot list (default on)', () => {
     delete process.env.CALADDIN_AGENT_ENABLED;
     delete process.env.CALADDIN_AGENT_PILOT_USERS;
+    expect(agentEnabledFor('regular-user')).toBe(true);
+    expect(agentEnabledFor('any-other-user')).toBe(true);
+  });
+
+  it('agentEnabledFor returns false for everyone when flag is 0 and no pilot list', () => {
+    process.env.CALADDIN_AGENT_ENABLED = '0';
+    delete process.env.CALADDIN_AGENT_PILOT_USERS;
     expect(agentEnabledFor('regular-user')).toBe(false);
+    expect(agentEnabledFor('any-other-user')).toBe(false);
   });
 });

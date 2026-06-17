@@ -129,7 +129,8 @@ export function _clearPendingFrameStorageOverrideForTests(): void {
   _setPendingFrameStorageForTests(null);
 }
 
-const NUMERIC_RANGE = /\b(\d{1,2})\s*(?::(\d{2}))?\s*(am|pm)?\s*(?:to|[-–])\s*(\d{1,2})\s*(?::(\d{2}))?\s*(am|pm)?\b/i;
+const NUMERIC_RANGE =
+  /\b(?:from\s+)?(\d{1,2})\s*(?::(\d{2}))?\s*(am|pm)?(?:\s+(?:(?:\w+)\s+)*time)?\s*(?:to|[-–])\s*(\d{1,2})\s*(?::(\d{2}))?\s*(am|pm)?(?:\s+(?:(?:\w+)\s+)*time)?\b/i;
 
 function padTime(h: number, m: number): string {
   return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
@@ -244,6 +245,8 @@ export function extractProtectKnownFieldsFromUtterance(
 
   const called = raw.match(/\bcalled\s+([^,.]+)/i) ?? raw.match(/\bnamed\s+([^,.]+)/i);
   if (called?.[1]) known['label'] = called[1].trim().slice(0, 140);
+  else if (/\bpersonal\s+time\b/i.test(lower)) known['label'] = 'Personal time';
+  else if (/\bfocus\s+time\b/i.test(lower)) known['label'] = 'Focus time';
 
   let daysOfWeek: number[] = [];
   if (/\bweekdays?\b|\bweek\s+days?\b/i.test(lower)) {
