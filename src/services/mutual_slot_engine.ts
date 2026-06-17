@@ -7,6 +7,7 @@ import {
   pickTwoDiverseSlots,
   freeBusyToIntervals,
   offeredSlotsToBusy,
+  intervalsOverlap,
   type BusyInterval,
 } from './scheduling_slot_engine.js';
 
@@ -88,4 +89,58 @@ export function freeBusyResponseToIntervals(
 
 export function candidateSlotsToMutual(slots: CandidateSlot[]): MutualSlot[] {
   return slots.map((s) => ({ start: s.start, end: s.end }));
+}
+
+export type SlotConflict = { start: string; end: string; party: 'host' | 'invitee' };
+
+export type CheckSpecificSlotResult = {
+  available: boolean;
+  scope: 'host_only' | 'mutual';
+  conflicts: SlotConflict[];
+  reason?: string;
+};
+
+export function checkSpecificSlot(params: {
+  candidateStart: string;
+  candidateEnd: string;
+  hostBusy: BusyInterval[];
+  inviteeBusy?: BusyInterval[];
+  timezone: string;
+}): CheckSpecificSlotResult {
+  const { candidateStart, candidateEnd, hostBusy, inviteeBusy } = params;
+  const scope: CheckSpecificSlotResult['scope'] = inviteeBusy !== undefined ? 'mutual' : 'host_only';
+
+  const startMs = new Date(candidateStart).getTime();
+  const endMs = new Date(candidateEnd).getTime();
+  if (!Number.isFinite(startMs) || !Number.isFinite(endMs) || endMs <= startMs) {
+    return {
+      available: false,
+      scope,
+      conflicts: [],
+      reason: 'invalid_time_range',
+    };
+  }
+
+  const candidate: BusyInterval = { start: candidateStart, end: candidateEnd };
+  const conflicts: SlotConflict[] = [];
+
+  for (const block of hostBusy) {
+    if (intervalsOverlap(candidate, block)) {
+      conflicts.push({ start: block.start, end: block.end, party: 'host' });
+    }
+  }
+
+  if (inviteeBusy) {
+    for (const block of inviteeBusy) {
+      if (intervalsOverlap(candidate, block)) {
+        conflicts.push({ start: block.start, end: block.end, party: 'invitee' });
+      }
+    }
+  }
+
+  return {
+    available: conflicts.length === 0,
+    scope,
+    conflicts,
+  };
 }

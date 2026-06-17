@@ -449,6 +449,41 @@ h1, h2, h3 {
   font-style: italic;
 }
 
+.msg.streaming {
+  position: relative;
+  color: var(--color-text);
+  background: var(--color-bg-elevated);
+  border: 1px solid var(--color-border);
+  font-style: normal;
+  white-space: pre-wrap;
+}
+
+.msg.streaming.is-waiting {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  color: var(--color-info);
+  background: var(--color-accent-soft);
+  border-color: var(--color-accent-border);
+  font-style: italic;
+}
+
+.typing-cursor {
+  display: inline-block;
+  width: 2px;
+  height: 1em;
+  margin-left: 2px;
+  vertical-align: text-bottom;
+  background: var(--color-accent);
+  animation: blink-cursor 1s step-end infinite;
+}
+
+@keyframes blink-cursor {
+  50% {
+    opacity: 0;
+  }
+}
+
 .thinking-spinner {
   width: 0.875rem;
   height: 0.875rem;

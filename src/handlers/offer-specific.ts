@@ -1,6 +1,6 @@
 import { ParsedIntent, IntentResult, OrchestratorContext } from '../core/adts.js';
 import { ensureDefaultPolicy, getPolicy, upsertPolicy } from '../db/users.js';
-import { generateSlots } from '../core/slot-scoring.js';
+import { generateSlots, type SchedulingPosture } from '../core/slot-scoring.js';
 import { createSchedulingSession } from '../db/scheduling_sessions.js';
 import { insertEvent } from '../db/events.js';
 import { config } from '../config.js';
@@ -8,6 +8,8 @@ import { calendar_v3 } from 'googleapis';
 import { getUserById } from '../db/users.js';
 import { generateFaxEffectMessage } from '../core/fax-effect.js';
 import { sendEmail, schedulingLinkEmailHtml, schedulingLinkEmailText } from '../services/email.js';
+import { lookupInviteeAvailability } from '../services/invitee_lookup.js';
+import type { SlotSource } from '../db/scheduling_sessions.js';
 
 export async function handleOfferSpecific(
   parsed: ParsedIntent,
@@ -27,10 +29,29 @@ export async function handleOfferSpecific(
       ? postureRaw
       : 'mutual';
 
+  let slotSource: SlotSource = 'host_only_pending_grant';
+  let slotPosture: SchedulingPosture = posture;
+  let mutualRecipientEmail: string | undefined;
+
+  if (recipientEmail) {
+    const invitee = await lookupInviteeAvailability(recipientEmail);
+    if (invitee.isCaladdinUser && invitee.hasCalendarConnected) {
+      slotSource = 'mutual_known_user';
+      mutualRecipientEmail = recipientEmail;
+      if (posture !== 'flexible') {
+        slotPosture = 'mutual';
+      }
+    } else {
+      slotSource = 'host_only_pending_grant';
+      slotPosture = posture === 'strict' ? 'strict' : 'flexible';
+      mutualRecipientEmail = undefined;
+    }
+  }
+
   const slots = await generateSlots(ctx.userId, policy, duration, 7, {
-    recipientEmail,
+    recipientEmail: mutualRecipientEmail,
     cal,
-    posture,
+    posture: slotPosture,
   });
 
   if (slots.length === 0) {
@@ -73,6 +94,7 @@ export async function handleOfferSpecific(
       energyScore: s.score ?? 0.5,
       createsFragment: false,
     })),
+    slotSource,
   });
 
   const link = `${config.baseUrl.replace(/\/$/, '')}/s/${session.token}`;
@@ -106,6 +128,8 @@ export async function handleOfferSpecific(
     messageToUser: `${faxMsg} Share this link: ${link}`,
     slots,
     schedulingLink: link,
+    sessionToken: session.token,
+    slotSource,
     eventsAffected: slots.length,
     schemaVersion: 1,
   };

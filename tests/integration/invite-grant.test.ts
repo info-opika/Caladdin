@@ -16,6 +16,7 @@ const mockGetGoogleUserInfo = vi.fn();
 const mockGetInviteeCal = vi.fn();
 const mockGetHostCal = vi.fn();
 const mockListBusy = vi.fn();
+const mockHostGrantNotification = vi.fn().mockResolvedValue(true);
 
 vi.mock('../../src/db/scheduling_sessions.js', () => ({
   getSchedulingSessionByToken: (...a: unknown[]) => mockGetSession(...a),
@@ -56,6 +57,10 @@ vi.mock('../../src/services/mutual_slot_engine.js', () => ({
     { start: '2026-06-10T10:00:00-05:00', end: '2026-06-10T11:00:00-05:00' },
     { start: '2026-06-11T14:00:00-05:00', end: '2026-06-11T15:00:00-05:00' },
   ]),
+}));
+
+vi.mock('../../src/services/notifications.js', () => ({
+  sendHostGrantNotification: (...a: unknown[]) => mockHostGrantNotification(...a),
 }));
 
 function app() {
@@ -133,6 +138,13 @@ describe('invite grant routes', () => {
     expect(res.status).toBe(302);
     expect(res.headers.location).toBe('/s/tok-grant?grant=connected');
     expect(mockUpsertGrant).toHaveBeenCalled();
+    expect(mockHostGrantNotification).toHaveBeenCalledWith(
+      expect.objectContaining({
+        hostUserId: 'host-1',
+        sessionToken: 'tok-grant',
+        inviteeEmail: 'guest@test.com',
+      }),
+    );
   });
 
   it('POST /s/:token/grant/window updates preferred window', async () => {

@@ -7,6 +7,7 @@ const mockGenerateSlots = vi.fn();
 const mockInsertEvent = vi.fn();
 const mockCreateSession = vi.fn();
 const mockSendEmail = vi.fn();
+const mockLookupInvitee = vi.fn();
 
 vi.mock('../../../src/db/users.js', () => ({
   ensureDefaultPolicy: (...a: unknown[]) => mockEnsurePolicy(...a),
@@ -15,6 +16,10 @@ vi.mock('../../../src/db/users.js', () => ({
 
 vi.mock('../../../src/core/slot-scoring.js', () => ({
   generateSlots: (...a: unknown[]) => mockGenerateSlots(...a),
+}));
+
+vi.mock('../../../src/services/invitee_lookup.js', () => ({
+  lookupInviteeAvailability: (...a: unknown[]) => mockLookupInvitee(...a),
 }));
 
 vi.mock('../../../src/db/events.js', () => ({
@@ -68,6 +73,7 @@ describe('handleOfferSpecific', () => {
     mockEnsurePolicy.mockResolvedValue(POLICY);
     mockGetUser.mockResolvedValue({ display_name: 'Host', email: 'host@example.com' });
     mockSendEmail.mockResolvedValue({ ok: true });
+    mockLookupInvitee.mockResolvedValue({ isCaladdinUser: false, hasCalendarConnected: false });
   });
 
   it('returns fax message when no slots available', async () => {
@@ -125,6 +131,78 @@ describe('handleOfferSpecific', () => {
     expect(mockInsertEvent).toHaveBeenCalledTimes(2);
     expect(mockSendEmail).toHaveBeenCalledWith(
       expect.objectContaining({ to: 'guest@example.com' }),
+    );
+  });
+
+  it('uses mutual slots for known Caladdin user with calendar', async () => {
+    mockLookupInvitee.mockResolvedValue({
+      isCaladdinUser: true,
+      hasCalendarConnected: true,
+      userId: 'invitee-1',
+    });
+    mockGenerateSlots.mockResolvedValue([
+      { start: '2026-06-10T15:00:00-05:00', end: '2026-06-10T16:00:00-05:00', score: 0.9 },
+    ]);
+    mockInsertEvent.mockImplementation(async (_uid, ev) => ({ id: `ev-${ev.title}`, ...ev, userId: 'user-1' }));
+    mockCreateSession.mockResolvedValue({ token: 'mutual-tok' });
+
+    const parsed = ParsedIntentSchema.parse({
+      intent: 'OFFER_SPECIFIC',
+      confidence: 0.9,
+      params: { recipientEmail: 'known@example.com', recipientName: 'Known' },
+      mappingMethod: 'direct',
+      rawUtterance: 'offer known user times',
+    });
+    const result = await handleOfferSpecific(parsed, ctx, null);
+
+    expect(result.success).toBe(true);
+    expect(result.slotSource).toBe('mutual_known_user');
+    expect(mockGenerateSlots).toHaveBeenCalledWith(
+      'user-1',
+      POLICY,
+      45,
+      7,
+      expect.objectContaining({
+        recipientEmail: 'known@example.com',
+        posture: 'mutual',
+      }),
+    );
+    expect(mockCreateSession).toHaveBeenCalledWith(
+      expect.objectContaining({ slotSource: 'mutual_known_user' }),
+    );
+  });
+
+  it('uses host-only slots for unknown invitee with honest metadata', async () => {
+    mockLookupInvitee.mockResolvedValue({ isCaladdinUser: false, hasCalendarConnected: false });
+    mockGenerateSlots.mockResolvedValue([
+      { start: '2026-06-10T15:00:00-05:00', end: '2026-06-10T16:00:00-05:00', score: 0.9 },
+    ]);
+    mockInsertEvent.mockImplementation(async (_uid, ev) => ({ id: `ev-${ev.title}`, ...ev, userId: 'user-1' }));
+    mockCreateSession.mockResolvedValue({ token: 'host-tok' });
+
+    const parsed = ParsedIntentSchema.parse({
+      intent: 'OFFER_SPECIFIC',
+      confidence: 0.9,
+      params: { recipientEmail: 'unknown@example.com', recipientName: 'Unknown' },
+      mappingMethod: 'direct',
+      rawUtterance: 'offer unknown guest times',
+    });
+    const result = await handleOfferSpecific(parsed, ctx, null);
+
+    expect(result.success).toBe(true);
+    expect(result.slotSource).toBe('host_only_pending_grant');
+    expect(mockGenerateSlots).toHaveBeenCalledWith(
+      'user-1',
+      POLICY,
+      45,
+      7,
+      expect.objectContaining({
+        recipientEmail: undefined,
+        posture: 'flexible',
+      }),
+    );
+    expect(mockCreateSession).toHaveBeenCalledWith(
+      expect.objectContaining({ slotSource: 'host_only_pending_grant' }),
     );
   });
 });

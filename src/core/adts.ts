@@ -214,6 +214,8 @@ export const IntentResultSchema = z.object({
   eventsAffected: z.union([z.number().int(), z.array(z.unknown())]).optional(),
   schemaVersion: z.number().int().optional(),
   schedulingLink: z.string().url().optional(),
+  sessionToken: z.string().min(1).optional(),
+  slotSource: z.enum(['mutual_known_user', 'host_only_pending_grant']).optional(),
   executionStatus: z.enum(['success', 'failed']).optional(),
   isWarmRedirect: z.boolean().optional(),
   atomicOp: z.string().optional(),

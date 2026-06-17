@@ -19,6 +19,8 @@ export function asProposedAlternative(alt: unknown): ProposedAlternative {
   return alt as ProposedAlternative;
 }
 
+export type SlotSource = 'mutual_known_user' | 'host_only_pending_grant';
+
 export interface SchedulingSession {
   id: string;
   token: string;
@@ -37,6 +39,7 @@ export interface SchedulingSession {
   selected_slot?: CandidateSlot | null;
   google_event_id?: string | null;
   proposed_alternatives?: unknown[];
+  slot_source?: SlotSource | null;
 }
 
 export interface SchedulingSessionRow {
@@ -56,6 +59,7 @@ export interface SchedulingSessionRow {
   expires_at: string;
   created_at: string;
   updated_at: string;
+  slot_source?: SlotSource | null;
   slots?: unknown;
   context?: string | null;
   posture?: string;
@@ -82,6 +86,7 @@ function rowFromDb(data: Record<string, unknown>): SchedulingSessionRow {
     created_at: (data.created_at as string) ?? new Date().toISOString(),
     updated_at: (data.updated_at as string) ?? new Date().toISOString(),
     posture: (data.posture as string) ?? 'mutual',
+    slot_source: (data.slot_source as SlotSource | null) ?? null,
   };
 }
 
@@ -102,6 +107,7 @@ export async function createSchedulingSession(entry: {
   hostTimezone?: string;
   durationMinutes?: number;
   offeredSlots?: CandidateSlot[];
+  slotSource?: SlotSource;
 }): Promise<SchedulingSession> {
   const expiresAt = new Date(Date.now() + config.schedulingSessionHours * 3600 * 1000).toISOString();
   const offered = entry.offeredSlots ?? entry.slots.map((s) => ({
@@ -125,6 +131,7 @@ export async function createSchedulingSession(entry: {
       invitee_email: entry.inviteeEmail,
       host_timezone: entry.hostTimezone ?? 'America/Chicago',
       duration_minutes: entry.durationMinutes ?? 30,
+      slot_source: entry.slotSource ?? null,
       expires_at: expiresAt,
       status: 'pending',
     })
@@ -294,6 +301,43 @@ export async function appendProposedAlternative(
 export async function updateSessionStatus(token: string, status: string): Promise<void> {
   const { error } = await getSupabase().from('scheduling_sessions').update({ status }).eq('token', token);
   if (error) throw error;
+}
+
+export async function replaceSessionOfferedSlots(
+  token: string,
+  slots: Array<{ start: string; end: string }>,
+): Promise<boolean> {
+  const offered = slots.map((s) => ({
+    start: s.start,
+    end: s.end,
+    adjacentEventCount: 0,
+    energyScore: 0.5,
+    createsFragment: false,
+  }));
+  const { error } = await getSupabase()
+    .from('scheduling_sessions')
+    .update({ offered_slots: offered, updated_at: new Date().toISOString() })
+    .eq('token', token)
+    .eq('status', 'pending');
+  return !error;
+}
+
+export async function getLatestOpenSessionForInvitee(
+  hostUserId: string,
+  inviteeEmail: string,
+): Promise<SchedulingSessionRow | null> {
+  const { data, error } = await getSupabase()
+    .from('scheduling_sessions')
+    .select('*')
+    .eq('host_user_id', hostUserId)
+    .ilike('invitee_email', inviteeEmail.trim().toLowerCase())
+    .in('status', ['pending', 'open'])
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) return null;
+  return rowFromDb(data as Record<string, unknown>);
 }
 
 export async function listSessionsForHost(hostUserId: string): Promise<SchedulingSession[]> {

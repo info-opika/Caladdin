@@ -22,14 +22,27 @@ npm run db:status
 
 In [Google Cloud Console](https://console.cloud.google.com/) → APIs & Services → Credentials:
 
-1. Create or edit your OAuth 2.0 Client (Web application).
-2. Add **Authorized redirect URI** (after first deploy you'll know the URL):
+1. Create or edit your OAuth 2.0 Client (Web application) — the same client ID/secret used for `GOOGLE_OAUTH_CLIENT_ID` / `GOOGLE_OAUTH_CLIENT_SECRET`.
+2. Add **Authorized redirect URIs** (after first deploy you'll know the URL):
 
    ```
    https://<your-service>.onrender.com/auth/callback
+   https://<your-service>.onrender.com/s/grant/callback
    ```
 
+   - `/auth/callback` — host Google sign-in
+   - `/s/grant/callback` — invitee calendar grant (`calendar.freebusy` only; see `src/services/invitee_oauth.ts`)
+
+   <!-- Google Cloud Console checklist (manual — not automatable):
+        [ ] Same Web OAuth client as host auth
+        [ ] Authorized redirect URI: {CALADDIN_BASE_URL}/auth/callback
+        [ ] Authorized redirect URI: {CALADDIN_BASE_URL}/s/grant/callback
+        [ ] Save credentials; URIs must match CALADDIN_BASE_URL exactly
+   -->
+
 3. OAuth consent screen: add test users **or** publish the app for external users.
+
+Optional env `INVITEE_GRANT_REDIRECT_URI` overrides the grant callback; default is `{CALADDIN_BASE_URL}/s/grant/callback`. If set in Render, it must match the URI registered in Google Console and what `invitee_oauth.ts` expects.
 
 ### 3. Generate production secrets
 
@@ -56,6 +69,7 @@ Save these — you'll paste them into Render once.
 |----------|-----------------|
 | `CALADDIN_BASE_URL` | `https://caladdin.onrender.com` (your web service URL, no trailing slash) |
 | `GOOGLE_REDIRECT_URI` | `https://caladdin.onrender.com/auth/callback` |
+| `INVITEE_GRANT_REDIRECT_URI` | *(optional)* `https://caladdin.onrender.com/s/grant/callback` — omit to derive from `CALADDIN_BASE_URL` |
 | `GOOGLE_OAUTH_CLIENT_ID` | From Google Console |
 | `GOOGLE_OAUTH_CLIENT_SECRET` | From Google Console |
 | `SUPABASE_URL` | `https://xxxx.supabase.co` |
@@ -100,6 +114,8 @@ Ensure `CALADDIN_BASE_URL` and `CALADDIN_API_KEY` are set before cron runs.
 |---------|-----|
 | Service won't start | Check Render logs — often missing env var or weak `SESSION_SECRET` |
 | `GOOGLE_REDIRECT_URI must be...` | `GOOGLE_REDIRECT_URI` must exactly match `{CALADDIN_BASE_URL}/auth/callback` |
+| `INVITEE_GRANT_REDIRECT_URI must be...` | Must match `{CALADDIN_BASE_URL}/s/grant/callback` (or unset to use default) |
+| Invitee grant OAuth error from Google | Add `{CALADDIN_BASE_URL}/s/grant/callback` to **Authorized redirect URIs** on the same Web OAuth client |
 | Sign-in loop | Migrations not applied (`sessions` table missing) or OAuth redirect mismatch |
 | `db: "error"` on `/health` | Wrong `SUPABASE_URL` or service role key |
 | UI 500 "App UI not found" | Rebuild Docker image (needs `web/dist` in image — fixed in Dockerfile) |

@@ -14,6 +14,10 @@ import { getOAuthClientForUser } from '../services/auth_service.js';
 import { buildIcsCalendar } from '../services/ics.js';
 import { listWeekEventsWithSource } from '../db/events.js';
 import { WeekCalendarResponseSchema } from '../core/adts.js';
+import { listBusyFromGCal } from '../services/calendar_api.js';
+import { getCachedBusyFromGCal } from '../services/freebusy-cache.js';
+import { lookupInviteeAvailability } from '../services/invitee_lookup.js';
+import { checkSpecificSlot } from '../services/mutual_slot_engine.js';
 
 export const apiRouter = Router();
 
@@ -31,6 +35,12 @@ const ProfilePatchSchema = z.object({
 
 const UserDataDeleteSchema = z.object({
   confirm: z.literal('DELETE'),
+});
+
+const CheckSlotSchema = z.object({
+  candidateStart: z.string().min(1),
+  candidateEnd: z.string().min(1),
+  inviteeEmail: z.string().email().optional(),
 });
 
 apiRouter.get('/csrf-token', requireSession, (req: Request, res: Response) => {
@@ -191,6 +201,52 @@ apiRouter.post('/sessions/:token/proposals/:index', requireSession, async (req: 
   } catch (err) {
     logger.error('proposal action failed', { err: String(err), token });
     res.status(500).json({ error: 'failed' });
+  }
+});
+
+apiRouter.post('/calendar/check-slot', requireSession, async (req: Request, res: Response) => {
+  const session = (req as Request & { session: { userId: string } }).session;
+  const parsed = CheckSlotSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: 'Invalid payload', details: parsed.error.flatten() });
+    return;
+  }
+
+  const { candidateStart, candidateEnd, inviteeEmail } = parsed.data;
+
+  try {
+    const policy = await ensureDefaultPolicy(session.userId);
+    const hostCal = await getOAuthClientForUser(session.userId);
+    if (!hostCal) {
+      res.status(401).json({ error: 'calendar_not_connected' });
+      return;
+    }
+
+    const hostBusy = await listBusyFromGCal(hostCal, candidateStart, candidateEnd);
+
+    let inviteeBusy: Array<{ start: string; end: string }> | undefined;
+    if (inviteeEmail) {
+      const invitee = await lookupInviteeAvailability(inviteeEmail);
+      if (invitee.hasCalendarConnected && invitee.userId) {
+        const inviteeCal = await getOAuthClientForUser(invitee.userId);
+        if (inviteeCal) {
+          inviteeBusy = await getCachedBusyFromGCal(inviteeCal, invitee.userId, candidateStart, candidateEnd);
+        }
+      }
+    }
+
+    const result = checkSpecificSlot({
+      candidateStart,
+      candidateEnd,
+      hostBusy,
+      inviteeBusy,
+      timezone: policy.timezone,
+    });
+
+    res.json(result);
+  } catch (err) {
+    logger.error('check-slot failed', { err: String(err) });
+    res.status(502).json({ error: 'calendar_check_failed' });
   }
 });
 

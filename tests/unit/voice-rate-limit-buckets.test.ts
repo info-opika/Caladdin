@@ -1,11 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { classifyVoiceRateLimitBucket } from '../../src/middleware/voice-rate-limit-bucket.js';
-import {
-  VOICE_RATE_LIMIT_LEGACY_SHARED_MAX,
-  VOICE_RATE_LIMIT_MUTATION_MAX,
-  VOICE_RATE_LIMIT_READ_MAX,
-  VOICE_RATE_LIMIT_SCHEDULING_MAX,
-} from '../../src/middleware/rate-limit.js';
+import { classifyVoiceRateLimitBucket } from '../../src/core/voice-rate-limit-bucket.js';
+import { config } from '../../src/config.js';
 
 describe('classifyVoiceRateLimitBucket', () => {
   it('classifies calendar queries as read', () => {
@@ -35,21 +30,13 @@ describe('classifyVoiceRateLimitBucket', () => {
 });
 
 describe('voice rate limit thresholds', () => {
-  it('allows a full smoke sequence within per-bucket budgets', () => {
+  it('allows a full smoke sequence within the shared /voice budget', () => {
     const smokeSteps = [
       { bucket: 'read' as const, count: 3 },
       { bucket: 'mutation' as const, count: 2 },
       { bucket: 'scheduling' as const, count: 1 },
     ];
-    const maxByBucket = {
-      read: VOICE_RATE_LIMIT_READ_MAX,
-      mutation: VOICE_RATE_LIMIT_MUTATION_MAX,
-      scheduling: VOICE_RATE_LIMIT_SCHEDULING_MAX,
-    };
-    for (const step of smokeSteps) {
-      expect(step.count).toBeLessThanOrEqual(maxByBucket[step.bucket]);
-    }
-    const legacyTotal = smokeSteps.reduce((n, s) => n + s.count, 0);
-    expect(legacyTotal).toBeGreaterThan(VOICE_RATE_LIMIT_LEGACY_SHARED_MAX);
+    const total = smokeSteps.reduce((n, s) => n + s.count, 0);
+    expect(total).toBeLessThanOrEqual(config.voiceHttpRateLimitMax);
   });
 });

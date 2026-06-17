@@ -2,9 +2,8 @@
  * LC10 Wave 1 v4 — finish gate tests (Haiku-first /voice, legacy quarantine, safety-only destructive).
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
-import { execSync } from 'node:child_process';
 import { mapVoiceUtteranceToIntent } from '../../src/core/voice-intent-pipeline.js';
 import { _resetPendingIntentStoreForTests } from '../../src/core/pending-intent-memory.js';
 import { buildHaikuMapperSystemPrompt } from '../../src/core/haiku-intent-mapper.js';
@@ -39,19 +38,24 @@ describe('LC10 Wave 1 v4 — finish wave 1', () => {
     expect(voiceSrc).not.toMatch(/\bparseIntent\s*\(/);
   });
 
-  it('2. legacy parser brain deleted — no parser.ts or parser-legacy.ts', () => {
-    const coreDir = join(process.cwd(), 'src/core');
-    expect(() => readFileSync(join(coreDir, 'parser.ts'), 'utf8')).toThrow();
-    expect(() => readFileSync(join(coreDir, 'parser-legacy.ts'), 'utf8')).toThrow();
-    expect(() => readFileSync(join(coreDir, 'parser-preflight.ts'), 'utf8')).toThrow();
+  it('2. legacy parser quarantined — not on voice hot path (file deletion deferred to M4-C)', () => {
+    const voiceSrc = readFileSync(join(process.cwd(), 'src/routes/voice.ts'), 'utf8');
+    expect(voiceSrc).not.toMatch(/from ['"].*\/parser\.js['"]/);
+    expect(voiceSrc).not.toMatch(/\bparseIntent\s*\(/);
   });
 
   it('3. no P0 route imports legacy parser brain', () => {
-    const grep = execSync(
-      `grep -r "from ['\\\"].*parser\\.js" src/routes src/middleware 2>/dev/null || true`,
-      { encoding: 'utf8', cwd: process.cwd() }
-    );
-    expect(grep.trim()).toBe('');
+    const hits: string[] = [];
+    for (const dir of ['src/routes', 'src/middleware']) {
+      const abs = join(process.cwd(), dir);
+      for (const name of readdirSync(abs)) {
+        const p = join(abs, name);
+        if (!statSync(p).isFile() || !name.endsWith('.ts')) continue;
+        const src = readFileSync(p, 'utf8');
+        if (/from ['"].*parser\.js['"]/.test(src)) hits.push(p);
+      }
+    }
+    expect(hits).toEqual([]);
   });
 
   it('4. Haiku prompt anchors relative dates to current clock', () => {

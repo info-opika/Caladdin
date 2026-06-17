@@ -22,6 +22,7 @@ import { listBusyFromGCal } from '../services/calendar_api.js';
 import { getPolicy } from '../db/users.js';
 import { findMutualSlots } from '../services/mutual_slot_engine.js';
 import { migratePolicy } from '../core/adts.js';
+import { sendHostGrantNotification } from '../services/notifications.js';
 
 const router = Router();
 
@@ -144,6 +145,12 @@ async function handleGrantCallback(req: Request, res: Response, expectedToken?: 
       oauthRefreshToken: tokens.refresh_token,
       oauthExpiry: tokens.expiry_date ? new Date(tokens.expiry_date) : null,
     });
+
+    void sendHostGrantNotification({
+      hostUserId: session.host_user_id,
+      sessionToken: session.token,
+      inviteeEmail,
+    }).catch(() => undefined);
   } catch {
     res.redirect(`/s/${parsed.token}?grant=error`);
     return;

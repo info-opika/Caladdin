@@ -343,6 +343,78 @@ components:
         createsFragment:
           type: boolean
 
+    SlotSource:
+      type: string
+      enum: [mutual_known_user, host_only_pending_grant]
+      description: Honest metadata for how offered slots were computed
+
+    CheckSlotRequest:
+      type: object
+      required: [candidateStart, candidateEnd]
+      properties:
+        candidateStart:
+          type: string
+          format: date-time
+        candidateEnd:
+          type: string
+          format: date-time
+        inviteeEmail:
+          type: string
+          format: email
+          description: When provided, checks mutual availability if invitee is a known Caladdin user with calendar connected
+
+    SlotConflict:
+      type: object
+      properties:
+        start:
+          type: string
+          format: date-time
+        end:
+          type: string
+          format: date-time
+        party:
+          type: string
+          enum: [host, invitee]
+
+    CheckSlotResponse:
+      type: object
+      properties:
+        available:
+          type: boolean
+        scope:
+          type: string
+          enum: [host_only, mutual]
+        conflicts:
+          type: array
+          items:
+            $ref: '#/components/schemas/SlotConflict'
+        reason:
+          type: string
+
+    NextSlotsResponse:
+      type: object
+      properties:
+        ok:
+          type: boolean
+        slots:
+          type: array
+          items:
+            type: object
+            properties:
+              start:
+                type: string
+                format: date-time
+              end:
+                type: string
+                format: date-time
+        source:
+          type: string
+          enum: [mutual, host, host_fallback]
+          description: |
+            `mutual` — two-calendar matching via active invite grant.
+            `host` — host-only slots (no grant).
+            `host_fallback` — grant active but mutual search returned too few slots.
+
     JobComplete:
       type: object
       properties:
@@ -679,6 +751,36 @@ paths:
           description: Deleted
         '404':
           description: Not found
+
+  /api/calendar/check-slot:
+    post:
+      tags: [Calendar]
+      summary: Check whether a specific time is free
+      description: |
+        Host-authenticated targeted slot check. Uses Google Calendar free/busy for the host;
+        when `inviteeEmail` belongs to a known Caladdin user with calendar connected,
+        also checks invitee busy time and returns `scope: mutual`.
+      security:
+        - sessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CheckSlotRequest'
+      responses:
+        '200':
+          description: Slot availability result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CheckSlotResponse'
+        '400':
+          description: Invalid payload
+        '401':
+          description: Not authenticated or host calendar not connected
+        '502':
+          description: Calendar API failure
 
   /api/calendar.ics:
     get:
@@ -1071,6 +1173,148 @@ paths:
           description: Session not found
         '409':
           description: already_confirmed or propose_failed
+
+  /s/{token}/grant/start:
+    get:
+      tags: [Guest Scheduling]
+      summary: Start invitee calendar grant OAuth
+      description: |
+        Redirects invitee to Google OAuth scoped to `calendar.freebusy` only.
+        Used when the invitee shares availability for this meeting only.
+      parameters:
+        - name: token
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '302':
+          description: Redirect to Google OAuth
+        '404':
+          description: Invite not found or expired
+
+  /s/grant/callback:
+    get:
+      tags: [Guest Scheduling]
+      summary: Invitee grant OAuth callback (global)
+      description: Exchanges OAuth code and stores scoped grant for the scheduling session.
+      responses:
+        '302':
+          description: Redirect back to scheduling page with grant status query param
+
+  /s/{token}/grant/callback:
+    get:
+      tags: [Guest Scheduling]
+      summary: Invitee grant OAuth callback (token-scoped)
+      parameters:
+        - name: token
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '302':
+          description: Redirect back to scheduling page
+
+  /s/{token}/grant/window:
+    post:
+      tags: [Guest Scheduling]
+      summary: Set invitee preferred search window
+      description: Requires an active invite calendar grant.
+      parameters:
+        - name: token
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [start, end]
+              properties:
+                start:
+                  type: string
+                  format: date-time
+                end:
+                  type: string
+                  format: date-time
+      responses:
+        '200':
+          description: Window saved
+        '400':
+          description: invalid_window
+        '403':
+          description: grant_required
+        '404':
+          description: not_found
+
+  /s/{token}/grant/slots:
+    get:
+      tags: [Guest Scheduling]
+      summary: Mutual slots via active invite grant
+      description: Returns up to two mutual slots using host + invitee free/busy data.
+      parameters:
+        - name: token
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Mutual slot list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  slots:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        start:
+                          type: string
+                          format: date-time
+                        end:
+                          type: string
+                          format: date-time
+        '403':
+          description: grant_required
+        '404':
+          description: not_found
+
+  /s/{token}/next-slots:
+    post:
+      tags: [Guest Scheduling]
+      summary: Find next offered time slots
+      description: |
+        Replaces session offered slots with up to two new options.
+        Uses true two-calendar matching when an invite grant is active;
+        otherwise returns host-only slots with honest `source` metadata.
+      parameters:
+        - name: token
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: New slot options
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NextSlotsResponse'
+        '404':
+          description: not_found
+        '409':
+          description: no_slots
+        '502':
+          description: host_calendar_unavailable
 
   /jobs/session-expiry:
     post:

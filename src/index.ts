@@ -48,7 +48,16 @@ function getAppVersion(): string {
 
 app.use(securityHeadersMiddleware);
 app.use(requestIdMiddleware);
-app.use(compression({ threshold: 1024 }));
+app.use(
+  compression({
+    threshold: 1024,
+    filter: (req, res) => {
+      const accept = req.headers.accept ?? '';
+      if (accept.includes('text/event-stream')) return false;
+      return compression.filter(req, res);
+    },
+  }),
+);
 app.use(cookieParser());
 app.use(express.json({ limit: '10kb' }));
 app.use(csrfProtectionMiddleware);

@@ -2,6 +2,20 @@ import { getSupabase } from './client.js';
 
 export type CommandInputMode = 'text' | 'voice';
 
+export type AgentToolTraceEntry = {
+  name: string;
+  latencyMs: number;
+  ok: boolean;
+};
+
+/** Persisted on command_logs.agent_trace for agent-path /voice requests. */
+export type AgentTrace = {
+  model: string;
+  rounds: number;
+  totalLatencyMs: number;
+  tools: AgentToolTraceEntry[];
+};
+
 export interface CommandLogRow {
   id: string;
   user_id: string;
@@ -9,6 +23,7 @@ export interface CommandLogRow {
   input_mode: CommandInputMode;
   parsed_intent: string | null;
   parsed_params: Record<string, unknown>;
+  agent_trace: AgentTrace | null;
   confirmed: boolean;
   resulting_action_id: string | null;
   created_at: string;
@@ -56,6 +71,17 @@ export async function markCommandLogConfirmed(
       confirmed: true,
       ...(resultingActionId ? { resulting_action_id: resultingActionId } : {}),
     })
+    .eq('id', id);
+  if (error) throw error;
+}
+
+export async function updateCommandLogAgentTrace(
+  id: string,
+  trace: AgentTrace,
+): Promise<void> {
+  const { error } = await getSupabase()
+    .from('command_logs')
+    .update({ agent_trace: trace })
     .eq('id', id);
   if (error) throw error;
 }

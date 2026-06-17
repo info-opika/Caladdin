@@ -6,7 +6,7 @@ import { WARM_REDIRECT_MESSAGE } from '../core/adts.js';
 import { requireSession } from '../middleware/session.js';
 import { getRequestId } from '../middleware/requestId.js';
 import { getPolicy, getUserById, ensureDefaultPolicy, recordSetupFieldAnswer } from '../db/users.js';
-import { config } from '../config.js';
+import { agentEnabledFor, config } from '../config.js';
 import { voiceHttpRateLimiter } from '../core/rate-limiter.js';
 import { classifyVoiceRateLimitBucket } from '../core/voice-rate-limit-bucket.js';
 import { getOAuthClientForUser } from '../services/auth_service.js';
@@ -30,10 +30,21 @@ import {
 import {
   insertCommandLog,
   updateCommandLogParsed,
+  updateCommandLogAgentTrace,
 } from '../db/command_logs.js';
 import type { ParsedIntent } from '../core/adts.js';
+import { wantsVoiceStream } from '../core/voice-stream.js';
+import { buildAgentVoiceBody, deliverAgentOrStubStream } from '../core/voice-agent-stream.js';
+import { runSchedulingAgent } from '../agent/scheduling-agent.js';
 
 export const voiceRouter = Router();
+
+export type VoiceRouteOutcome = {
+  status: number;
+  body: Record<string, unknown>;
+  retryAfter?: string;
+  streamable: boolean;
+};
 
 async function tryResolvePendingSetup(
   userId: string,
@@ -50,38 +61,83 @@ async function tryResolvePendingSetup(
   return pending.deferredParsed;
 }
 
-voiceRouter.post('/', requireSession, async (req: Request, res: Response) => {
+/** Agent path for pilot / globally enabled users — skips Haiku classifier + orchestrator. */
+async function executeAgentVoicePath(
+  userId: string,
+  utterance: string,
+  requestId: string,
+  tz: string,
+  commandLogId?: string,
+): Promise<VoiceRouteOutcome> {
+  try {
+    const result = await runSchedulingAgent(
+      utterance,
+      { userId, requestId, timezone: tz },
+      [],
+    );
+
+    if (commandLogId) {
+      try {
+        await updateCommandLogParsed(commandLogId, {
+          intent: 'RESOLVE_MANUAL',
+          params: { agentPath: true, agentRounds: result.rounds },
+        });
+        await updateCommandLogAgentTrace(commandLogId, result.trace);
+      } catch (e) {
+        logger.warn('Command log agent update failed', { commandLogId, error: String(e) });
+      }
+    }
+
+    return {
+      status: 200,
+      streamable: true,
+      body: buildAgentVoiceBody(result, tz),
+    };
+  } catch (err) {
+    logger.error('Agent voice pipeline failed', { requestId, userId, error: String(err) });
+    return {
+      status: 503,
+      body: { error: 'Caladdin is temporarily unavailable. Try again in 30 seconds.' },
+      retryAfter: '30',
+      streamable: false,
+    };
+  }
+}
+
+export async function executeVoiceRequest(
+  req: Request,
+  session: { userId: string; email: string },
+): Promise<VoiceRouteOutcome> {
   const requestId = getRequestId(req);
-  const session = (req as Request & { session: { userId: string; email: string } }).session;
   const userId = (req.body.userId as string) ?? session.userId;
 
   if (req.body.userId && req.body.userId !== session.userId) {
-    res.status(403).json({ error: 'Forbidden' });
-    return;
+    return { status: 403, body: { error: 'Forbidden' }, streamable: false };
   }
 
   const uidCheck = validateUserId(userId);
   if (!uidCheck.valid) {
-    res.status(400).json({ error: uidCheck.error });
-    return;
+    return { status: 400, body: { error: uidCheck.error ?? 'Invalid user' }, streamable: false };
   }
 
   const utterance = req.body.utterance as string;
   const uttCheck = validateUtterance(utterance, config.utteranceMaxLength);
   if (!uttCheck.valid) {
-    res.status(400).json({ error: uttCheck.error });
-    return;
+    return { status: 400, body: { error: uttCheck.error ?? 'Invalid utterance' }, streamable: false };
   }
 
   const bucket = classifyVoiceRateLimitBucket(utterance);
   const rateKey = `${session.userId}:${bucket}`;
   const httpRate = await voiceHttpRateLimiter.check(rateKey);
   if (!httpRate.allowed) {
-    res.status(429).json({
-      error: 'Rate limit exceeded',
-      retryAfterMs: httpRate.retryAfterMs,
-    });
-    return;
+    return {
+      status: 429,
+      body: {
+        error: 'Rate limit exceeded',
+        retryAfterMs: httpRate.retryAfterMs,
+      },
+      streamable: false,
+    };
   }
 
   const inputMode = req.body.source === 'text' ? 'text' : 'voice';
@@ -106,21 +162,29 @@ voiceRouter.post('/', requireSession, async (req: Request, res: Response) => {
     ]);
 
     if (systemMode === 'SAFE_MODE') {
-      res.status(503).setHeader('Retry-After', '30').setHeader('x-request-id', requestId).json({
-        error: 'Caladdin is in safe mode. Try again shortly.',
-      });
-      return;
+      return {
+        status: 503,
+        body: { error: 'Caladdin is in safe mode. Try again shortly.' },
+        retryAfter: '30',
+        streamable: false,
+      };
     }
 
     if (!policy && !(await getUserById(userId))) {
-      res.status(404).json({ error: 'No policy found for user' });
-      return;
+      return { status: 404, body: { error: 'No policy found for user' }, streamable: false };
     }
 
     const tz = policy?.timezone ?? 'America/Chicago';
+
+    if (agentEnabledFor(userId)) {
+      return executeAgentVoicePath(userId, utterance, requestId, tz, commandLogId);
+    }
+
     let parsed: ParsedIntent | null = await tryResolvePendingSetup(userId, utterance);
 
     if (!parsed) {
+      // @deprecated Legacy Haiku classifier hot path — bypassed when agentEnabledFor(userId).
+      // Retained for users not on the agent pilot until full rollout (M5+).
       const { intent: pipelineIntent } = await mapVoiceUtteranceToIntent(utterance, { userId, timezone: tz });
       parsed = pipelineIntent;
 
@@ -128,15 +192,17 @@ voiceRouter.post('/', requireSession, async (req: Request, res: Response) => {
         if (pendingEmail) {
           parsed = { ...parsed, intent: 'RESOLVE_MANUAL' as const, params: {} };
         } else {
-          res.setHeader('x-request-id', requestId);
-          res.json({
-            intent: 'RESOLVE_MANUAL',
-            success: true,
-            requiresConfirmation: false,
-            messageToUser: WARM_REDIRECT_MESSAGE,
-            schemaVersion: 1,
-          });
-          return;
+          return {
+            status: 200,
+            streamable: true,
+            body: {
+              intent: 'RESOLVE_MANUAL',
+              success: true,
+              requiresConfirmation: false,
+              messageToUser: WARM_REDIRECT_MESSAGE,
+              schemaVersion: 1,
+            },
+          };
         }
       }
 
@@ -149,9 +215,11 @@ voiceRouter.post('/', requireSession, async (req: Request, res: Response) => {
         inputMode,
       );
       if (!emailGate.proceed) {
-        res.setHeader('x-request-id', requestId);
-        res.json(emailGate.result);
-        return;
+        return {
+          status: 200,
+          streamable: true,
+          body: emailGate.result as Record<string, unknown>,
+        };
       }
       parsed = emailGate.parsed;
     }
@@ -175,20 +243,22 @@ voiceRouter.post('/', requireSession, async (req: Request, res: Response) => {
         deferredParsed: parsed,
         originalUtterance: utterance,
       });
-      res.setHeader('x-request-id', requestId);
-      res.json({
-        outcome: 'needs_setup',
-        intent: parsed.intent,
-        success: false,
-        requiresConfirmation: false,
-        setupField: setupGap.field,
-        formType: setupGap.formType,
-        showFormFallback: true,
-        pendingUtterance: utterance,
-        messageToUser: setupGap.question,
-        schemaVersion: 1,
-      });
-      return;
+      return {
+        status: 200,
+        streamable: true,
+        body: {
+          outcome: 'needs_setup',
+          intent: parsed.intent,
+          success: false,
+          requiresConfirmation: false,
+          setupField: setupGap.field,
+          formType: setupGap.formType,
+          showFormFallback: true,
+          pendingUtterance: utterance,
+          messageToUser: setupGap.question,
+          schemaVersion: 1,
+        },
+      };
     }
 
     const result = await orchestrate(parsed, {
@@ -199,14 +269,58 @@ voiceRouter.post('/', requireSession, async (req: Request, res: Response) => {
       conversationContext,
       commandLogId,
     });
-    res.setHeader('x-request-id', requestId);
-    res.json(result);
+
+    return {
+      status: 200,
+      streamable: true,
+      body: result as Record<string, unknown>,
+    };
   } catch (err) {
     logger.error('Voice pipeline failed', { requestId, userId, error: String(err) });
-    res.status(503).setHeader('Retry-After', '30').setHeader('x-request-id', requestId).json({
-      error: 'Caladdin is temporarily unavailable. Try again in 30 seconds.',
-    });
+    return {
+      status: 503,
+      body: { error: 'Caladdin is temporarily unavailable. Try again in 30 seconds.' },
+      retryAfter: '30',
+      streamable: false,
+    };
   }
+}
+
+function sendVoiceJson(res: Response, requestId: string, outcome: VoiceRouteOutcome): void {
+  if (outcome.retryAfter) {
+    res.status(outcome.status).setHeader('Retry-After', outcome.retryAfter);
+  } else {
+    res.status(outcome.status);
+  }
+  res.setHeader('x-request-id', requestId).json(outcome.body);
+}
+
+voiceRouter.post('/', requireSession, async (req: Request, res: Response) => {
+  const requestId = getRequestId(req);
+  const session = (req as Request & { session: { userId: string; email: string } }).session;
+  const useStream = wantsVoiceStream(req);
+  const outcome = await executeVoiceRequest(req, session);
+
+  if (useStream && outcome.streamable && outcome.status === 200) {
+    const utterance = String(req.body.utterance ?? '');
+    const tz =
+      typeof outcome.body.timezone === 'string'
+        ? outcome.body.timezone
+        : 'America/Chicago';
+    await deliverAgentOrStubStream(
+      res,
+      {
+        userId: session.userId,
+        utterance,
+        requestId,
+        timezone: tz,
+      },
+      outcome.body,
+    );
+    return;
+  }
+
+  sendVoiceJson(res, requestId, outcome);
 });
 
 voiceRouter.post('/confirm/:token/approve', requireSession, async (req: Request, res: Response) => {

@@ -18,6 +18,28 @@ const mockRejectPendingConfirmation = vi.fn();
 const mockVoiceRateCheck = vi.fn();
 const mockInsertCommandLog = vi.fn();
 const mockUpdateCommandLogParsed = vi.fn();
+const mockUpdateCommandLogAgentTrace = vi.fn();
+
+const mockAgentTrace = {
+  model: 'claude-sonnet-4-20250514',
+  rounds: 1,
+  totalLatencyMs: 12,
+  tools: [] as Array<{ name: string; latencyMs: number; ok: boolean }>,
+};
+const mockAgentEnabledFor = vi.fn();
+const mockRunSchedulingAgent = vi.fn();
+
+vi.mock('../../src/config.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../src/config.js')>();
+  return {
+    ...actual,
+    agentEnabledFor: (...args: unknown[]) => mockAgentEnabledFor(...args),
+  };
+});
+
+vi.mock('../../src/agent/scheduling-agent.js', () => ({
+  runSchedulingAgent: (...args: unknown[]) => mockRunSchedulingAgent(...args),
+}));
 
 vi.mock('../../src/db/users.js', () => ({
   getPolicy: (...args: unknown[]) => mockGetPolicy(...args),
@@ -37,6 +59,7 @@ vi.mock('../../src/db/conversation-context.js', () => ({
 vi.mock('../../src/db/command_logs.js', () => ({
   insertCommandLog: (...args: unknown[]) => mockInsertCommandLog(...args),
   updateCommandLogParsed: (...args: unknown[]) => mockUpdateCommandLogParsed(...args),
+  updateCommandLogAgentTrace: (...args: unknown[]) => mockUpdateCommandLogAgentTrace(...args),
   markCommandLogConfirmed: vi.fn(),
 }));
 
@@ -120,6 +143,13 @@ const basePolicy = {
 describe('voice route — validation and happy path', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockAgentEnabledFor.mockReturnValue(false);
+    mockRunSchedulingAgent.mockResolvedValue({
+      reply: 'Agent reply.',
+      toolCalls: [],
+      rounds: 1,
+      trace: mockAgentTrace,
+    });
     mockVoiceRateCheck.mockResolvedValue({ allowed: true });
     mockGetPolicy.mockResolvedValue(basePolicy);
     mockEnsureDefaultPolicy.mockResolvedValue(basePolicy);
@@ -129,6 +159,7 @@ describe('voice route — validation and happy path', () => {
     mockGetPendingSetupIntent.mockResolvedValue(null);
     mockInsertCommandLog.mockResolvedValue('cmd-log-test-1');
     mockUpdateCommandLogParsed.mockResolvedValue(undefined);
+    mockUpdateCommandLogAgentTrace.mockResolvedValue(undefined);
     mockApplyConversationContext.mockImplementation((_parsed) => _parsed);
     mockHandleEmailConfirmationGate.mockResolvedValue({
       proceed: true,
@@ -266,5 +297,53 @@ describe('voice route — validation and happy path', () => {
     const res = await request(app()).post('/voice/confirm/tok-abc/reject');
     expect(res.status).toBe(200);
     expect(mockRejectPendingConfirmation).toHaveBeenCalledWith('tok-abc', USER_ID);
+  });
+
+  it('streams SSE tokens when stream:true', async () => {
+    const res = await request(app())
+      .post('/voice')
+      .set('Accept', 'text/event-stream')
+      .send({ utterance: 'what is on my calendar today', stream: true });
+
+    expect(res.status).toBe(200);
+    expect(res.headers['content-type']).toContain('text/event-stream');
+    expect(res.text).toContain('event: status');
+    expect(res.text).toContain('event: token');
+    expect(res.text).toContain('event: done');
+    expect(res.text).toContain('You are free.');
+    expect(mockOrchestrate).toHaveBeenCalled();
+  });
+
+  it('uses agent path when agentEnabledFor and skips classifier + orchestrator', async () => {
+    mockAgentEnabledFor.mockReturnValue(true);
+    const res = await request(app()).post('/voice').send({ utterance: 'invite jane@example.com' });
+
+    expect(res.status).toBe(200);
+    expect(res.body.messageToUser).toBe('Agent reply.');
+    expect(res.body.agentRounds).toBe(1);
+    expect(mockRunSchedulingAgent).toHaveBeenCalledWith(
+      'invite jane@example.com',
+      expect.objectContaining({ userId: USER_ID }),
+      [],
+    );
+    expect(mockMapVoiceUtteranceToIntent).not.toHaveBeenCalled();
+    expect(mockOrchestrate).not.toHaveBeenCalled();
+    expect(mockUpdateCommandLogAgentTrace).toHaveBeenCalledWith('cmd-log-test-1', mockAgentTrace);
+  });
+
+  it('streams agent SSE when agentEnabledFor and stream requested', async () => {
+    mockAgentEnabledFor.mockReturnValue(true);
+    const res = await request(app())
+      .post('/voice')
+      .set('Accept', 'text/event-stream')
+      .send({ utterance: 'book a slot on my calendar', stream: true });
+
+    expect(res.status).toBe(200);
+    expect(res.headers['content-type']).toContain('text/event-stream');
+    expect(res.text).toContain('Agent reply.');
+    expect(res.text).toContain('event: done');
+    expect(mockMapVoiceUtteranceToIntent).not.toHaveBeenCalled();
+    expect(mockOrchestrate).not.toHaveBeenCalled();
+    expect(mockRunSchedulingAgent).toHaveBeenCalledTimes(1);
   });
 });

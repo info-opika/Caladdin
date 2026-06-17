@@ -7,6 +7,18 @@ const st = vi.hoisted(() => ({
 
 vi.mock('../../../src/db/client.js', () => ({
   getSupabase: () => ({
+    rpc: async (fn: string, args: Record<string, unknown>) => {
+      if (fn === 'claim_scheduling_slot_for_gcal') {
+        const token = args.p_token as string;
+        const row = st.sessions.find((s) => s.token === token);
+        if (row) {
+          row.google_event_id = '__CALADDIN_GCAL_CLAIMING__';
+          row.status = 'pending';
+        }
+        return { data: true, error: null };
+      }
+      return { data: true, error: null };
+    },
     from: (table: string) => {
       if (table !== 'scheduling_sessions') throw new Error(table);
       return {

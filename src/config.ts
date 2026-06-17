@@ -13,6 +13,18 @@ function required(name: string): string {
   return v ?? '';
 }
 
+/** Comma-separated CALADDIN_AGENT_PILOT_USERS → trimmed user IDs. */
+export function parseAgentPilotUsers(raw: string | undefined): string[] {
+  if (!raw?.trim()) return [];
+  return raw.split(',').map((id) => id.trim()).filter(Boolean);
+}
+
+/** True when CALADDIN_AGENT_ENABLED=1 or userId is in CALADDIN_AGENT_PILOT_USERS. */
+export function agentEnabledFor(userId: string): boolean {
+  if (process.env.CALADDIN_AGENT_ENABLED === '1') return true;
+  return parseAgentPilotUsers(process.env.CALADDIN_AGENT_PILOT_USERS).includes(userId);
+}
+
 export const config = {
   port: parseInt(process.env.PORT ?? '3000', 10),
   nodeEnv: process.env.NODE_ENV ?? 'development',
@@ -34,6 +46,11 @@ export const config = {
   conversationSessionMinutes: 10,
   schedulingSessionHours: 72,
   undoWindowMinutes: 10,
+  /** Global agent rollout flag (see also agentEnabledFor for per-user pilot). */
+  agentEnabled: process.env.CALADDIN_AGENT_ENABLED === '1',
+  get agentPilotUsers(): string[] {
+    return parseAgentPilotUsers(process.env.CALADDIN_AGENT_PILOT_USERS);
+  },
   llmTimeoutMs: 10000,
   rateLimitMax: 20,
   rateLimitWindowMs: 60 * 60 * 1000,

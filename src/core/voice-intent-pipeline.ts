@@ -235,6 +235,9 @@ async function maybeStoreProtectPending(
 
 /**
  * Maps a /voice utterance to ParsedIntent using Haiku as sole semantic authority.
+ *
+ * @deprecated Hot path for users with agentEnabledFor(userId). Kept for legacy
+ * rollout until the scheduling agent fully replaces the Haiku classifier.
  */
 export async function mapVoiceUtteranceToIntent(
   utterance: string,

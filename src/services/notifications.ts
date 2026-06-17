@@ -75,6 +75,12 @@ export interface HostBookingNotificationInput {
   note?: string;
 }
 
+export interface HostGrantNotificationInput {
+  hostUserId: string;
+  sessionToken: string;
+  inviteeEmail?: string;
+}
+
 function subjectForKind(kind: HostBookingNotificationKind): string {
   switch (kind) {
     case 'proposed':
@@ -100,6 +106,32 @@ function bodyForKind(input: HostBookingNotificationInput): string {
     default:
       return `Someone picked a time from your scheduling link.\n\nView session: ${link}`;
   }
+}
+
+export async function sendHostGrantNotification(input: HostGrantNotificationInput): Promise<boolean> {
+  const link = `${config.baseUrl.replace(/\/$/, '')}/s/${input.sessionToken}`;
+  const who = input.inviteeEmail ?? 'Your invitee';
+  const subject = 'Caladdin — invitee shared availability';
+  const text = `${who} shared their calendar availability for your meeting invite. You can now find mutual times.\n\nView session: ${link}`;
+  const short = `grant connected (${input.sessionToken.slice(0, 8)}…)`;
+
+  logger.info('Host grant notification', {
+    hostUserId: input.hostUserId,
+    sessionToken: input.sessionToken.slice(0, 8),
+    inviteeEmail: input.inviteeEmail,
+  });
+
+  const host = await getUserById(input.hostUserId);
+  if (host?.email) {
+    await sendEmail({
+      to: host.email,
+      subject,
+      html: `<p>${text.replace(/\n/g, '<br/>')}</p>`,
+      text,
+    });
+  }
+
+  return sendNtfy(`Caladdin - ${subject}`, short);
 }
 
 export async function sendHostBookingNotification(input: HostBookingNotificationInput): Promise<boolean> {

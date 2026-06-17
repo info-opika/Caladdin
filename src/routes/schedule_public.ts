@@ -8,6 +8,7 @@ import {
   appendProposedAlternative,
   cancelConfirmedSession,
   rescheduleConfirmedSession,
+  replaceSessionOfferedSlots,
   GCAL_CLAIMING_SENTINEL,
   type SchedulingSessionRow,
 } from '../db/scheduling_sessions.js';
@@ -416,25 +417,6 @@ function guestFromSession(session: SchedulingSessionRow): GuestIntakePayload | u
     name: session.invitee_label?.trim() || local,
     email: session.invitee_email,
   };
-}
-
-async function replaceSessionOfferedSlots(
-  token: string,
-  slots: Array<{ start: string; end: string }>,
-): Promise<boolean> {
-  const offered = slots.map((s) => ({
-    start: s.start,
-    end: s.end,
-    adjacentEventCount: 0,
-    energyScore: 0.5,
-    createsFragment: false,
-  }));
-  const { error } = await getSupabase()
-    .from('scheduling_sessions')
-    .update({ offered_slots: offered, updated_at: new Date().toISOString() })
-    .eq('token', token)
-    .eq('status', 'pending');
-  return !error;
 }
 
 router.post('/s/:token/select', async (req: Request, res: Response) => {

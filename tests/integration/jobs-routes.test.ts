@@ -48,7 +48,7 @@ describe('jobs routes', () => {
       reportPath: '/tmp/IMPROVEMENT_REPORT.md',
       ntfySent: false,
     });
-    mockRunSessionExpiry.mockResolvedValue(3);
+    mockRunSessionExpiry.mockResolvedValue({ sessions: 3, grants: 0 });
   });
 
   describe('POST /jobs/reminders', () => {
@@ -136,7 +136,7 @@ describe('jobs routes', () => {
         .post('/jobs/session-expiry')
         .set('x-api-key', 'test-api-key');
       expect(res.status).toBe(200);
-      expect(res.body).toEqual({ status: 'complete', expired: 3 });
+      expect(res.body).toEqual({ status: 'complete', sessions: 3, grants: 0, expired: 3 });
       expect(mockRunSessionExpiry).toHaveBeenCalledTimes(1);
     });
 

@@ -7,7 +7,7 @@ import {
   _resetPendingIntentStoreForTests,
   parseFollowUpHourRange,
 } from '../../src/core/pending-intent-memory.js';
-import { resolveManual } from '../../src/core/intents/resolve-manual.js';
+import { handleResolveManual } from '../../src/handlers/resolve-manual.js';
 import { finalizeSchedulingLinkStructuredContract } from '../../src/core/scheduling-link-contract.js';
 import { ParsedIntentSchema } from '../../src/core/adts.js';
 import type { UserPolicyProfile } from '../../src/core/adts.js';
@@ -97,7 +97,7 @@ describe('LC10 Wave 1 v5 — ambiguous follow-up times', () => {
       },
       mappingMethod: 'resolve_manual',
     });
-    const result = await resolveManual(intent, profile);
+    const result = await handleResolveManual(intent, { userId: UID, requestId: 'req-1' }, null);
     expect(result.messageToUser).toMatch(/1am.*2am.*1pm.*2pm/i);
   });
 

@@ -3,6 +3,7 @@ import { join } from 'path';
 import { config } from './config.js';
 import { resolveWebRoot } from './project-paths.js';
 import { logger } from './logger.js';
+import { inviteeGrantRedirectUri } from './services/invitee_oauth.js';
 
 const WEAK_SECRETS = new Set([
   '',
@@ -27,10 +28,19 @@ export function validateProductionConfig(): void {
   assertSecret('OAUTH_STATE_SECRET', config.oauthStateSecret);
   assertSecret('CALADDIN_API_KEY', config.apiKey, 24);
 
-  const expectedRedirect = `${config.baseUrl.replace(/\/$/, '')}/auth/callback`;
+  const baseUrl = config.baseUrl.replace(/\/$/, '');
+  const expectedRedirect = `${baseUrl}/auth/callback`;
   if (config.googleRedirectUri !== expectedRedirect) {
     throw new Error(
       `GOOGLE_REDIRECT_URI must be ${expectedRedirect} (got ${config.googleRedirectUri})`,
+    );
+  }
+
+  const expectedGrantRedirect = `${baseUrl}/s/grant/callback`;
+  const actualGrantRedirect = inviteeGrantRedirectUri();
+  if (actualGrantRedirect !== expectedGrantRedirect) {
+    throw new Error(
+      `INVITEE_GRANT_REDIRECT_URI must be ${expectedGrantRedirect} (got ${actualGrantRedirect})`,
     );
   }
 

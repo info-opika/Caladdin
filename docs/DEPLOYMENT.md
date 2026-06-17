@@ -5,7 +5,9 @@ Production deployment target: **Render** (Blueprint: [`render.yaml`](../render.y
 ## Prerequisites
 
 - Supabase project with migrations applied (see below)
-- Google OAuth client with redirect URI `{CALADDIN_BASE_URL}/auth/callback`
+- Google OAuth client with redirect URIs:
+  - Host sign-in: `{CALADDIN_BASE_URL}/auth/callback`
+  - Invitee calendar grant: `{CALADDIN_BASE_URL}/s/grant/callback` (same OAuth client; see [Google Cloud Console checklist](#google-cloud-console-checklist-invitee-grant-oauth))
 - Resend API key (invites, scheduling links, booking reminders)
 - Anthropic API key (voice orchestration)
 
@@ -22,6 +24,10 @@ All files in `supabase/migrations/` must be applied in filename order. Key migra
 | `023_booking_responses.sql` | Guest intake responses on bookings |
 | `024_booking_reminders.sql` | Reminder queue (T-24h, T-1h) |
 | `025`–`028` | Indexes, webhooks, team scheduling, atomic slot claim |
+| `029_v3_command_logs.sql` | NL command audit trail |
+| `030_v3_invite_calendar_grants.sql` | Invitee calendar grant OAuth tokens |
+| `031_v4_slot_source.sql` | `slot_source` on scheduling sessions (mutual vs host-only honesty) |
+| `034_v4_agent_trace.sql` | `agent_trace` JSON on `command_logs` for agent observability |
 
 Earlier migrations (`001`–`018`) must already be applied on the project.
 
@@ -56,6 +62,7 @@ Set via Render **env group** `caladdin-core` (see `render.yaml`) or Dashboard �
 | `GOOGLE_OAUTH_CLIENT_ID` | yes | |
 | `GOOGLE_OAUTH_CLIENT_SECRET` | yes | |
 | `GOOGLE_REDIRECT_URI` | yes | `{CALADDIN_BASE_URL}/auth/callback` |
+| `INVITEE_GRANT_REDIRECT_URI` | no | Defaults to `{CALADDIN_BASE_URL}/s/grant/callback`; set only if you override the grant callback path (must match `invitee_oauth.ts` and Google Console) |
 | `CALADDIN_BASE_URL` | yes | Public URL, e.g. `https://caladdin.onrender.com` |
 | `CALADDIN_API_KEY` | yes | Protects `/jobs/*`, `/confirm/*` (cron uses `x-api-key` header) |
 | `SESSION_SECRET` | yes | ≥ 32 chars in production |
@@ -72,9 +79,33 @@ Set via Render **env group** `caladdin-core` (see `render.yaml`) or Dashboard �
 | `NTFY_USER_TOPIC` | `caladdin-user` | User notifications |
 | `MAX_PILOT_USERS` | `10` | Pilot cap |
 | `CALADDIN_KILL_SWITCH` | `0` | `1` blocks mutations |
+| `CALADDIN_AGENT_ENABLED` | `0` | `1` routes all users through the scheduling agent on `/voice` |
+| `CALADDIN_AGENT_PILOT_USERS` | — | Comma-separated user UUIDs for agent pilot when global flag is off |
+| `ANTHROPIC_AGENT_MODEL` | `claude-sonnet-4-20250514` | Model for scheduling agent tool loop |
 | `CALADDIN_SERVICE_NAME` | `caladdin` | Log field `service` |
 
 Copy local template: [`.env.example`](../.env.example)
+
+### Invitee grant OAuth callback
+
+When an invitee shares calendar availability, Caladdin redirects them through Google OAuth with scope `calendar.freebusy` only (`src/services/invitee_oauth.ts`). After consent, Google redirects to:
+
+```
+{CALADDIN_BASE_URL}/s/grant/callback
+```
+
+`INVITEE_GRANT_REDIRECT_URI` is optional; when unset, the app derives the URI above from `CALADDIN_BASE_URL`. In production, `validate-production.ts` fails fast if `INVITEE_GRANT_REDIRECT_URI` is set to anything other than that derived value.
+
+### Google Cloud Console checklist (invitee grant OAuth)
+
+Manual step — cannot be automated in code. On the **same** OAuth 2.0 Web client used for host sign-in (`GOOGLE_OAUTH_CLIENT_ID`):
+
+- [ ] APIs & Services → Credentials → your Web application client
+- [ ] Under **Authorized redirect URIs**, add host sign-in (if not already): `{CALADDIN_BASE_URL}/auth/callback`
+- [ ] Add invitee grant callback: `{CALADDIN_BASE_URL}/s/grant/callback`
+- [ ] Save; redeploy is not required on Render, but env `CALADDIN_BASE_URL` / `INVITEE_GRANT_REDIRECT_URI` must match the registered URIs exactly (scheme, host, path, no trailing slash on base URL)
+
+Without the grant redirect URI registered, invitees see a Google OAuth error when starting the calendar-grant flow.
 
 ## Render Blueprint deploy
 

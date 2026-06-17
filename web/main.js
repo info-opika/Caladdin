@@ -68,6 +68,8 @@ let pendingConfirmationToken = null;
 let busy = false;
 let listening = false;
 let thinkingEl = null;
+let streamingEl = null;
+let streamingTextEl = null;
 let listeningEl = null;
 let hasMessages = false;
 let calendarWeek = null;
@@ -183,6 +185,70 @@ function clearThinkingMessage() {
   thinkingEl = null;
 }
 
+function clearStreamingMessage() {
+  streamingEl?.remove();
+  streamingEl = null;
+  streamingTextEl = null;
+}
+
+function showStreamWaiting(message) {
+  clearThinkingMessage();
+  clearStreamingMessage();
+  hasMessages = true;
+  updateEmptyState();
+  streamingEl = document.createElement('div');
+  streamingEl.className = 'msg bot streaming is-waiting';
+  streamingEl.setAttribute('role', 'status');
+  streamingEl.setAttribute('aria-live', 'polite');
+  streamingEl.setAttribute('data-testid', 'voice-stream-indicator');
+  streamingEl.innerHTML = `<span class="thinking-spinner" aria-hidden="true"></span><span>${message}</span>`;
+  messages.appendChild(streamingEl);
+  messages.scrollTop = messages.scrollHeight;
+}
+
+function beginStreamTokens() {
+  if (!streamingEl) {
+    hasMessages = true;
+    updateEmptyState();
+    streamingEl = document.createElement('div');
+    streamingEl.className = 'msg bot streaming';
+    streamingEl.setAttribute('role', 'status');
+    streamingEl.setAttribute('aria-live', 'polite');
+    streamingEl.setAttribute('data-testid', 'voice-stream-message');
+    messages.appendChild(streamingEl);
+  } else {
+    streamingEl.classList.remove('is-waiting');
+    streamingEl.innerHTML = '';
+  }
+
+  streamingTextEl = document.createElement('span');
+  streamingTextEl.className = 'stream-text';
+  streamingTextEl.setAttribute('data-testid', 'voice-stream-text');
+  const cursor = document.createElement('span');
+  cursor.className = 'typing-cursor';
+  cursor.setAttribute('aria-hidden', 'true');
+  cursor.setAttribute('data-testid', 'voice-typing-cursor');
+  streamingEl.append(streamingTextEl, cursor);
+  messages.scrollTop = messages.scrollHeight;
+}
+
+function appendStreamToken(text) {
+  if (!text) return;
+  if (!streamingTextEl) beginStreamTokens();
+  streamingTextEl.textContent += text;
+  messages.scrollTop = messages.scrollHeight;
+}
+
+function finalizeStreamMessage() {
+  if (!streamingEl) return;
+  streamingEl.querySelector('.typing-cursor')?.remove();
+  streamingEl.removeAttribute('role');
+  streamingEl.classList.remove('streaming', 'is-waiting');
+  streamingEl.classList.add('bot');
+  streamingEl = null;
+  streamingTextEl = null;
+}
+
 function showListeningMessage() {
   clearListeningMessage();
   listeningEl = document.createElement('div');
@@ -238,11 +304,11 @@ function clearListening() {
   setListening(false);
 }
 
-function setBusy(message) {
+function setBusy(message, { skipThinking = false } = {}) {
   busy = true;
   chat?.classList.add('is-busy');
   chat?.setAttribute('aria-busy', 'true');
-  showThinkingMessage(message);
+  if (!skipThinking) showThinkingMessage(message);
   if (statusText) statusText.textContent = message;
   statusBar?.classList.remove('hidden');
   if (utteranceInput) utteranceInput.disabled = true;
@@ -259,6 +325,9 @@ function clearBusy() {
   chat?.classList.remove('is-busy');
   chat?.removeAttribute('aria-busy');
   clearThinkingMessage();
+  if (!streamingEl) {
+    clearStreamingMessage();
+  }
   if (!listening) {
     statusBar?.classList.add('hidden');
     if (statusText) statusText.textContent = '';
@@ -310,6 +379,80 @@ async function api(path, options = {}) {
     ...options,
   });
   return { res, data: res.headers.get('content-type')?.includes('json') ? await res.json() : null };
+}
+
+function parseSseBlock(block) {
+  let eventName = 'message';
+  const dataLines = [];
+  for (const line of block.split('\n')) {
+    if (!line || line.startsWith(':')) continue;
+    if (line.startsWith('event:')) {
+      eventName = line.slice(6).trim();
+    } else if (line.startsWith('data:')) {
+      dataLines.push(line.slice(5).trim());
+    }
+  }
+  if (dataLines.length === 0) return null;
+  try {
+    return { event: eventName, data: JSON.parse(dataLines.join('\n')) };
+  } catch {
+    return null;
+  }
+}
+
+async function consumeVoiceSseStream(res, handlers = {}) {
+  if (!res.body) throw new Error('Streaming not supported');
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+  let finalResult = null;
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+
+    let boundary = buffer.indexOf('\n\n');
+    while (boundary !== -1) {
+      const block = buffer.slice(0, boundary);
+      buffer = buffer.slice(boundary + 2);
+      const parsed = parseSseBlock(block);
+      if (parsed) {
+        if (parsed.event === 'status' && parsed.data?.phase) {
+          handlers.onStatus?.(parsed.data.phase);
+        } else if (parsed.event === 'token' && parsed.data?.text) {
+          handlers.onToken?.(parsed.data.text);
+        } else if (parsed.event === 'done' && parsed.data?.result) {
+          finalResult = parsed.data.result;
+          handlers.onDone?.(parsed.data.result);
+        } else if (parsed.event === 'error') {
+          const err = new Error(parsed.data?.message ?? 'Stream failed');
+          err.status = parsed.data?.status ?? 500;
+          throw err;
+        }
+      }
+      boundary = buffer.indexOf('\n\n');
+    }
+  }
+
+  return finalResult;
+}
+
+async function voiceStreamApi(path, body) {
+  const headers = {
+    'Content-Type': 'application/json',
+    Accept: 'text/event-stream',
+  };
+  const token = await ensureCsrfToken();
+  if (token) headers['x-csrf-token'] = token;
+
+  const res = await fetch(path, {
+    method: 'POST',
+    credentials: 'include',
+    headers,
+    body: JSON.stringify({ ...body, stream: true }),
+  });
+  return res;
 }
 
 const eventTypesManager = {
@@ -500,35 +643,75 @@ async function sendVoiceMessage(utterance, { showUserMessage = true, busyMessage
   confirmCard?.classList.add('hidden');
   pendingConfirmationToken = null;
 
-  setBusy(busyMessage);
+  setBusy(busyMessage, { skipThinking: true });
+  showStreamWaiting(busyMessage);
   try {
-    const { res, data } = await api('/voice', {
-      method: 'POST',
-      body: JSON.stringify({ utterance, source }),
-    });
+    const res = await voiceStreamApi('/voice', { utterance, source });
 
     if (res.status === 401) {
+      clearStreamingMessage();
       showToast('Your session expired. Please sign in again.', 'error');
       show(landing);
       return false;
     }
     if (res.status === 429) {
+      clearStreamingMessage();
+      let data = null;
+      try {
+        data = await res.json();
+      } catch {
+        // ignore
+      }
       const msg = data?.error ?? 'Too many requests. Please wait a moment.';
       addMessage(msg, 'bot');
       showToast(msg, 'error');
       return false;
     }
     if (res.status === 503) {
+      clearStreamingMessage();
+      let data = null;
+      try {
+        data = await res.json();
+      } catch {
+        // ignore
+      }
       const msg = data?.error ?? 'Caladdin is temporarily unavailable. Try again in 30 seconds.';
       addMessage(msg, 'bot');
       showToast(msg, 'error');
       return false;
     }
+    if (!res.ok) {
+      clearStreamingMessage();
+      const msg = `Request failed (${res.status}).`;
+      addMessage(msg, 'bot');
+      showToast(msg, 'error');
+      return false;
+    }
+
+    const contentType = res.headers.get('content-type') ?? '';
+    let data = null;
+
+    if (contentType.includes('text/event-stream')) {
+      data = await consumeVoiceSseStream(res, {
+        onStatus(phase) {
+          if (phase === 'thinking') showStreamWaiting(busyMessage);
+        },
+        onToken(text) {
+          appendStreamToken(text);
+        },
+      });
+      finalizeStreamMessage();
+    } else {
+      clearStreamingMessage();
+      data = await res.json();
+      addMessage(data?.messageToUser ?? 'Done.', 'bot');
+    }
+
+    if (!data) return false;
 
     lastIntent = data?.intent;
 
     if (data?.outcome === 'needs_setup') {
-      addMessage(data?.messageToUser ?? 'I need one quick preference first.', 'bot');
       if (data?.showFormFallback && messages) {
         mountContextualSetupForm(messages, data, {
           api,
@@ -549,11 +732,16 @@ async function sendVoiceMessage(utterance, { showUserMessage = true, busyMessage
       confirmCard?.classList.remove('hidden');
       bindConfirmFocusTrap();
     } else {
-      addMessage(data?.messageToUser ?? 'Done.', 'bot');
       await refreshCalendarWeek();
     }
 
     return true;
+  } catch (err) {
+    clearStreamingMessage();
+    const msg = err?.message ?? 'Something went wrong. Please try again.';
+    addMessage(msg, 'bot');
+    showToast(msg, 'error');
+    return false;
   } finally {
     clearBusy();
   }
