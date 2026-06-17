@@ -713,6 +713,11 @@ h1, h2, h3 {
   margin-bottom: var(--space-3);
 }
 
+/* Home (chat + calendar) — mobile stack, desktop split */
+.screen-home {
+  width: 100%;
+}
+
 .home-layout {
   display: flex;
   flex-direction: column;
@@ -724,46 +729,77 @@ h1, h2, h3 {
   display: flex;
   flex-direction: column;
   min-width: 0;
-  flex: 1 1 auto;
+  flex: 0 0 auto;
 }
 
 .home-calendar {
   flex: 0 0 auto;
   min-width: 0;
+  background: var(--color-bg-elevated);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-4);
+  box-shadow: var(--shadow-sm);
 }
 
-@media (min-width: 960px) {
+@media (max-width: 767px) {
+  .screen-home {
+    padding-left: var(--space-4);
+    padding-right: var(--space-4);
+  }
+
   .home-layout {
-    flex-direction: row;
-    align-items: flex-start;
     gap: var(--space-6);
   }
 
-  .home-chat {
-    flex: 1 1 50%;
-    max-width: 36rem;
-    min-width: 0;
+  .home-calendar {
+    padding: var(--space-4) var(--space-3);
   }
 
-  .home-calendar {
-    flex: 1 1 50%;
-    min-width: 0;
-    position: sticky;
-    top: var(--space-4);
-    max-height: calc(100vh - var(--space-12));
-    overflow: auto;
+  .chip {
+    padding: var(--space-3) var(--space-4);
   }
 }
 
-/* Side-by-side only when there is room for a readable 7-day grid */
-@media (min-width: 1200px) {
+@media (min-width: 1024px) {
+  .screen-home {
+    max-width: var(--content-max-home);
+    padding-left: var(--space-6);
+    padding-right: var(--space-6);
+  }
+
+  .home-layout {
+    flex-direction: row;
+    align-items: stretch;
+    gap: var(--space-6);
+    min-height: calc(100vh - 5.5rem);
+  }
+
   .home-chat {
-    flex: 1 1 45%;
-    max-width: 42rem;
+    flex: 0 0 var(--home-chat-width);
+    width: var(--home-chat-width);
+    max-width: var(--home-chat-width);
+    min-width: 0;
+    padding-right: var(--space-2);
+    border-right: 1px solid var(--color-border);
   }
 
   .home-calendar {
-    flex: 1 1 55%;
+    flex: 1 1 auto;
+    min-width: 0;
+    position: sticky;
+    top: var(--space-4);
+    align-self: flex-start;
+    max-height: calc(100vh - var(--space-8));
+    overflow: auto;
+    border: none;
+    box-shadow: none;
+    background: transparent;
+    padding: 0;
+  }
+
+  .screen-home .messages {
+    max-height: min(58vh, 36rem);
   }
 }
 
@@ -814,32 +850,45 @@ h1, h2, h3 {
 .legend-item.source-caladdin_invite::before { background: #2563eb; }
 .legend-item.source-external::before { background: var(--color-text-muted); }
 
+.calendar-week-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  margin: 0 calc(-1 * var(--space-1));
+  padding: 0 var(--space-1);
+}
+
 .calendar-week-grid {
   display: grid;
-  grid-template-columns: repeat(7, minmax(4.5rem, 1fr));
+  grid-template-columns: repeat(7, minmax(var(--home-day-min), 1fr));
   gap: var(--space-2);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
   overflow: hidden;
   background: var(--color-bg-elevated);
-  min-width: min(100%, 32rem);
+  min-width: 0;
 }
 
-.home-calendar .calendar-week-grid {
-  overflow-x: auto;
-}
-
-@media (max-width: 1199px) {
-  .calendar-week-grid {
-    grid-template-columns: repeat(7, minmax(4.5rem, 1fr));
-    min-width: 32rem;
+@media (max-width: 1023px) {
+  .calendar-week-scroll .calendar-week-grid {
+    min-width: calc(7 * var(--home-day-min) + 6 * var(--space-2));
   }
 }
 
-@media (max-width: 719px) {
+@media (max-width: 767px) {
   .calendar-week-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .calendar-week-scroll .calendar-week-grid {
     min-width: 0;
+  }
+
+  .calendar-week-day:nth-child(7n) {
+    border-right: 1px solid var(--color-border);
+  }
+
+  .calendar-week-day:nth-child(2n) {
+    border-right: none;
   }
 }
 
@@ -847,8 +896,39 @@ h1, h2, h3 {
   border-right: 1px solid var(--color-border);
   border-bottom: 1px solid var(--color-border);
   min-height: 5rem;
+  min-width: 0;
   display: flex;
   flex-direction: column;
+}
+
+@media (min-width: 1024px) {
+  .calendar-week-day {
+    min-height: 6.5rem;
+  }
+
+  .calendar-week-day-head {
+    font-size: 0.8rem;
+  }
+
+  .calendar-week-event {
+    font-size: 0.75rem;
+  }
+
+  .calendar-week-event-time {
+    font-size: 0.7rem;
+  }
+
+  .calendar-week-event-title {
+    white-space: normal;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  .calendar-week-day-events {
+    max-height: 14rem;
+  }
 }
 
 .calendar-week-day:nth-child(7n) { border-right: none; }

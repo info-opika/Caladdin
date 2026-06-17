@@ -51,6 +51,9 @@
   /* Layout */
   --content-max: 480px;
   --content-max-wide: 960px;
+  --content-max-home: 90rem;
+  --home-chat-width: 35rem;
+  --home-day-min: 6.25rem;
   --focus-ring: 0 0 0 3px rgba(194, 65, 12, 0.4);
 }
 

@@ -61,7 +61,9 @@ export function createCalendarWeek({ container, fetchWeek }) {
         <span class="legend-item source-caladdin_invite">Meetings</span>
         <span class="legend-item source-external">Other</span>
       </div>
-      <div class="calendar-week-grid" role="grid" aria-labelledby="calendar-week-title"></div>
+      <div class="calendar-week-scroll">
+        <div class="calendar-week-grid" role="grid" aria-labelledby="calendar-week-title"></div>
+      </div>
       <p class="calendar-week-empty hidden" role="status">No events this week.</p>
     `;
 
