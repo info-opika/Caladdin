@@ -26,8 +26,26 @@ vi.mock('../../src/db/audit.js', () => ({
   insertAuditLog: vi.fn().mockResolvedValue(undefined),
 }));
 
+vi.mock('../../src/db/confirmations.js', () => ({
+  insertPendingConfirmation: vi.fn().mockResolvedValue('confirm-token-abc'),
+}));
+
+vi.mock('../../src/services/notifications.js', () => ({
+  sendConfirmationRequest: vi.fn().mockResolvedValue(true),
+}));
+
+vi.mock('../../src/db/policies.js', () => ({
+  upsertUserPolicy: vi.fn().mockResolvedValue(undefined),
+}));
+
+vi.mock('../../src/services/gcal.js', () => ({
+  gcalCreateRecurringEvent: vi.fn().mockResolvedValue(undefined),
+  gcalListEvents: vi.fn().mockResolvedValue([]),
+}));
+
 vi.mock('../../src/services/auth_service.js', () => ({
   getOAuthClientForUser: mockGetOAuthClientForUser,
+  getOAuth2AuthForUser: vi.fn().mockResolvedValue({}),
 }));
 
 vi.mock('../../src/services/calendar_api.js', () => ({
@@ -97,11 +115,24 @@ describe('Orchestrator', () => {
     mockCheckOperationAllowed.mockResolvedValue({ allowed: true });
   });
 
-  it('bounded PROTECT_BLOCK applies without blast confirmation', async () => {
+  it('PROTECT_BLOCK requires confirmation before applying', async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-06-08T12:00:00.000Z'));
     try {
       const result = await orchestrate(SMALL_PROTECT, CTX);
+      expect(result.success).toBe(false);
+      expect(result.requiresConfirmation).toBe(true);
+      expect(result.confirmationToken).toBe('confirm-token-abc');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('bounded PROTECT_BLOCK applies after confirmation gate skipped', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-06-08T12:00:00.000Z'));
+    try {
+      const result = await orchestrate(SMALL_PROTECT, { ...CTX, _skipConfirmationGate: true });
       expect(result.success).toBe(true);
       expect(result.requiresConfirmation).toBe(false);
     } finally {

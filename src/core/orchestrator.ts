@@ -9,6 +9,7 @@ import { logger } from '../logger.js';
 import { checkOperationAllowed } from '../pilot/pilot_controls.js';
 import { prepareParsedForExecution, normalizeStoredParsed } from './param-extract.js';
 import { getConversationContext } from '../db/conversation-context.js';
+import { generateConfirmationCopy } from './confirmation-copy.js';
 
 import { handleQueryCalendar } from '../handlers/query-calendar.js';
 import { handleCreateEvent } from '../handlers/create-event.js';
@@ -114,12 +115,14 @@ export async function orchestrate(
   const preflight = await preflightSafety(parsed, userId, blastRadius);
 
   if (!_skipConfirmationGate && preflight.requiresConfirmation) {
+    const policy = await ensureDefaultPolicy(userId);
+    const confirmCopy = generateConfirmationCopy(parsed, policy.timezone ?? ctx.timezone ?? 'America/Chicago');
     const token = await insertPendingConfirmation({
       userId,
       intent: parsed.intent,
-      payload: { parsed, requestId },
+      payload: { parsed, requestId, ...(ctx.commandLogId ? { commandLogId: ctx.commandLogId } : {}) },
     });
-    await sendConfirmationRequest(token, `Confirm: ${parsed.intent} - "${parsed.rawUtterance.slice(0, 80)}"`);
+    await sendConfirmationRequest(token, confirmCopy);
     await insertAuditLog({
       userId,
       intent: parsed.intent,
@@ -131,7 +134,7 @@ export async function orchestrate(
       success: false,
       requiresConfirmation: true,
       confirmationToken: token,
-      messageToUser: `This cannot be undone. Confirm: ${parsed.rawUtterance.slice(0, 120)}. Use Approve below (phone notification is optional).`,
+      messageToUser: `${confirmCopy} This cannot be undone. Use Approve below (phone notification is optional).`,
       schemaVersion: 1,
     };
   }

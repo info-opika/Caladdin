@@ -44,6 +44,11 @@ export async function gcalCreateRecurringEvent(
       start: { dateTime: config.startDateTimeIso, timeZone: safeTz(config.timezone) },
       end: { dateTime: config.endDateTimeIso, timeZone: safeTz(config.timezone) },
       recurrence: [`RRULE:FREQ=WEEKLY;BYDAY=${byDay};UNTIL=${config.untilUtcRfc}`],
+      extendedProperties: {
+        private: {
+          caladdin_source: 'block',
+        },
+      },
     },
   });
 }

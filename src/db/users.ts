@@ -139,7 +139,10 @@ export async function updateUserProfile(
     privacyMode?: 'private' | 'trusted' | 'open';
     workingHoursStart?: string;
     workingHoursEnd?: string;
+    defaultMeetingLengthMinutes?: number;
+    meetingTimePreference?: 'morning' | 'afternoon' | 'flexible';
     markOnboardingComplete?: boolean;
+    appendSetupFieldAnswered?: string;
   },
 ): Promise<UserProfileView> {
   const user = await getUserById(userId);
@@ -159,6 +162,15 @@ export async function updateUserProfile(
   if (updates.timezone?.trim()) nextPolicy.timezone = updates.timezone.trim();
   if (updates.workingHoursStart?.trim()) nextPolicy.workingHoursStart = updates.workingHoursStart.trim();
   if (updates.workingHoursEnd?.trim()) nextPolicy.workingHoursEnd = updates.workingHoursEnd.trim();
+  if (updates.defaultMeetingLengthMinutes != null) {
+    nextPolicy.defaultMeetingLengthMinutes = updates.defaultMeetingLengthMinutes;
+  }
+  if (updates.meetingTimePreference) nextPolicy.meetingTimePreference = updates.meetingTimePreference;
+  if (updates.appendSetupFieldAnswered) {
+    const answered = new Set(nextPolicy.setupFieldsAnswered ?? []);
+    answered.add(updates.appendSetupFieldAnswered);
+    nextPolicy.setupFieldsAnswered = [...answered];
+  }
   if (updates.markOnboardingComplete) nextPolicy.onboardingComplete = true;
   await upsertPolicy(userId, nextPolicy);
 
@@ -176,4 +188,30 @@ export async function updateUserProfile(
     onboardingComplete: nextPolicy.onboardingComplete ?? false,
     calendarConnected: false,
   };
+}
+
+export type SetupFieldPatch = {
+  timezone?: string;
+  workingHoursStart?: string;
+  workingHoursEnd?: string;
+  defaultMeetingLengthMinutes?: number;
+  meetingTimePreference?: 'morning' | 'afternoon' | 'flexible';
+};
+
+/** Persist a contextual setup answer and mark the field in setupFieldsAnswered. */
+export async function recordSetupFieldAnswer(
+  userId: string,
+  field: string,
+  patch: SetupFieldPatch,
+): Promise<UserPolicyProfile> {
+  await updateUserProfile(userId, {
+    timezone: patch.timezone,
+    workingHoursStart: patch.workingHoursStart,
+    workingHoursEnd: patch.workingHoursEnd,
+    defaultMeetingLengthMinutes: patch.defaultMeetingLengthMinutes,
+    meetingTimePreference: patch.meetingTimePreference,
+    appendSetupFieldAnswered: field,
+    markOnboardingComplete: field === 'timezone',
+  });
+  return ensureDefaultPolicy(userId);
 }

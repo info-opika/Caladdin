@@ -8,6 +8,7 @@ import {
   sendEmail,
   platformInviteEmailHtml,
   schedulingLinkEmailHtml,
+  schedulingLinkEmailText,
 } from '../../src/services/email.js';
 
 describe('email service', () => {
@@ -48,8 +49,17 @@ describe('email service', () => {
     expect(result.ok).toBe(false);
   });
 
-  it('builds HTML templates', () => {
+  it('builds minimal scheduling invite HTML without Caladdin branding', () => {
+    const html = schedulingLinkEmailHtml('Host', 'https://x.test/s');
+    expect(html).toMatch(/Pick a time/i);
+    expect(html).toMatch(/Host picked two times/i);
+    expect(html).not.toMatch(/Caladdin/i);
+    const text = schedulingLinkEmailText('Host', 'https://x.test/s');
+    expect(text).not.toMatch(/Caladdin/i);
+    expect(text).toContain('https://x.test/s');
+  });
+
+  it('builds platform invite HTML', () => {
     expect(platformInviteEmailHtml('Alex', 'https://x.test/i')).toMatch(/Alex invited you/i);
-    expect(schedulingLinkEmailHtml('Host', 'https://x.test/s')).toMatch(/Pick a time/i);
   });
 });

@@ -86,6 +86,9 @@ export const UserPolicyProfileSchema = z.object({
   contactTiers: z.record(z.number()).default({}),
   shareAvailabilityOnInvite: z.boolean().default(true),
   onboardingComplete: z.boolean().default(false),
+  defaultMeetingLengthMinutes: z.number().int().min(5).max(480).default(30),
+  meetingTimePreference: z.enum(['morning', 'afternoon', 'flexible']).optional(),
+  setupFieldsAnswered: z.array(z.string()).default([]),
 });
 
 export type UserPolicyProfile = z.infer<typeof UserPolicyProfileSchema>;
@@ -120,6 +123,16 @@ export function migratePolicy(raw: unknown): UserPolicyProfile {
   if (!obj.contactTiers) obj.contactTiers = {};
   if (obj.shareAvailabilityOnInvite === undefined) obj.shareAvailabilityOnInvite = true;
   if (obj.onboardingComplete === undefined) obj.onboardingComplete = false;
+  if (obj.defaultMeetingLengthMinutes === undefined) obj.defaultMeetingLengthMinutes = 30;
+  if (!obj.setupFieldsAnswered) obj.setupFieldsAnswered = [];
+  if (obj.meetingTimePreference === undefined && obj.chronotype) {
+    const c = obj.chronotype as string;
+    if (c === 'morning' || c === 'evening') {
+      obj.meetingTimePreference = c === 'evening' ? 'afternoon' : 'morning';
+    } else {
+      obj.meetingTimePreference = 'flexible';
+    }
+  }
   if (!obj.faxEffectConfig) {
     obj.faxEffectConfig = {
       targetSlotsPerOffer: 2,
@@ -151,6 +164,25 @@ export const CalendarEventSchema = z.object({
 });
 
 export type CalendarEvent = z.infer<typeof CalendarEventSchema>;
+
+export const CalendarEventSourceEnum = z.enum(['caladdin_block', 'caladdin_invite', 'external']);
+export type CalendarEventSource = z.infer<typeof CalendarEventSourceEnum>;
+
+export const WeekCalendarEventSchema = z.object({
+  id: z.string().uuid(),
+  title: z.string(),
+  start: z.string(),
+  end: z.string(),
+  source: CalendarEventSourceEnum,
+});
+export type WeekCalendarEvent = z.infer<typeof WeekCalendarEventSchema>;
+
+export const WeekCalendarResponseSchema = z.object({
+  start: z.string(),
+  end: z.string(),
+  events: z.array(WeekCalendarEventSchema),
+});
+export type WeekCalendarResponse = z.infer<typeof WeekCalendarResponseSchema>;
 
 export const ParsedIntentSchema = z.object({
   intent: IntentEnum,
@@ -272,6 +304,7 @@ export interface OrchestratorContext {
   oauthClient?: unknown;
   conversationContext?: import('../db/conversation-context.js').ConversationContext | null;
   _skipConfirmationGate?: boolean;
+  commandLogId?: string;
 }
 
 export interface FailureLogEntry {

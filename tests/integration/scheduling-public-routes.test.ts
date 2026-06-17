@@ -80,6 +80,21 @@ vi.mock('../../src/pilot/pilot_controls.js', () => ({
   checkOperationAllowed: (...args: unknown[]) => mockCheckOperationAllowed(...args),
 }));
 
+vi.mock('../../src/db/invite_calendar_grants.js', () => ({
+  getGrantBySessionId: vi.fn().mockResolvedValue(null),
+  revokeGrantForSession: vi.fn().mockResolvedValue(undefined),
+}));
+
+vi.mock('../../src/db/client.js', () => ({
+  getSupabase: () => ({
+    from: () => ({
+      update: () => ({
+        eq: () => ({ eq: () => ({ error: null }) }),
+      }),
+    }),
+  }),
+}));
+
 function app() {
   const x = express();
   x.use(express.json());
@@ -161,30 +176,28 @@ describe('Public scheduling routes', () => {
     });
   });
 
-  it('GET /s/:token renders polished invitee page with exactly two slot cards', async () => {
+  it('GET /s/:token renders v3 minimal invitee page with exactly two slot buttons', async () => {
+    mockGetSession.mockResolvedValueOnce(baseSession({ host_name: 'Kanth' }));
     const res = await request(app()).get('/s/tok123');
     expect(res.status).toBe(200);
     expect(res.type).toMatch(/html/);
-    expect(res.text).toContain('Two thoughtful times, picked for you.');
-    expect(res.text).toContain('Your host used Caladdin to avoid the calendar back-and-forth.');
-    expect(res.text).toContain('Pick one, or suggest another time.');
-    expect(res.text).toContain('Choose this time');
-    expect((res.text.match(/class="card slot-card"/g) || []).length).toBe(2);
-    expect(res.text).toContain('Option 1');
-    expect(res.text).toContain('Option 2');
-    expect(res.text).toContain('Suggest another time');
-    expect(res.text).toContain('guest1@example.test');
+    expect(res.text).toContain('is inviting you to a meeting');
+    expect(res.text).toContain('Find next common slot');
+    expect(res.text).toContain('Type a preferred time');
+    expect((res.text.match(/class="slot-btn/g) || []).length).toBe(2);
+    expect(res.text).toContain('Share your availability for this meeting only');
+    expect(res.text).not.toContain('Caladdin');
+    expect(res.text).not.toContain('Suggest another time');
   });
 
-  it('GET /s/:token uses host-name hero copy when host name exists', async () => {
+  it('GET /s/:token uses host name in invite line', async () => {
     mockGetSession.mockResolvedValueOnce({
       ...baseSession(),
       host_name: 'Kanth',
     });
     const res = await request(app()).get('/s/tok123');
     expect(res.status).toBe(200);
-    expect(res.text).toContain('Kanth found two thoughtful times for you.');
-    expect(res.text).toContain('Kanth used Caladdin to avoid the calendar back-and-forth.');
+    expect(res.text).toContain('Kanth is inviting you to a meeting.');
   });
 
   it('GET /s/:token shows expired copy when past expires_at', async () => {
@@ -203,8 +216,7 @@ describe('Public scheduling routes', () => {
       google_event_id: 'e1',
     });
     const res = await request(app()).get('/s/tok123');
-    expect(res.text).toContain('You’re all set.');
-    expect(res.text).toContain('will see this on the calendar.');
+    expect(res.text).toContain('You\u2019re all set.');
     expect(res.text).toContain('A calendar invite should follow.');
   });
 
@@ -214,7 +226,7 @@ describe('Public scheduling routes', () => {
     expect(res.status).toBe(200);
     expect(res.text).toContain('These options are no longer available.');
     expect(res.text).toContain('Ask your host for a fresh link.');
-    expect(res.text).toContain('Suggest another time');
+    expect(res.text).toContain('Find next common slot');
   });
 
   it('POST /s/:token/select claims, creates calendar event, then finalizes', async () => {

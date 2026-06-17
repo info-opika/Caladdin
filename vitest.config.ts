@@ -20,7 +20,7 @@ export default defineConfig({
 
       'tests/security/**/*.test.ts',
 
-      'tests/unit/{adts,conversation-context,email-confirmation,email-confirmation-gate,gcal-time,notifications,notifications-service,param-extract,parser,parser-llm,recurring-scheduling-user-scenarios,safety,safety-mutations,pilot-controls,pilot-controls-capacity,confirmation-actions,voice-route-errors,voice-route,waitlist-db,slot-scoring-protected-blocks,freebusy-cache,platform-invites-db,invite-platform-handler,fax-effect,fax-effect-messages,session-store,distributed-rate-limiter,guest-action-token,booking-responses,calendar-api,calendar-service,email-service,auth-service,gcal-service,graceful-failure,availability-engine,webhooks-ics,redis,lc10-wave1-v3-voice-pipeline,lc10-wave1-v2-voice-pipeline,lc10-wave1-v4-finish-wave1,lc10-wave1-v5-blocker-fix,lc10-wave1-haiku-form-filler,lc12-pending-scheduling-memory,destructive-prefilter,query-prefilter,scheduling-link-prefilter,voice-rate-limit-buckets}.test.ts',
+      'tests/unit/{adts,conversation-context,confirmation-copy,parsed-intent-validator-no-reask,email-confirmation,email-confirmation-gate,gcal-time,notifications,notifications-service,param-extract,parser,parser-llm,recurring-scheduling-user-scenarios,safety,safety-mutations,pilot-controls,pilot-controls-capacity,confirmation-actions,voice-route-errors,voice-route,waitlist-db,slot-scoring-protected-blocks,freebusy-cache,platform-invites-db,invite-platform-handler,fax-effect,fax-effect-messages,session-store,distributed-rate-limiter,guest-action-token,booking-responses,calendar-api,calendar-service,email-service,auth-service,gcal-service,graceful-failure,availability-engine,webhooks-ics,redis,lc10-wave1-v3-voice-pipeline,lc10-wave1-v2-voice-pipeline,lc10-wave1-v4-finish-wave1,lc10-wave1-v5-blocker-fix,lc10-wave1-haiku-form-filler,lc12-pending-scheduling-memory,destructive-prefilter,query-prefilter,scheduling-link-prefilter,voice-rate-limit-buckets,event-source,mutual-slot-engine}.test.ts',
 
       'tests/unit/handlers/**/*.test.ts',
 
@@ -32,7 +32,7 @@ export default defineConfig({
 
       'tests/unit/voice-ui-stt.test.ts',
 
-      'tests/integration/{orchestrator,orchestrator-handlers,scheduling-public-routes,waitlist-routes,auth-oauth-mvp,invite-routes,event-types-routes,profile-api,user-data-api,guest-lifecycle,jobs-routes,book-public-routes,book-slots-routes,booking-flow-smoke,ceo-handoff-smoke,health,availability-engine,webhooks-dispatch,webhooks-routes,calendar-ics,team-booking}.test.ts',
+      'tests/integration/{orchestrator,orchestrator-handlers,scheduling-public-routes,schedule-public-v3,invite-grant,waitlist-routes,auth-oauth-mvp,invite-routes,event-types-routes,profile-api,user-data-api,guest-lifecycle,jobs-routes,book-public-routes,book-slots-routes,booking-flow-smoke,ceo-handoff-smoke,health,availability-engine,webhooks-dispatch,webhooks-routes,calendar-ics,calendar-week-api,team-booking,contextual-setup,command-log}.test.ts',
 
       'tests/integration/db/rls.integration.test.ts',
 

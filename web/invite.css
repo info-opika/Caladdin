@@ -1,0 +1,304 @@
+/* v3 invitee screen — dark, minimal, mobile-first */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body.invite-page {
+  margin: 0;
+  min-height: 100dvh;
+  background: #0f0f0f;
+  color: #f2f2f2;
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  font-size: 1rem;
+  line-height: 1.5;
+}
+
+#booking-root {
+  max-width: 28rem;
+  margin: 0 auto;
+  padding: 1.5rem 1.25rem 2.5rem;
+}
+
+.invite-host-line {
+  margin: 0 0 1.5rem;
+  font-size: 1.125rem;
+  font-weight: 500;
+}
+
+.invite-sub {
+  margin: 0 0 1rem;
+  color: #a8a8a8;
+  font-size: 0.9375rem;
+}
+
+.slot-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-bottom: 1.25rem;
+}
+
+.slot-btn {
+  display: block;
+  width: 100%;
+  padding: 1rem 1.125rem;
+  border: 1px solid #3a3a3a;
+  border-radius: 0.625rem;
+  background: #1a1a1a;
+  color: #f2f2f2;
+  font-size: 1rem;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.slot-btn:hover:not(:disabled) {
+  border-color: #5a5a5a;
+  background: #222;
+}
+
+.slot-btn:disabled,
+.slot-btn.is-loading {
+  opacity: 0.55;
+  cursor: wait;
+}
+
+.btn-secondary {
+  display: block;
+  width: 100%;
+  padding: 0.875rem 1rem;
+  margin-bottom: 1.25rem;
+  border: 1px solid #3a3a3a;
+  border-radius: 0.625rem;
+  background: transparent;
+  color: #e8e8e8;
+  font-size: 0.9375rem;
+  font-weight: 500;
+  text-align: center;
+  cursor: pointer;
+}
+
+.btn-secondary:hover:not(:disabled) {
+  border-color: #5a5a5a;
+  background: #1a1a1a;
+}
+
+.btn-secondary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.preferred-time-form {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.preferred-time-form input[type='text'] {
+  flex: 1;
+  min-width: 0;
+  padding: 0.75rem 0.875rem;
+  border: 1px solid #3a3a3a;
+  border-radius: 0.625rem;
+  background: #1a1a1a;
+  color: #f2f2f2;
+  font-size: 1rem;
+}
+
+.preferred-time-form input::placeholder {
+  color: #6b6b6b;
+}
+
+.preferred-time-form button[type='submit'] {
+  flex-shrink: 0;
+  padding: 0.75rem 1rem;
+  border: none;
+  border-radius: 0.625rem;
+  background: #f2f2f2;
+  color: #0f0f0f;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.preferred-time-form button:disabled {
+  opacity: 0.5;
+  cursor: wait;
+}
+
+.grant-section {
+  padding-top: 0.5rem;
+  border-top: 1px solid #2a2a2a;
+}
+
+.grant-link {
+  display: block;
+  color: #9ec5ff;
+  font-size: 0.875rem;
+  text-decoration: none;
+  text-align: center;
+  padding: 0.5rem 0;
+}
+
+.grant-link:hover {
+  text-decoration: underline;
+}
+
+.grant-window-panel {
+  margin-top: 0.75rem;
+}
+
+.grant-window-panel label {
+  display: block;
+  margin-bottom: 0.25rem;
+  font-size: 0.8125rem;
+  color: #a8a8a8;
+}
+
+.grant-window-panel input {
+  width: 100%;
+  margin-bottom: 0.625rem;
+  padding: 0.625rem 0.75rem;
+  border: 1px solid #3a3a3a;
+  border-radius: 0.5rem;
+  background: #1a1a1a;
+  color: #f2f2f2;
+  font-size: 0.9375rem;
+}
+
+.grant-window-panel button {
+  width: 100%;
+  padding: 0.75rem;
+  border: none;
+  border-radius: 0.5rem;
+  background: #2a2a2a;
+  color: #f2f2f2;
+  font-size: 0.9375rem;
+  cursor: pointer;
+}
+
+.booking-status {
+  display: none;
+  margin-bottom: 1rem;
+  padding: 0.75rem 0.875rem;
+  border-radius: 0.5rem;
+  font-size: 0.875rem;
+}
+
+.booking-status.is-visible {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.booking-status.is-info {
+  background: #1e2a3a;
+  color: #b8d4f0;
+}
+
+.booking-status.is-success {
+  background: #1a2e1f;
+  color: #a8ddb5;
+}
+
+.booking-status.is-error {
+  background: #2e1a1a;
+  color: #f0b8b8;
+}
+
+.status-spinner {
+  width: 1rem;
+  height: 1rem;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.invite-empty h1,
+.invite-confirmed h1 {
+  margin: 0 0 0.75rem;
+  font-size: 1.25rem;
+  font-weight: 600;
+}
+
+.hidden {
+  display: none !important;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Action pages (cancel / reschedule via email links) */
+.action-panel {
+  margin-bottom: 1rem;
+}
+
+.action-slot-options {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.action-slot-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  padding: 0.75rem;
+  border: 1px solid #3a3a3a;
+  border-radius: 0.5rem;
+  cursor: pointer;
+}
+
+.action-slot-option input {
+  margin-top: 0.2rem;
+}
+
+.invite-back-link {
+  display: inline-block;
+  margin-top: 1rem;
+  color: #9ec5ff;
+  font-size: 0.875rem;
+  text-decoration: none;
+}
+
+.choose-btn {
+  display: block;
+  width: 100%;
+  padding: 0.875rem 1rem;
+  border: none;
+  border-radius: 0.625rem;
+  background: #f2f2f2;
+  color: #0f0f0f;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.choose-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}

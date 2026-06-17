@@ -31,8 +31,8 @@ jobsRouter.post('/reminders', async (_req: Request, res: Response) => {
 
 jobsRouter.post('/session-expiry', async (_req: Request, res: Response) => {
   try {
-    const count = await runSessionExpiry();
-    res.json({ status: 'complete', expired: count });
+    const result = await runSessionExpiry();
+    res.json({ status: 'complete', ...result, expired: result.sessions });
   } catch {
     res.status(500).json({ error: 'Internal server error' });
   }

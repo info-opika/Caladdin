@@ -20,6 +20,17 @@ describe('ADTs', () => {
     expect(p.protectedBlocks).toEqual([]);
   });
 
+  it('v3: defaults defaultMeetingLengthMinutes and setupFieldsAnswered', () => {
+    const p = migratePolicy({});
+    expect(p.defaultMeetingLengthMinutes).toBe(30);
+    expect(p.setupFieldsAnswered).toEqual([]);
+  });
+
+  it('v3: maps chronotype evening to meetingTimePreference afternoon', () => {
+    const p = migratePolicy({ chronotype: 'evening' });
+    expect(p.meetingTimePreference).toBe('afternoon');
+  });
+
   it('validates IntentResult', () => {
     const r = IntentResultSchema.parse({
       intent: 'QUERY_CALENDAR',

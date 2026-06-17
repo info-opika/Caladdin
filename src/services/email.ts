@@ -48,10 +48,11 @@ export function platformInviteEmailHtml(inviterName: string, inviteLink: string)
 }
 
 export function schedulingLinkEmailHtml(hostName: string, link: string): string {
-  return `
-    <p>${hostName} picked two times that work for a meeting with you.</p>
-    <p><a href="${link}">Pick a time</a></p>
-  `;
+  return `<p>${hostName} picked two times that work for a meeting with you.</p><p><a href="${link}">Pick a time</a></p>`;
+}
+
+export function schedulingLinkEmailText(hostName: string, link: string): string {
+  return `${hostName} picked two times that work for a meeting with you.\nPick a time: ${link}`;
 }
 
 export { config };

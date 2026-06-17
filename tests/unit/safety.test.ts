@@ -28,9 +28,9 @@ describe('Safety — preflightSafety', () => {
     expect(result.blocked).toBe(false);
   });
 
-  it('allows non-destructive PROTECT_BLOCK', async () => {
+  it('requires confirmation for PROTECT_BLOCK writes', async () => {
     const result = await preflightSafety(parsed('PROTECT_BLOCK', { tier: 2 }), '8b616ceb-7e77-4886-9361-92a534374fac');
-    expect(result.requiresConfirmation).toBe(false);
+    expect(result.requiresConfirmation).toBe(true);
     expect(result.blocked).toBe(false);
   });
 });

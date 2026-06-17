@@ -28,6 +28,7 @@ vi.mock('../../../src/db/scheduling_sessions.js', () => ({
 vi.mock('../../../src/services/email.js', () => ({
   sendEmail: (...a: unknown[]) => mockSendEmail(...a),
   schedulingLinkEmailHtml: (name: string, link: string) => `<a href="${link}">${name}</a>`,
+  schedulingLinkEmailText: (name: string, link: string) => `${name}: ${link}`,
 }));
 
 vi.mock('../../../src/config.js', () => ({
@@ -56,6 +57,7 @@ const POLICY: UserPolicyProfile = {
   },
   protectedBlocks: [],
   contactTiers: {},
+  defaultMeetingLengthMinutes: 45,
   workingHoursStart: '09:00',
   workingHoursEnd: '17:00',
 };
@@ -80,6 +82,25 @@ describe('handleOfferSpecific', () => {
     const result = await handleOfferSpecific(parsed, ctx, null);
     expect(result.success).toBe(false);
     expect(mockCreateSession).not.toHaveBeenCalled();
+  });
+
+  it('uses policy defaultMeetingLengthMinutes when duration omitted', async () => {
+    mockGenerateSlots.mockResolvedValue([]);
+    const parsed = ParsedIntentSchema.parse({
+      intent: 'OFFER_SPECIFIC',
+      confidence: 0.9,
+      params: { recipientName: 'Guest' },
+      mappingMethod: 'direct',
+      rawUtterance: 'offer guest two times',
+    });
+    await handleOfferSpecific(parsed, ctx, null);
+    expect(mockGenerateSlots).toHaveBeenCalledWith(
+      'user-1',
+      POLICY,
+      45,
+      7,
+      expect.any(Object),
+    );
   });
 
   it('creates proposed events, session, and scheduling link', async () => {

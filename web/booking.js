@@ -1,4 +1,4 @@
-/** Public booking page interactions — no alert() */
+/** v3 invitee screen — minimal slot select, find-next, preferred time, grant window */
 
 function showBookingStatus(message, variant = 'info', { loading = false } = {}) {
   const el = document.getElementById('booking-status');
@@ -24,69 +24,26 @@ function setButtonLoading(btn, loading) {
   btn.setAttribute('aria-busy', loading ? 'true' : 'false');
 }
 
-function clearFieldErrors(form) {
-  form?.querySelectorAll('.field-error').forEach((el) => el.remove());
-  form?.querySelectorAll('.is-invalid').forEach((el) => el.classList.remove('is-invalid'));
-}
-
-function showFieldError(input, message) {
-  if (!input) return;
-  input.classList.add('is-invalid');
-  input.setAttribute('aria-invalid', 'true');
-  const err = document.createElement('p');
-  err.className = 'field-error';
-  err.id = `${input.id}-error`;
-  err.setAttribute('role', 'alert');
-  err.textContent = message;
-  input.setAttribute('aria-describedby', err.id);
-  input.parentElement?.appendChild(err);
-}
-
-function isValidEmail(value) {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
-}
-
-function guestValidationMessages() {
-  return {
-    name_required: 'Please enter your name.',
-    email_required: 'Please enter your email.',
-    email_invalid: 'Please enter a valid email address.',
-  };
-}
-
-function validateGuestForm(form) {
-  clearFieldErrors(form);
-  const nameInput = form.querySelector('[name="guestName"]');
-  const emailInput = form.querySelector('[name="guestEmail"]');
-  const name = nameInput?.value?.trim() ?? '';
-  const email = emailInput?.value?.trim() ?? '';
-  let valid = true;
-
-  if (!name) {
-    showFieldError(nameInput, guestValidationMessages().name_required);
-    valid = false;
+function formatSlotLabel(isoStart) {
+  try {
+    return new Date(isoStart).toLocaleString(undefined, {
+      weekday: 'short',
+      hour: 'numeric',
+      minute: '2-digit',
+    });
+  } catch {
+    return isoStart;
   }
-  if (!email) {
-    showFieldError(emailInput, guestValidationMessages().email_required);
-    valid = false;
-  } else if (!isValidEmail(email)) {
-    showFieldError(emailInput, guestValidationMessages().email_invalid);
-    valid = false;
-  }
-
-  return valid ? { name, email, notes: form.querySelector('[name="guestNotes"]')?.value?.trim() || undefined } : null;
 }
 
-function errorMessageForSelect(status, body) {
-  const guestErrors = guestValidationMessages();
-  if (status === 400 && body?.error && guestErrors[body.error]) {
-    return guestErrors[body.error];
-  }
-  if (status === 429) return 'Too many attempts. Please wait a moment and try again.';
-  if (status === 503) return body?.message ?? 'Booking is temporarily unavailable.';
-  if (status === 409) return 'That time is no longer available. Ask your host for a fresh link.';
-  if (status === 502) return 'Could not add this to the calendar. Try another time.';
-  return body?.error ?? 'Something went wrong. Please try again.';
+function renderSlotButtons(slots) {
+  const grid = document.querySelector('.slot-grid');
+  if (!grid || !slots?.length) return;
+  grid.innerHTML = slots.slice(0, 2).map((s, i) => `
+    <button type="button" class="slot-btn choose-btn" data-index="${i}" aria-label="Select ${formatSlotLabel(s.start)}">
+      ${formatSlotLabel(s.start)}
+    </button>`).join('');
+  bindSlotButtons(grid.closest('#booking-root')?.dataset.token);
 }
 
 function renderSuccessView(root, { slotLabel, actions }) {
@@ -99,28 +56,24 @@ function renderSuccessView(root, { slotLabel, actions }) {
 
   const manageLinks = (cancelHref || rescheduleHref)
     ? `<div class="booking-manage">
-        <p class="booking-sub">Need to change plans?</p>
+        <p class="invite-sub">Need to change plans?</p>
         <div class="booking-manage-actions">
           ${rescheduleHref ? `<a class="btn-secondary booking-manage-btn" href="${rescheduleHref}">Reschedule</a>` : ''}
           ${cancelHref ? `<a class="btn-secondary booking-manage-btn is-danger" href="${cancelHref}">Cancel meeting</a>` : ''}
         </div>
-        <p class="booking-tz-note">You&apos;ll also get reminder emails with these links.</p>
       </div>`
-    : `<p class="booking-tz-note">Reminder emails will include links to reschedule or cancel.</p>`;
+    : '';
 
   root.innerHTML = `
-    <div class="booking-confirmed">
+    <div class="invite-confirmed">
       <h1>You&apos;re all set.</h1>
-      ${slotLabel ? `<p class="booking-sub">${slotLabel}</p>` : ''}
-      <p class="booking-sub">A calendar invite should follow shortly.</p>
+      ${slotLabel ? `<p class="invite-sub">${slotLabel}</p>` : ''}
+      <p class="invite-sub">A calendar invite should follow shortly.</p>
       ${manageLinks}
     </div>`;
 }
 
-async function selectSlot(token, slotIndex, guest, btn, { slotLabel } = {}) {
-  const form = btn?.closest('form');
-  const card = btn?.closest('.slot-card');
-  card?.classList.add('is-loading');
+async function selectSlot(token, slotIndex, btn) {
   setButtonLoading(btn, true);
   hideBookingStatus();
 
@@ -128,95 +81,106 @@ async function selectSlot(token, slotIndex, guest, btn, { slotLabel } = {}) {
     const res = await fetch(`/s/${token}/select`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ slotIndex, guest }),
+      body: JSON.stringify({ slotIndex }),
     });
     const body = res.headers.get('content-type')?.includes('json') ? await res.json() : null;
 
     if (res.ok) {
       const root = document.getElementById('booking-root');
-      if (root && (body?.actions || slotLabel)) {
+      const slotLabel = btn?.textContent?.trim() ?? '';
+      if (root) {
         renderSuccessView(root, { slotLabel, actions: body?.actions });
         window.scrollTo({ top: 0, behavior: 'smooth' });
         return;
       }
-      showBookingStatus('Confirmed! Updating your booking…', 'success', { loading: true });
       window.location.reload();
       return;
     }
 
-    if (res.status === 400 && form && body?.error && guestValidationMessages()[body.error]) {
-      const fieldMap = {
-        name_required: '[name="guestName"]',
-        email_required: '[name="guestEmail"]',
-        email_invalid: '[name="guestEmail"]',
-      };
-      const input = form.querySelector(fieldMap[body.error]);
-      if (input) {
-        showFieldError(input, guestValidationMessages()[body.error]);
-        input.focus();
-      }
-    } else {
-      showBookingStatus(errorMessageForSelect(res.status, body), 'error');
-    }
-    card?.classList.remove('is-loading');
-    setButtonLoading(btn, false);
+    const messages = {
+      name_required: 'We need your name to confirm.',
+      email_required: 'We need your email to confirm.',
+      email_invalid: 'Please use a valid email address.',
+    };
+    showBookingStatus(
+      messages[body?.error] ?? (res.status === 409
+        ? 'That time is no longer available.'
+        : 'Something went wrong. Please try again.'),
+      'error',
+    );
   } catch {
     showBookingStatus('Network error. Check your connection and try again.', 'error');
-    card?.classList.remove('is-loading');
+  } finally {
     setButtonLoading(btn, false);
   }
 }
 
-function openGuestIntake(slotIndex, slotLabel) {
-  const panel = document.getElementById('guest-intake-panel');
-  const slotGrid = document.querySelector('.slot-grid');
-  if (!panel) return;
-
-  panel.dataset.slotIndex = String(slotIndex);
-  panel.dataset.slotLabel = slotLabel ?? '';
-  const labelEl = document.getElementById('guest-intake-slot-label');
-  if (labelEl) labelEl.textContent = slotLabel ?? '';
-
-  slotGrid?.classList.add('hidden');
-  document.getElementById('propose-toggle')?.closest('.booking-links')?.classList.add('hidden');
-  panel.classList.remove('hidden');
-  hideBookingStatus();
-  clearFieldErrors(document.getElementById('guest-intake-form'));
-  panel.querySelector('[name="guestName"]')?.focus();
-}
-
-function closeGuestIntake() {
-  const panel = document.getElementById('guest-intake-panel');
-  panel?.classList.add('hidden');
-  document.querySelector('.slot-grid')?.classList.remove('hidden');
-  document.getElementById('propose-toggle')?.closest('.booking-links')?.classList.remove('hidden');
-  hideBookingStatus();
-}
-
-function initGuestIntake(token) {
-  document.querySelectorAll('.choose-btn').forEach((btn) => {
+function bindSlotButtons(token) {
+  if (!token) return;
+  document.querySelectorAll('.slot-btn.choose-btn').forEach((btn) => {
+    btn.replaceWith(btn.cloneNode(true));
+  });
+  document.querySelectorAll('.slot-btn.choose-btn').forEach((btn) => {
     btn.addEventListener('click', () => {
       const index = parseInt(btn.dataset.index ?? '0', 10);
-      const card = btn.closest('.slot-card');
-      const slotLabel = card?.querySelector('.slot-time')?.textContent?.trim() ?? '';
-      openGuestIntake(index, slotLabel);
+      selectSlot(token, index, btn);
     });
   });
+}
 
-  document.getElementById('guest-intake-cancel')?.addEventListener('click', closeGuestIntake);
+async function findNextSlots(token, btn) {
+  setButtonLoading(btn, true);
+  hideBookingStatus();
+  try {
+    const res = await fetch(`/s/${token}/next-slots`, { method: 'POST' });
+    const body = res.headers.get('content-type')?.includes('json') ? await res.json() : null;
+    if (res.ok && body?.slots?.length) {
+      renderSlotButtons(body.slots);
+      showBookingStatus('Here are the next available times.', 'success');
+      return;
+    }
+    if (res.status === 403 || body?.error === 'grant_required') {
+      showBookingStatus('Share your availability below to find a common time.', 'info');
+      return;
+    }
+    showBookingStatus('No more times found right now. Try typing a preferred time.', 'error');
+  } catch {
+    showBookingStatus('Network error. Try again in a moment.', 'error');
+  } finally {
+    setButtonLoading(btn, false);
+  }
+}
 
-  const form = document.getElementById('guest-intake-form');
-  form?.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const guest = validateGuestForm(form);
-    if (!guest) return;
+async function saveGrantWindow(token) {
+  const startInput = document.getElementById('grant-window-start');
+  const endInput = document.getElementById('grant-window-end');
+  const saveBtn = document.getElementById('grant-window-save');
+  if (!startInput?.value || !endInput?.value) {
+    showBookingStatus('Choose a start and end date for your availability.', 'error');
+    return;
+  }
 
-    const panel = document.getElementById('guest-intake-panel');
-    const slotIndex = parseInt(panel?.dataset.slotIndex ?? '0', 10);
-    const slotLabel = panel?.dataset.slotLabel ?? '';
-    const submitBtn = form.querySelector('[type="submit"]');
-    await selectSlot(token, slotIndex, guest, submitBtn, { slotLabel });
-  });
+  const start = new Date(`${startInput.value}T09:00:00`).toISOString();
+  const end = new Date(`${endInput.value}T17:00:00`).toISOString();
+  setButtonLoading(saveBtn, true);
+  try {
+    const res = await fetch(`/s/${token}/grant/window`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ start, end }),
+    });
+    if (res.ok) {
+      showBookingStatus('Availability window saved. Finding common times…', 'info', { loading: true });
+      const findBtn = document.getElementById('find-next-slot');
+      await findNextSlots(token, findBtn);
+      return;
+    }
+    showBookingStatus('Could not save your window. Try again.', 'error');
+  } catch {
+    showBookingStatus('Network error. Try again.', 'error');
+  } finally {
+    setButtonLoading(saveBtn, false);
+  }
 }
 
 function initActionPage() {
@@ -260,21 +224,14 @@ function initActionPage() {
           ? 'Your host has been notified.'
           : 'Your calendar invite will reflect the new time.';
         root.innerHTML = `
-          <div class="booking-confirmed">
+          <div class="invite-confirmed">
             <h1>${heading}</h1>
-            <p class="booking-sub">${detail}</p>
-            <a class="cta" href="/s/${token}">Back to booking</a>
+            <p class="invite-sub">${detail}</p>
           </div>`;
         return;
       }
 
-      const messages = {
-        invalid_action_token: 'This link is invalid or expired. Use the link from your latest email.',
-        not_cancellable: 'This meeting can no longer be cancelled.',
-        not_reschedulable: 'This meeting can no longer be rescheduled.',
-        gcal_failed: 'Could not update the calendar. Try again or contact your host.',
-      };
-      showBookingStatus(messages[body?.error] ?? 'Something went wrong. Please try again.', 'error');
+      showBookingStatus('Something went wrong. Please try again.', 'error');
     } catch {
       showBookingStatus('Network error. Check your connection and try again.', 'error');
     } finally {
@@ -283,7 +240,7 @@ function initActionPage() {
   });
 }
 
-function initBookingPage() {
+function initInvitePage() {
   const root = document.getElementById('booking-root');
   if (!root) return;
 
@@ -295,69 +252,64 @@ function initBookingPage() {
   const token = root.dataset.token;
   if (!token) return;
 
-  initGuestIntake(token);
+  const params = new URLSearchParams(window.location.search);
+  if (params.get('grant') === 'connected') {
+    showBookingStatus('Calendar connected for this meeting only.', 'success');
+    window.history.replaceState({}, '', window.location.pathname);
+  } else if (params.get('grant') === 'error') {
+    showBookingStatus('Could not connect your calendar. Try again.', 'error');
+    window.history.replaceState({}, '', window.location.pathname);
+  }
 
-  const proposeToggle = document.getElementById('propose-toggle');
-  const proposePanel = document.getElementById('propose-panel');
-  const proposeCancel = document.getElementById('propose-cancel');
-  const proposeForm = document.getElementById('propose-form');
+  bindSlotButtons(token);
 
-  proposeToggle?.addEventListener('click', (e) => {
-    e.preventDefault();
-    closeGuestIntake();
-    proposePanel?.classList.remove('hidden');
-    proposeToggle.setAttribute('aria-expanded', 'true');
-    proposePanel?.querySelector('input, select, textarea')?.focus();
+  document.getElementById('find-next-slot')?.addEventListener('click', (e) => {
+    findNextSlots(token, e.currentTarget);
   });
 
-  proposeCancel?.addEventListener('click', () => {
-    proposePanel?.classList.add('hidden');
-    proposeToggle?.setAttribute('aria-expanded', 'false');
-    hideBookingStatus();
-  });
-
-  proposeForm?.addEventListener('submit', async (e) => {
+  document.getElementById('preferred-time-form')?.addEventListener('submit', async (e) => {
     e.preventDefault();
-    const submitBtn = proposeForm.querySelector('[type="submit"]');
+    const form = e.currentTarget;
+    const input = form.querySelector('[name="preferredTime"]');
+    const submitBtn = form.querySelector('[type="submit"]');
+    const text = input?.value?.trim();
+    if (!text) {
+      showBookingStatus('Type a preferred time first.', 'error');
+      return;
+    }
+
     setButtonLoading(submitBtn, true);
     hideBookingStatus();
-
-    const dateInput = proposeForm.querySelector('[name="proposedDate"]');
-    const windowInput = proposeForm.querySelector('[name="proposedTimeWindow"]');
-    const noteInput = proposeForm.querySelector('[name="note"]');
-
     try {
       const res = await fetch(`/s/${token}/propose`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          proposedDate: dateInput?.value || new Date().toISOString().slice(0, 10),
-          proposedTimeWindow: windowInput?.value || 'flexible',
-          note: noteInput?.value?.trim() || undefined,
+          note: text,
+          proposedTimeWindow: 'flexible',
+          proposedDate: new Date().toISOString().slice(0, 10),
         }),
       });
-
       if (res.ok) {
-        showBookingStatus('Your suggestion was sent to your host.', 'success');
-        proposePanel?.classList.add('hidden');
-        proposeToggle?.setAttribute('aria-expanded', 'false');
-        proposeForm.reset();
+        showBookingStatus('Your preference was sent to your host.', 'success');
+        form.reset();
       } else {
-        const body = res.headers.get('content-type')?.includes('json') ? await res.json() : null;
-        showBookingStatus(body?.error === 'already_confirmed'
-          ? 'This meeting is already confirmed.'
-          : 'Could not send your suggestion. Try again.', 'error');
+        showBookingStatus('Could not send your message. Try again.', 'error');
       }
     } catch {
-      showBookingStatus('Network error. Try again in a moment.', 'error');
+      showBookingStatus('Network error. Try again.', 'error');
     } finally {
       setButtonLoading(submitBtn, false);
     }
   });
+
+  document.getElementById('grant-window-save')?.addEventListener('click', () => {
+    saveGrantWindow(token);
+  });
 }
 
 if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', initBookingPage);
+  document.addEventListener('DOMContentLoaded', initInvitePage);
 } else {
-  initBookingPage();
+  initInvitePage();
 }

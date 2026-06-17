@@ -79,6 +79,21 @@ vi.mock('../../src/db/usage_events.js', () => ({
   recordUsageEvent: vi.fn(),
 }));
 
+vi.mock('../../src/db/invite_calendar_grants.js', () => ({
+  getGrantBySessionId: vi.fn().mockResolvedValue(null),
+  revokeGrantForSession: vi.fn().mockResolvedValue(undefined),
+}));
+
+vi.mock('../../src/db/client.js', () => ({
+  getSupabase: () => ({
+    from: () => ({
+      update: () => ({
+        eq: () => ({ eq: () => ({ error: null }) }),
+      }),
+    }),
+  }),
+}));
+
 function app() {
   const x = express();
   x.use(express.json());
@@ -157,11 +172,21 @@ describe('guest lifecycle routes', () => {
     });
   });
 
-  it('POST /s/:token/select requires guest name and email', async () => {
+  it('POST /s/:token/select requires guest when session has no invitee email', async () => {
+    store.row = baseSession({ invitee_email: null });
     const res = await request(app()).post('/s/tok123/select').send({ slotIndex: 0 });
     expect(res.status).toBe(400);
     expect(res.body.error).toBe('name_required');
     expect(mockClaim).not.toHaveBeenCalled();
+  });
+
+  it('POST /s/:token/select uses session invitee email without guest form', async () => {
+    const res = await request(app()).post('/s/tok123/select').send({ slotIndex: 0 });
+    expect(res.status).toBe(200);
+    expect(mockUpsertGuest).toHaveBeenCalledWith({
+      sessionId: 's1',
+      guest: { name: 'guest1', email: 'guest1@example.test' },
+    });
   });
 
   it('POST /s/:token/select stores guest intake before calendar write', async () => {

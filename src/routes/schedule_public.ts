@@ -28,6 +28,11 @@ import { dispatchBookingWebhooks } from '../services/webhooks.js';
 import { recordUsageEvent } from '../db/usage_events.js';
 import { checkOperationAllowed } from '../pilot/pilot_controls.js';
 import { bookingSelectRateLimiter } from '../core/rate-limiter.js';
+import { getGrantBySessionId, revokeGrantForSession } from '../db/invite_calendar_grants.js';
+import { listBusyFromGCal } from '../services/calendar_api.js';
+import { findMutualSlots } from '../services/mutual_slot_engine.js';
+import { migratePolicy } from '../core/adts.js';
+import { getSupabase } from '../db/client.js';
 
 const router = Router();
 
@@ -59,13 +64,24 @@ function escapeHtml(value: string): string {
     .replace(/"/g, '&quot;');
 }
 
-const BOOKING_HEAD = `
+function formatSlotButtonLabel(slot: { start: string; end: string }, tz: string): string {
+  const start = DateTime.fromISO(slot.start, { zone: tz });
+  if (!start.isValid) return slot.start;
+  return start.toFormat('ccc, h:mm a');
+}
+
+function parseHourFromTime(hhmm: string, fallback: number): number {
+  const m = /^(\d{1,2}):/.exec(hhmm);
+  if (!m) return fallback;
+  const h = parseInt(m[1], 10);
+  return Number.isFinite(h) ? h : fallback;
+}
+
+const INVITE_HEAD = `
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
-  <meta name="theme-color" content="#d97706"/>
-  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=Fraunces:wght@600&display=swap" rel="stylesheet"/>
-  <link rel="stylesheet" href="/tokens.css"/>
-  <link rel="stylesheet" href="/booking.css"/>
+  <meta name="theme-color" content="#0f0f0f"/>
+  <link rel="stylesheet" href="/invite.css"/>
 `;
 
 function guestActionLinksHtml(sessionToken: string): string {
@@ -73,34 +89,11 @@ function guestActionLinksHtml(sessionToken: string): string {
   const rescheduleUrl = escapeHtml(guestActionUrl(sessionToken, 'reschedule'));
   return `
     <div class="booking-manage">
-      <p class="booking-sub">Need to change plans?</p>
+      <p class="invite-sub">Need to change plans?</p>
       <div class="booking-manage-actions">
         <a class="btn-secondary booking-manage-btn" href="${rescheduleUrl}">Reschedule</a>
         <a class="btn-secondary booking-manage-btn is-danger" href="${cancelUrl}">Cancel meeting</a>
       </div>
-      <p class="booking-tz-note">Reminder emails include these links too.</p>
-    </div>`;
-}
-
-function guestIntakePanelHtml(prefillEmail = ''): string {
-  const emailValue = prefillEmail ? ` value="${escapeHtml(prefillEmail)}"` : '';
-  return `
-    <div id="guest-intake-panel" class="guest-intake-panel hidden" aria-labelledby="guest-intake-heading">
-      <h2 id="guest-intake-heading">Almost there — your details</h2>
-      <p class="booking-sub">We&apos;ll send a calendar invite to your email.</p>
-      <p id="guest-intake-slot-label" class="guest-intake-slot"></p>
-      <form id="guest-intake-form" novalidate>
-        <label for="guest-name">Your name</label>
-        <input type="text" id="guest-name" name="guestName" autocomplete="name" required />
-        <label for="guest-email">Email</label>
-        <input type="email" id="guest-email" name="guestEmail" autocomplete="email" required${emailValue} />
-        <label for="guest-notes">Notes for your host (optional)</label>
-        <textarea id="guest-notes" name="guestNotes" rows="2" placeholder="Anything helpful before you meet"></textarea>
-        <div class="guest-intake-actions">
-          <button type="submit" class="choose-btn">Confirm this time</button>
-          <button type="button" id="guest-intake-cancel" class="btn-secondary">Back</button>
-        </div>
-      </form>
     </div>`;
 }
 
@@ -113,21 +106,15 @@ function selectActionPayload(sessionToken: string) {
   };
 }
 
-function bookingShell(content: string, { title = 'Caladdin Booking', script = true, rootAttrs = '' }: { title?: string; script?: boolean; rootAttrs?: string } = {}): string {
+function bookingShell(content: string, { title = 'Meeting invite', script = true, rootAttrs = '' }: { title?: string; script?: boolean; rootAttrs?: string } = {}): string {
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
-  ${BOOKING_HEAD}
+  ${INVITE_HEAD}
   <title>${escapeHtml(title)}</title>
 </head>
-<body class="booking-page">
-  <div class="booking-shell">
-    <header class="booking-brand">
-      <div class="booking-brand-mark" aria-hidden="true">C</div>
-      <p class="booking-brand-name">Caladdin</p>
-    </header>
-    <div id="booking-root" ${rootAttrs}>${content}</div>
-  </div>
+<body class="invite-page">
+  <main id="booking-root" ${rootAttrs}>${content}</main>
   ${script ? '<script type="module" src="/booking.js"></script>' : ''}
 </body>
 </html>`;
@@ -135,33 +122,56 @@ function bookingShell(content: string, { title = 'Caladdin Booking', script = tr
 
 function render404(): string {
   return bookingShell(`
-    <div class="booking-empty">
+    <div class="invite-empty">
       <h1>Link not found</h1>
-      <p class="booking-sub">This link is invalid or expired. Please ask the sender for a new link.</p>
+      <p class="invite-sub">This link is invalid or expired. Please ask the sender for a new link.</p>
     </div>
   `, { title: 'Link not found', script: false });
 }
 
 function renderExpired(): string {
   return bookingShell(`
-    <div class="booking-empty">
+    <div class="invite-empty">
       <h1>This scheduling link has expired.</h1>
-      <p class="booking-sub">Ask your host for a fresh link.</p>
+      <p class="invite-sub">Ask your host for a fresh link.</p>
     </div>
   `, { title: 'Link expired', script: false });
 }
 
-function renderPage(session: SchedulingSessionRow): string {
+function grantSectionHtml(session: SchedulingSessionRow, grantConnected: boolean): string {
+  if (grantConnected) {
+    const tz = session.host_timezone ?? 'America/Chicago';
+    const today = DateTime.now().setZone(tz).toISODate() ?? '';
+    const defaultEnd = DateTime.now().setZone(tz).plus({ days: 7 }).toISODate() ?? '';
+    return `
+    <div class="grant-section" data-grant-active="true">
+      <p class="invite-sub">Your calendar is connected for this meeting only.</p>
+      <div id="grant-window-panel" class="grant-window-panel">
+        <label for="grant-window-start">Available from</label>
+        <input type="date" id="grant-window-start" value="${today}" />
+        <label for="grant-window-end">Available until</label>
+        <input type="date" id="grant-window-end" value="${defaultEnd}" />
+        <button type="button" id="grant-window-save">Save availability window</button>
+      </div>
+    </div>`;
+  }
+
+  return `
+    <div class="grant-section">
+      <a class="grant-link" href="/s/${escapeHtml(session.token)}/grant/start">Share your availability for this meeting only</a>
+    </div>`;
+}
+
+function renderPage(session: SchedulingSessionRow, grantConnected = false): string {
   const tz = session.host_timezone ?? 'America/Chicago';
   const host = session.host_name ?? 'Your host';
   const slots = session.offered_slots ?? [];
-  const signupUrl = `/auth/start?ref=scheduling&token=${session.token}`;
 
   if (session.status === 'cancelled') {
     return bookingShell(`
-      <div class="booking-empty">
+      <div class="invite-empty">
         <h1>This meeting was cancelled.</h1>
-        <p class="booking-sub">Ask ${escapeHtml(host)} for a new link if you&apos;d like to reschedule.</p>
+        <p class="invite-sub">Ask ${escapeHtml(host)} for a new link if you&apos;d like to reschedule.</p>
       </div>
     `, { title: 'Meeting cancelled', script: false });
   }
@@ -169,12 +179,11 @@ function renderPage(session: SchedulingSessionRow): string {
   if (session.status === 'confirmed' && session.selected_slot) {
     const label = escapeHtml(formatSlotLabel(session.selected_slot, tz));
     return bookingShell(`
-      <div class="booking-confirmed">
+      <div class="invite-confirmed">
         <h1>You\u2019re all set.</h1>
-        <p class="booking-sub">${label} — ${escapeHtml(host)} will see this on the calendar.</p>
-        <p class="booking-sub">A calendar invite should follow.</p>
+        <p class="invite-sub">${label}</p>
+        <p class="invite-sub">A calendar invite should follow.</p>
         ${guestActionLinksHtml(session.token)}
-        <a class="cta" href="${signupUrl}">Create your Caladdin account</a>
       </div>
     `, { title: 'Booking confirmed', script: false });
   }
@@ -182,95 +191,43 @@ function renderPage(session: SchedulingSessionRow): string {
   if (isExpired(session)) return renderExpired();
 
   if (slots.length < 2) {
-    const proposeSection = `
-    <div class="booking-links">
-      <a href="#" id="propose-toggle" aria-expanded="false">Suggest another time</a>
-    </div>
-    <div id="propose-panel" class="propose-panel hidden">
-      <form id="propose-form">
-        <label for="proposed-date">Preferred date</label>
-        <input type="date" id="proposed-date" name="proposedDate" value="${DateTime.now().toISODate() ?? ''}" required />
-        <label for="proposed-window">Time preference</label>
-        <select id="proposed-window" name="proposedTimeWindow">
-          <option value="morning">Morning</option>
-          <option value="afternoon">Afternoon</option>
-          <option value="evening">Evening</option>
-          <option value="flexible" selected>Flexible</option>
-        </select>
-        <label for="proposed-note">Note (optional)</label>
-        <textarea id="proposed-note" name="note" rows="2" placeholder="Any details for your host"></textarea>
-        <div class="propose-actions">
-          <button type="submit" class="choose-btn">Send suggestion</button>
-          <button type="button" id="propose-cancel" class="btn-secondary">Cancel</button>
-        </div>
-      </form>
-    </div>`;
     return bookingShell(`
-      <div class="booking-empty">
+      <div class="invite-empty">
         <h1>These options are no longer available.</h1>
-        <p class="booking-sub">Ask your host for a fresh link.</p>
+        <p class="invite-sub">Ask your host for a fresh link.</p>
         <div id="booking-status" class="booking-status" role="status"></div>
-        ${proposeSection}
+        <button type="button" id="find-next-slot" class="btn-secondary">Find next common slot</button>
+        <form id="preferred-time-form" class="preferred-time-form">
+          <label for="preferred-time" class="visually-hidden">Preferred time</label>
+          <input type="text" id="preferred-time" name="preferredTime" placeholder="Type a preferred time" autocomplete="off" />
+          <button type="submit">Send</button>
+        </form>
+        ${grantSectionHtml(session, grantConnected)}
       </div>
-    `, { title: 'Options unavailable', rootAttrs: `data-token="${escapeHtml(session.token)}"` });
+    `, { title: 'Options unavailable', rootAttrs: `data-token="${escapeHtml(session.token)}" data-grant="${grantConnected ? 'active' : 'none'}"` });
   }
 
-  const hero = session.host_name
-    ? `${host} found two thoughtful times for you.`
-    : 'Two thoughtful times, picked for you.';
-  const sub = session.host_name
-    ? `${host} used Caladdin to avoid the calendar back-and-forth.`
-    : 'Your host used Caladdin to avoid the calendar back-and-forth.';
+  const hostLine = session.host_name
+    ? `${escapeHtml(host)} is inviting you to a meeting.`
+    : 'You\u2019re invited to a meeting.';
 
-  const cards = slots.slice(0, 2).map((s, i) => `
-    <div class="card slot-card">
-      <span class="slot-label">Option ${i + 1}</span>
-      <p class="slot-time">${escapeHtml(formatSlotLabel(s, tz))}</p>
-      <button type="button" class="choose-btn" data-index="${i}" aria-label="Choose option ${i + 1}">Choose this time</button>
-    </div>`).join('');
-
-  const inviteeLine = session.invitee_email
-    ? `<p class="booking-invitee">Invitation for ${escapeHtml(session.invitee_email)}</p>`
-    : '';
-
-  const proposeSection = `
-    <div class="booking-links">
-      <a href="/s/${escapeHtml(session.token)}/calendar">View ${escapeHtml(host)}&apos;s calendar</a>
-      <a href="#" id="propose-toggle" aria-expanded="false">Suggest another time</a>
-    </div>
-    <div id="propose-panel" class="propose-panel hidden">
-      <form id="propose-form">
-        <label for="proposed-date">Preferred date</label>
-        <input type="date" id="proposed-date" name="proposedDate" value="${DateTime.now().toISODate() ?? ''}" required />
-        <label for="proposed-window">Time preference</label>
-        <select id="proposed-window" name="proposedTimeWindow">
-          <option value="morning">Morning</option>
-          <option value="afternoon">Afternoon</option>
-          <option value="evening">Evening</option>
-          <option value="flexible" selected>Flexible</option>
-        </select>
-        <label for="proposed-note">Note (optional)</label>
-        <textarea id="proposed-note" name="note" rows="2" placeholder="Any details for your host"></textarea>
-        <div class="propose-actions">
-          <button type="submit" class="choose-btn">Send suggestion</button>
-          <button type="button" id="propose-cancel" class="btn-secondary">Cancel</button>
-        </div>
-      </form>
-    </div>`;
+  const slotButtons = slots.slice(0, 2).map((s, i) => `
+    <button type="button" class="slot-btn choose-btn" data-index="${i}" aria-label="Select ${escapeHtml(formatSlotButtonLabel(s, tz))}">
+      ${escapeHtml(formatSlotButtonLabel(s, tz))}
+    </button>`).join('');
 
   return bookingShell(`
-    <div class="booking-hero">
-      <h1>${escapeHtml(hero)}</h1>
-      <p class="booking-sub">${escapeHtml(sub)}</p>
-      <p class="booking-sub">Pick one, or suggest another time.</p>
-      <p class="booking-tz-note">Times shown in ${escapeHtml(formatTimezoneLabel(tz))} (${escapeHtml(tz.replace(/_/g, ' '))})</p>
-    </div>
-    ${inviteeLine}
+    <p class="invite-host-line">${hostLine}</p>
     <div id="booking-status" class="booking-status" role="status"></div>
-    <div class="slot-grid">${cards}</div>
-    ${guestIntakePanelHtml(session.invitee_email ?? '')}
-    ${proposeSection}
-  `, { title: 'Pick a time', rootAttrs: `data-token="${escapeHtml(session.token)}"` });
+    <div class="slot-grid">${slotButtons}</div>
+    <button type="button" id="find-next-slot" class="btn-secondary">Find next common slot</button>
+    <form id="preferred-time-form" class="preferred-time-form">
+      <label for="preferred-time" class="visually-hidden">Preferred time</label>
+      <input type="text" id="preferred-time" name="preferredTime" placeholder="Type a preferred time" autocomplete="off" />
+      <button type="submit">Send</button>
+    </form>
+    ${grantSectionHtml(session, grantConnected)}
+  `, { title: 'Pick a time', rootAttrs: `data-token="${escapeHtml(session.token)}" data-grant="${grantConnected ? 'active' : 'none'}"` });
 }
 
 function renderCancelPage(session: SchedulingSessionRow, actionToken: string): string {
@@ -286,18 +243,16 @@ function renderCancelPage(session: SchedulingSessionRow, actionToken: string): s
   ].join(' ');
 
   return bookingShell(`
-    <div class="booking-hero">
+    <div class="invite-empty">
       <h1>Cancel this meeting?</h1>
-      <p class="booking-sub">${label}</p>
-      <p class="booking-sub">Your host will be notified and the calendar event will be removed.</p>
+      <p class="invite-sub">${label}</p>
+      <p class="invite-sub">Your host will be notified and the calendar event will be removed.</p>
     </div>
     <div id="booking-status" class="booking-status" role="status"></div>
     <form id="action-form" class="action-panel">
       <button type="submit" class="choose-btn">Yes, cancel meeting</button>
     </form>
-    <div class="booking-links">
-      <a href="/s/${escapeHtml(session.token)}">Keep this meeting</a>
-    </div>
+    <a class="invite-back-link" href="/s/${escapeHtml(session.token)}">Keep this meeting</a>
   `, { title: 'Cancel meeting', rootAttrs });
 }
 
@@ -325,35 +280,33 @@ function renderReschedulePage(session: SchedulingSessionRow, actionToken: string
   }).join('');
 
   return bookingShell(`
-    <div class="booking-hero">
+    <div class="invite-empty">
       <h1>Pick a new time</h1>
-      <p class="booking-sub">Choose one of the options below. Your host will be notified.</p>
+      <p class="invite-sub">Choose one of the options below. Your host will be notified.</p>
     </div>
     <div id="booking-status" class="booking-status" role="status"></div>
     <form id="action-form" class="action-panel">
-      <div class="action-slot-options">${slotOptions || '<p class="booking-sub">No alternate times available. Contact your host.</p>'}</div>
+      <div class="action-slot-options">${slotOptions || '<p class="invite-sub">No alternate times available. Contact your host.</p>'}</div>
       <button type="submit" class="choose-btn"${slots.length < 1 ? ' disabled' : ''}>Confirm new time</button>
     </form>
-    <div class="booking-links">
-      <a href="/s/${escapeHtml(session.token)}">← Back to booking</a>
-    </div>
+    <a class="invite-back-link" href="/s/${escapeHtml(session.token)}">← Back to booking</a>
   `, { title: 'Reschedule meeting', rootAttrs });
 }
 
 function renderInvalidActionLink(): string {
   return bookingShell(`
-    <div class="booking-empty">
+    <div class="invite-empty">
       <h1>This link is invalid or expired</h1>
-      <p class="booking-sub">Use the latest link from your confirmation or reminder email.</p>
+      <p class="invite-sub">Use the latest link from your confirmation or reminder email.</p>
     </div>
   `, { title: 'Invalid link', script: false });
 }
 
 function renderCalendarAccessDenied(): string {
   return bookingShell(`
-    <div class="booking-empty">
+    <div class="invite-empty">
       <h1>Calendar view unavailable</h1>
-      <p class="booking-sub">Your host has not shared their full calendar on this invite. Use the offered time options instead.</p>
+      <p class="invite-sub">Your host has not shared their full calendar on this invite. Use the offered time options instead.</p>
     </div>
   `, { title: 'Calendar unavailable', script: false });
 }
@@ -375,9 +328,9 @@ async function renderCalendarView(session: SchedulingSessionRow, res: Response):
     .join('');
 
   res.send(bookingShell(`
-    <div class="booking-hero">
+    <div class="invite-empty">
       <h1>${escapeHtml(session.host_name ?? 'Host')}&apos;s availability</h1>
-      <p class="booking-sub">Read-only view for the next two weeks. Private events show as Busy.</p>
+      <p class="invite-sub">Read-only view for the next two weeks. Private events show as Busy.</p>
     </div>
     <div class="calendar-table-wrap">
       <table class="calendar-table">
@@ -385,9 +338,7 @@ async function renderCalendarView(session: SchedulingSessionRow, res: Response):
         <tbody>${rows || '<tr><td colspan="3">No events in this range</td></tr>'}</tbody>
       </table>
     </div>
-    <div class="booking-links">
-      <a href="/s/${escapeHtml(session.token)}">← Back to time options</a>
-    </div>
+    <a class="invite-back-link" href="/s/${escapeHtml(session.token)}">← Back to time options</a>
   `, { title: `${session.host_name ?? 'Host'} availability`, script: false }));
 }
 
@@ -398,7 +349,13 @@ router.get('/s/:token', async (req: Request, res: Response) => {
     res.status(404).type('html').send(render404());
     return;
   }
-  res.type('html').send(renderPage(session));
+  const grant = await getGrantBySessionId(session.id);
+  const grantConnected = Boolean(
+    grant?.status === 'active' &&
+      grant.oauth_access_token &&
+      new Date(grant.expires_at) > new Date(),
+  );
+  res.type('html').send(renderPage(session, grantConnected));
 });
 
 router.get('/s/:token/cancel', async (req: Request, res: Response) => {
@@ -452,6 +409,34 @@ function parseGuestPayload(body: Record<string, unknown>): GuestIntakePayload | 
   return guest;
 }
 
+function guestFromSession(session: SchedulingSessionRow): GuestIntakePayload | undefined {
+  if (!session.invitee_email) return undefined;
+  const local = session.invitee_email.split('@')[0] ?? 'Guest';
+  return {
+    name: session.invitee_label?.trim() || local,
+    email: session.invitee_email,
+  };
+}
+
+async function replaceSessionOfferedSlots(
+  token: string,
+  slots: Array<{ start: string; end: string }>,
+): Promise<boolean> {
+  const offered = slots.map((s) => ({
+    start: s.start,
+    end: s.end,
+    adjacentEventCount: 0,
+    energyScore: 0.5,
+    createsFragment: false,
+  }));
+  const { error } = await getSupabase()
+    .from('scheduling_sessions')
+    .update({ offered_slots: offered, updated_at: new Date().toISOString() })
+    .eq('token', token)
+    .eq('status', 'pending');
+  return !error;
+}
+
 router.post('/s/:token/select', async (req: Request, res: Response) => {
   const opGate = await checkOperationAllowed('calendar_write');
   if (!opGate.allowed) {
@@ -496,7 +481,7 @@ router.post('/s/:token/select', async (req: Request, res: Response) => {
     return;
   }
 
-  const guestPayload = parseGuestPayload(req.body as Record<string, unknown>);
+  const guestPayload = parseGuestPayload(req.body as Record<string, unknown>) ?? guestFromSession(session);
   const guestError = validateGuestIntake(guestPayload);
   if (guestError) {
     res.status(400).json({ error: guestError });
@@ -560,6 +545,8 @@ router.post('/s/:token/select', async (req: Request, res: Response) => {
       await enqueueRemindersForSession(finalizedSession).catch(() => {});
     }
 
+    await revokeGrantForSession(session.id).catch(() => {});
+
     res.json({ ok: true, actions: selectActionPayload(token) });
   } catch {
     await revertSessionClaim(token);
@@ -610,6 +597,8 @@ router.post('/s/:token/cancel', async (req: Request, res: Response) => {
     res.status(409).json({ error: 'cancel_failed' });
     return;
   }
+
+  await revokeGrantForSession(session.id).catch(() => {});
 
   await sendHostBookingNotification({ hostUserId: session.host_user_id, sessionToken: token, kind: 'cancelled' });
   await dispatchBookingWebhooks(session.host_user_id, 'booking.cancelled', {
@@ -719,23 +708,88 @@ router.post('/s/:token/propose', async (req: Request, res: Response) => {
     return;
   }
   try {
+    const note = String(req.body.note ?? req.body.preferredTime ?? '').trim();
+    const proposedDate =
+      req.body.proposedDate ??
+      DateTime.now().setZone(session.host_timezone ?? 'America/Chicago').toISODate();
     await appendProposedAlternative(token, {
-      proposedDate: req.body.proposedDate,
-      proposedTimeWindow: req.body.proposedTimeWindow,
-      note: req.body.note,
+      proposedDate,
+      proposedTimeWindow: req.body.proposedTimeWindow ?? 'flexible',
+      note: note || undefined,
     });
     await sendHostBookingNotification({
       hostUserId: session.host_user_id,
       sessionToken: token,
       kind: 'proposed',
-      proposedDate: req.body.proposedDate,
-      proposedTimeWindow: req.body.proposedTimeWindow,
-      note: req.body.note,
+      proposedDate,
+      proposedTimeWindow: req.body.proposedTimeWindow ?? 'flexible',
+      note: note || undefined,
     });
     res.json({ ok: true });
   } catch {
     res.status(409).json({ error: 'propose_failed' });
   }
+});
+
+router.post('/s/:token/next-slots', async (req: Request, res: Response) => {
+  const token = String(req.params.token);
+  const session = await getSchedulingSessionByToken(token);
+  if (!session || session.status !== 'pending' || isExpired(session)) {
+    res.status(404).json({ error: 'not_found' });
+    return;
+  }
+
+  const grant = await getGrantBySessionId(session.id);
+  const grantActive =
+    grant?.status === 'active' &&
+    grant.oauth_access_token &&
+    new Date(grant.expires_at) > new Date();
+
+  if (grantActive && grant) {
+    const { computeMutualSlotsForSession } = await import('./invite_grant_auth.js');
+    const slots = await computeMutualSlotsForSession(session, grant);
+    if (slots.length >= 2) {
+      await replaceSessionOfferedSlots(token, slots);
+      res.json({ ok: true, slots, source: 'mutual' });
+      return;
+    }
+  }
+
+  const tz = session.host_timezone ?? 'America/Chicago';
+  const policy = migratePolicy(await getPolicy(session.host_user_id));
+  const dayStart = parseHourFromTime(policy.workingHoursStart, 9);
+  const dayEnd = parseHourFromTime(policy.workingHoursEnd, 18);
+  const windowStart = DateTime.now().setZone(tz).plus({ hours: 1 }).toISO()!;
+  const windowEnd = DateTime.now().setZone(tz).plus({ days: 14 }).toISO()!;
+
+  const auth = getAuthService();
+  const hostCal = await auth.getClientForUser(session.host_user_id);
+  if (!hostCal) {
+    res.status(502).json({ error: 'host_calendar_unavailable' });
+    return;
+  }
+
+  const hostBusy = await listBusyFromGCal(hostCal, windowStart, windowEnd);
+  const slots = findMutualSlots({
+    hostBusy,
+    inviteeBusy: [],
+    windowStart,
+    windowEnd,
+    durationMinutes: session.duration_minutes ?? 30,
+    timezone: tz,
+    dayStartHour: dayStart,
+    dayEndHour: dayEnd,
+    excludeSlots: session.offered_slots ?? [],
+  });
+
+  if (slots.length < 1) {
+    res.status(409).json({ error: 'no_slots' });
+    return;
+  }
+
+  const next = slots.slice(0, 2);
+  await replaceSessionOfferedSlots(token, next);
+  res.json({ ok: true, slots: next, source: grantActive ? 'host_fallback' : 'host' });
 });
 
 export default router;

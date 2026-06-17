@@ -6,6 +6,7 @@ import {
 import { hashPayload, insertAuditLog } from '../db/audit.js';
 import { reExecuteFromConfirmation } from './orchestrator.js';
 import { logger } from '../logger.js';
+import { markCommandLogConfirmed } from '../db/command_logs.js';
 
 export type ConfirmationActionStatus = 200 | 403 | 404 | 409 | 410 | 500;
 
@@ -47,7 +48,7 @@ export async function approvePendingConfirmation(
   await updateConfirmationStatus(token, 'approved');
 
   try {
-    const payload = row.payload as { parsed: unknown; requestId: string };
+    const payload = row.payload as { parsed: unknown; requestId: string; commandLogId?: string };
     const result = await reExecuteFromConfirmation(payload, row.user_id);
     if (!result.success) {
       await updateConfirmationStatus(token, 'pending');
@@ -66,6 +67,13 @@ export async function approvePendingConfirmation(
           reason: result.messageToUser,
         },
       };
+    }
+    if (payload.commandLogId) {
+      try {
+        await markCommandLogConfirmed(payload.commandLogId);
+      } catch (e) {
+        logger.warn('Command log confirm mark failed', { commandLogId: payload.commandLogId, error: String(e) });
+      }
     }
     return {
       status: 200,

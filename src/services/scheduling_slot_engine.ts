@@ -188,12 +188,13 @@ export function offeredSlotsToBusy(offered: SlotIso[]): BusyInterval[] {
   return offered.map((o) => ({ start: o.start, end: o.end }));
 }
 
-/** Score, sort, return up to two diverse curated slots. */
+/** Score, sort, return up to `targetSlotsPerOffer` diverse curated slots (guaranteed ≤2 by default). */
 export function curateTwoSchedulingSlots(
   candidates: CandidateSlot[],
   profile: UserPolicyProfile
 ): CandidateSlot[] {
+  const target = Math.min(2, profile.faxEffectConfig?.targetSlotsPerOffer ?? 2);
   const ranked = selectTopSlots(candidates, profile, Math.max(8, candidates.length));
-  if (ranked.length <= 2) return ranked;
-  return pickTwoDiverseSlots(ranked, profile.timezone, 90);
+  if (ranked.length <= target) return ranked.slice(0, target);
+  return pickTwoDiverseSlots(ranked, profile.timezone, 90).slice(0, target);
 }

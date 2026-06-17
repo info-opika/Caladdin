@@ -44,6 +44,23 @@ function resolveManual(
   });
 }
 
+const NO_REASK_CHECKS: Record<string, (params: Record<string, unknown>) => boolean> = {
+  startTime: (p) => typeof p.startTime === 'string' && p.startTime.length > 0,
+  durationMinutes: (p) => typeof p.durationMinutes === 'number' && p.durationMinutes > 0,
+  label: (p) => typeof p.label === 'string' && p.label.trim().length > 0,
+};
+
+/** No re-ask: drop fields Haiku flagged missing when params already include them. */
+export function stripKnownFieldsFromMissingFields(
+  missingFields: string[],
+  params: Record<string, unknown>,
+): string[] {
+  return missingFields.filter((field) => {
+    const check = NO_REASK_CHECKS[field];
+    return !check || !check(params);
+  });
+}
+
 function stripUnknownTopLevel(raw: Record<string, unknown>): {
   cleaned: Record<string, unknown>;
   strippedKeys: string[];
@@ -92,9 +109,14 @@ export function validateHaikuMapperOutput(
       ? { ...(cleaned.params as Record<string, unknown>) }
       : {};
 
-  const missingFields = params['missingFields'];
-  const hasMissing =
-    Array.isArray(missingFields) && missingFields.length > 0;
+  const missingFields = stripKnownFieldsFromMissingFields(
+    Array.isArray(params['missingFields'])
+      ? params['missingFields'].filter((x): x is string => typeof x === 'string')
+      : [],
+    params,
+  );
+  delete params['missingFields'];
+  const hasMissing = missingFields.length > 0;
 
   let mappingMethod =
     cleaned.mappingMethod === 'direct' ||

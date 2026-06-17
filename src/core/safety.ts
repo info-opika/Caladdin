@@ -114,6 +114,10 @@ export async function preflightSafety(
     return { requiresConfirmation: true, blocked: false };
   }
 
+  if (parsed.intent === 'PROTECT_BLOCK') {
+    return { requiresConfirmation: true, blocked: false };
+  }
+
   if (destructive && parsed.params.tier === 0) {
     return { requiresConfirmation: true, blocked: false };
   }

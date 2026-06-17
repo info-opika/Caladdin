@@ -7,7 +7,7 @@ import { config } from '../config.js';
 import { calendar_v3 } from 'googleapis';
 import { getUserById } from '../db/users.js';
 import { generateFaxEffectMessage } from '../core/fax-effect.js';
-import { sendEmail, schedulingLinkEmailHtml } from '../services/email.js';
+import { sendEmail, schedulingLinkEmailHtml, schedulingLinkEmailText } from '../services/email.js';
 
 export async function handleOfferSpecific(
   parsed: ParsedIntent,
@@ -15,7 +15,10 @@ export async function handleOfferSpecific(
   cal: calendar_v3.Calendar | null,
 ): Promise<IntentResult> {
   const policy = await ensureDefaultPolicy(ctx.userId);
-  const duration = (parsed.params.durationMinutes as number) ?? 30;
+  const duration =
+    typeof parsed.params.durationMinutes === 'number'
+      ? parsed.params.durationMinutes
+      : policy.defaultMeetingLengthMinutes;
   const recipientName = (parsed.params.recipientName as string) ?? 'Guest';
   const recipientEmail = (parsed.params.recipientEmail as string) ?? undefined;
   const postureRaw = parsed.params.posture as string | undefined;
@@ -79,6 +82,7 @@ export async function handleOfferSpecific(
       to: recipientEmail,
       subject: `${user?.display_name ?? 'Someone'} picked two times to meet`,
       html: schedulingLinkEmailHtml(user?.display_name ?? 'Your host', link),
+      text: schedulingLinkEmailText(user?.display_name ?? 'Your host', link),
     });
   }
 

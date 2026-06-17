@@ -2,11 +2,13 @@ import { createSpeechInput, isSpeechSupported } from './speech-input.js';
 import { showToast, detectBrowserTimezone, COMMON_TIMEZONES } from './ui.js';
 import { initTheme } from './theme.js';
 import { createFocusTrap, initErrorBoundary } from './a11y.js';
+import { createCalendarWeek } from './calendar-week.js';
 import {
   parseWeeklyHours,
   deriveGlobalHours,
   mountWeeklyAvailabilityEditor,
 } from './availability-editor.js';
+import { mountContextualSetupForm } from './contextual-setup.js';
 
 /** Lazy-loaded when user opens Booking links — keeps initial chat bundle smaller. */
 let eventTypesManagerPromise;
@@ -27,10 +29,7 @@ async function getEventTypesManager() {
             settingsManager.close();
             getEventTypesManager().then((m) => m.open());
           } else if (view === 'settings') {
-            show(settingsScreen);
-            setActiveNav('settings');
-            getEventTypesManager().then((m) => m.close());
-            settingsManager.open();
+            openSettings();
           }
         },
       }),
@@ -59,6 +58,7 @@ const statusText = document.getElementById('status-text');
 const thumbsUp = document.getElementById('thumbs-up');
 const thumbsDown = document.getElementById('thumbs-down');
 const reconnectBanner = document.getElementById('reconnect-banner');
+const calendarWeekRoot = document.getElementById('calendar-week');
 const timezoneSelect = document.getElementById('timezone');
 const finishOnboardingBtn = document.getElementById('finish-onboarding');
 const onboardingError = document.getElementById('onboarding-error');
@@ -70,6 +70,29 @@ let listening = false;
 let thinkingEl = null;
 let listeningEl = null;
 let hasMessages = false;
+let calendarWeek = null;
+
+async function fetchCalendarWeek(startIso) {
+  const params = new URLSearchParams({ start: startIso });
+  const { res, data } = await api(`/api/calendar/week?${params}`);
+  if (!res.ok) throw new Error(data?.error ?? 'Could not load calendar');
+  return data;
+}
+
+function ensureCalendarWeek() {
+  if (!calendarWeekRoot) return null;
+  if (!calendarWeek) {
+    calendarWeek = createCalendarWeek({
+      container: calendarWeekRoot,
+      fetchWeek: fetchCalendarWeek,
+    });
+  }
+  return calendarWeek;
+}
+
+async function refreshCalendarWeek() {
+  await ensureCalendarWeek()?.refresh();
+}
 
 const speechInput = createSpeechInput({
   onInterim(transcript) {
@@ -103,15 +126,30 @@ function setActiveNav(view) {
   document.querySelectorAll('.app-nav-link').forEach((link) => {
     const isChat = link.id?.includes('nav-chat');
     const isEt = link.id?.includes('nav-event-types');
-    const isSettings = link.id?.includes('nav-settings');
     const active =
       (view === 'chat' && isChat) ||
-      (view === 'event-types' && isEt) ||
-      (view === 'settings' && isSettings);
+      (view === 'event-types' && isEt);
     link.classList.toggle('is-active', active);
     if (active) link.setAttribute('aria-current', 'page');
     else link.removeAttribute('aria-current');
   });
+}
+
+function isAppScreenActive() {
+  return [chat, eventTypesScreen, settingsScreen].some((s) => s && !s.classList.contains('hidden'));
+}
+
+function isOpenSettingsCommand(text) {
+  return /^\s*open\s+settings\s*$/i.test(text);
+}
+
+function openSettings() {
+  if (busy || listening) return;
+  clearListening();
+  eventTypesManager.close();
+  show(settingsScreen);
+  setActiveNav(null);
+  void settingsManager.open();
 }
 
 function updateEmptyState() {
@@ -382,22 +420,17 @@ function createSettingsManager({ api: apiFn }) {
       }
     });
 
-    for (const id of ['nav-chat-st', 'nav-event-types-st', 'nav-settings-st']) {
+    for (const id of ['nav-chat-st', 'nav-event-types-st']) {
       document.getElementById(id)?.addEventListener('click', (e) => {
         e.preventDefault();
-        const view = id.includes('chat') ? 'chat' : id.includes('event-types') ? 'event-types' : 'settings';
+        const view = id.includes('chat') ? 'chat' : 'event-types';
         if (view === 'chat') {
           show(chat);
           setActiveNav('chat');
           settingsManager.close();
           eventTypesManager.close();
-        } else if (view === 'event-types') {
-          void eventTypesManager.open();
         } else {
-          show(settingsScreen);
-          setActiveNav('settings');
-          eventTypesManager.close();
-          settingsManager.open();
+          void eventTypesManager.open();
         }
       });
     }
@@ -426,7 +459,7 @@ function bindConfirmFocusTrap() {
   confirmFocusRelease = createFocusTrap(confirmCard);
 }
 
-for (const id of ['nav-event-types', 'nav-event-types-et']) {
+for (const id of ['nav-event-types-et']) {
   document.getElementById(id)?.addEventListener('click', (e) => {
     e.preventDefault();
     void eventTypesManager.open();
@@ -443,13 +476,12 @@ for (const id of ['nav-chat', 'nav-chat-et']) {
   });
 }
 
-for (const id of ['nav-settings', 'nav-settings-et']) {
-  document.getElementById(id)?.addEventListener('click', (e) => {
+function bindSettingsShortcuts() {
+  document.addEventListener?.('keydown', (e) => {
+    if (!(e.ctrlKey || e.metaKey) || e.key !== ',') return;
+    if (!isAppScreenActive()) return;
     e.preventDefault();
-    show(settingsScreen);
-    setActiveNav('settings');
-    eventTypesManager.close();
-    void settingsManager.open();
+    openSettings();
   });
 }
 function clearWelcomeParam() {
@@ -495,6 +527,22 @@ async function sendVoiceMessage(utterance, { showUserMessage = true, busyMessage
 
     lastIntent = data?.intent;
 
+    if (data?.outcome === 'needs_setup') {
+      addMessage(data?.messageToUser ?? 'I need one quick preference first.', 'bot');
+      if (data?.showFormFallback && messages) {
+        mountContextualSetupForm(messages, data, {
+          api,
+          onComplete: () =>
+            sendVoiceMessage(data.pendingUtterance ?? utterance, {
+              showUserMessage: false,
+              busyMessage: 'Resuming your request…',
+              source,
+            }),
+        });
+      }
+      return true;
+    }
+
     if (data?.requiresConfirmation) {
       pendingConfirmationToken = data.confirmationToken ?? null;
       if (confirmText) confirmText.textContent = data.messageToUser ?? 'Please confirm this action.';
@@ -502,6 +550,7 @@ async function sendVoiceMessage(utterance, { showUserMessage = true, busyMessage
       bindConfirmFocusTrap();
     } else {
       addMessage(data?.messageToUser ?? 'Done.', 'bot');
+      await refreshCalendarWeek();
     }
 
     return true;
@@ -565,9 +614,12 @@ async function openChat({ profile } = {}) {
   setupVoiceUi();
   setReconnectBanner(profile && !profile.calendarConnected);
   updateEmptyState();
+  ensureCalendarWeek();
+  await refreshCalendarWeek();
 }
 
 async function init() {
+  bindSettingsShortcuts();
   setupVoiceUi();
   setupSuggestionChips();
   populateTimezoneSelect(detectBrowserTimezone());
@@ -579,18 +631,13 @@ async function init() {
   if (params.get('pilot') === 'paused') {
     document.getElementById('pilot-paused-banner')?.classList.remove('hidden');
     document.getElementById('signup-btn')?.classList.add('hidden');
+    document.getElementById('signin-btn')?.classList.add('hidden');
   }
 
   const { res } = await api('/auth/me');
   if (res.ok) {
     const profile = await loadProfile();
-    if (!profile?.onboardingComplete) {
-      if (profile) applyProfileToOnboarding(profile);
-      show(onboarding);
-      clearWelcomeParam();
-    } else {
-      await openChat({ profile });
-    }
+    await openChat({ profile });
   } else {
     show(landing);
   }
@@ -610,6 +657,7 @@ async function refreshPilotStatus() {
 function showWaitlistPanel() {
   document.getElementById('waitlist-panel')?.classList.remove('hidden');
   document.getElementById('signup-btn')?.classList.add('hidden');
+  document.getElementById('signin-btn')?.classList.add('hidden');
 }
 
 document.getElementById('waitlist-form')?.addEventListener('submit', async (e) => {
@@ -677,6 +725,10 @@ form?.addEventListener('submit', async (e) => {
   const utterance = utteranceInput.value.trim();
   if (!utterance) return;
   utteranceInput.value = '';
+  if (isOpenSettingsCommand(utterance)) {
+    openSettings();
+    return;
+  }
   await sendVoiceMessage(utterance, { busyMessage: 'Thinking…', source: 'text' });
 });
 
@@ -728,6 +780,7 @@ async function handleConfirmation(action) {
     }
     addMessage(message ?? 'Done.', 'bot');
     showToast('Action completed', 'success');
+    await refreshCalendarWeek();
   } finally {
     clearBusy();
   }

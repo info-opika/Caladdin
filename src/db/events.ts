@@ -1,5 +1,46 @@
 import { getSupabase } from './client.js';
-import { CalendarEvent } from '../core/adts.js';
+import { CalendarEvent, type CalendarEventSource, type WeekCalendarEvent } from '../core/adts.js';
+import { addDays, startOfWeek } from '../core/date-utils.js';
+
+export function inferCalendarEventSource(event: CalendarEvent): CalendarEventSource {
+  if (event.tier <= 1 || event.title.startsWith('[Protected]')) {
+    return 'caladdin_block';
+  }
+  if (
+    event.tier >= 3
+    || event.proposedForSession
+    || event.status === 'proposed'
+    || event.title.startsWith('[Proposed]')
+    || (event.participants?.length ?? 0) > 0
+  ) {
+    return 'caladdin_invite';
+  }
+  return 'external';
+}
+
+function toWeekCalendarEvent(event: CalendarEvent): WeekCalendarEvent {
+  return {
+    id: event.id,
+    title: event.title,
+    start: event.start,
+    end: event.end,
+    source: inferCalendarEventSource(event),
+  };
+}
+
+/** Collapse duplicate rows (e.g. from repeated GCal import on each sign-in). */
+export function dedupeCalendarEvents(events: CalendarEvent[]): CalendarEvent[] {
+  const seen = new Map<string, CalendarEvent>();
+  for (const ev of events) {
+    const key = ev.gcalEventId
+      ? `gcal:${ev.gcalEventId}`
+      : `slot:${ev.start}|${ev.end}|${ev.title}`;
+    if (!seen.has(key)) {
+      seen.set(key, ev);
+    }
+  }
+  return [...seen.values()];
+}
 
 function rowToEvent(row: Record<string, unknown>): CalendarEvent {
   return {
@@ -24,7 +65,43 @@ export async function listEvents(userId: string, start?: string, end?: string): 
   if (end) q = q.lte('end_at', end);
   const { data, error } = await q.order('start_at');
   if (error) throw error;
-  return (data ?? []).map(rowToEvent);
+  return dedupeCalendarEvents((data ?? []).map(rowToEvent));
+}
+
+/** Events overlapping [rangeStart, rangeEnd) — suitable for week grids. */
+export async function listEventsOverlapping(
+  userId: string,
+  rangeStart: string,
+  rangeEnd: string,
+): Promise<CalendarEvent[]> {
+  const { data, error } = await getSupabase()
+    .from('events')
+    .select('*')
+    .eq('user_id', userId)
+    .neq('status', 'cancelled')
+    .lt('start_at', rangeEnd)
+    .gt('end_at', rangeStart)
+    .order('start_at');
+  if (error) throw error;
+  return dedupeCalendarEvents((data ?? []).map(rowToEvent));
+}
+
+export async function listWeekEventsWithSource(
+  userId: string,
+  weekStartIso?: string,
+): Promise<{ start: string; end: string; events: WeekCalendarEvent[] }> {
+  const weekStart = weekStartIso
+    ? startOfWeek(new Date(weekStartIso))
+    : startOfWeek(new Date());
+  const weekEnd = addDays(weekStart, 7);
+  const start = weekStart.toISOString();
+  const end = weekEnd.toISOString();
+  const events = await listEventsOverlapping(userId, start, end);
+  return {
+    start,
+    end,
+    events: events.map(toWeekCalendarEvent),
+  };
 }
 
 export async function getEventById(id: string): Promise<CalendarEvent | null> {
@@ -34,6 +111,13 @@ export async function getEventById(id: string): Promise<CalendarEvent | null> {
 }
 
 export async function insertEvent(userId: string, event: Partial<CalendarEvent>): Promise<CalendarEvent> {
+  if (event.gcalEventId) {
+    const existing = await getEventByGcalId(userId, event.gcalEventId);
+    if (existing) {
+      return updateEvent(existing.id, event);
+    }
+  }
+
   const { data, error } = await getSupabase()
     .from('events')
     .insert({
@@ -77,6 +161,8 @@ export async function getEventByGcalId(userId: string, gcalEventId: string): Pro
     .eq('user_id', userId)
     .eq('gcal_event_id', gcalEventId)
     .neq('status', 'cancelled')
+    .order('created_at', { ascending: true })
+    .limit(1)
     .maybeSingle();
   if (error) throw error;
   return data ? rowToEvent(data) : null;

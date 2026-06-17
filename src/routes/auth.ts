@@ -49,7 +49,13 @@ authRouter.get('/start', (req: Request, res: Response) => {
   const ref = req.query.ref as string | undefined;
   const token = req.query.token as string | undefined;
   const invite = req.query.invite as string | undefined;
-  const state = buildOAuthState({ ref: ref ?? '', token: token ?? '', invite: invite ?? '' });
+  const mode = req.query.mode as string | undefined;
+  const state = buildOAuthState({
+    ref: ref ?? '',
+    token: token ?? '',
+    invite: invite ?? '',
+    mode: mode === 'signup' || mode === 'signin' ? mode : '',
+  });
   res.redirect(getAuthUrl(state));
 });
 

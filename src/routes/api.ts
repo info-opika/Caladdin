@@ -12,6 +12,8 @@ import { getUserProfileView, updateUserProfile, getUserById } from '../db/users.
 import { exportUserData, deleteUserAccount } from '../db/user_data.js';
 import { getOAuthClientForUser } from '../services/auth_service.js';
 import { buildIcsCalendar } from '../services/ics.js';
+import { listWeekEventsWithSource } from '../db/events.js';
+import { WeekCalendarResponseSchema } from '../core/adts.js';
 
 export const apiRouter = Router();
 
@@ -22,6 +24,9 @@ const ProfilePatchSchema = z.object({
   privacyMode: z.enum(['private', 'trusted', 'open']).optional(),
   workingHoursStart: z.string().regex(TIME_RE).optional(),
   workingHoursEnd: z.string().regex(TIME_RE).optional(),
+  defaultMeetingLengthMinutes: z.number().int().min(5).max(480).optional(),
+  meetingTimePreference: z.enum(['morning', 'afternoon', 'flexible']).optional(),
+  setupFieldAnswered: z.string().min(1).max(64).optional(),
 });
 
 const UserDataDeleteSchema = z.object({
@@ -93,9 +98,12 @@ apiRouter.patch('/profile', requireSession, async (req: Request, res: Response) 
     !parsed.data.timezone &&
     !parsed.data.privacyMode &&
     !parsed.data.workingHoursStart &&
-    !parsed.data.workingHoursEnd
+    !parsed.data.workingHoursEnd &&
+    parsed.data.defaultMeetingLengthMinutes == null &&
+    !parsed.data.meetingTimePreference &&
+    !parsed.data.setupFieldAnswered
   ) {
-    res.status(400).json({ error: 'Provide timezone, privacyMode, and/or working hours' });
+    res.status(400).json({ error: 'Provide timezone, privacyMode, working hours, meeting length, or setup field' });
     return;
   }
 
@@ -105,6 +113,9 @@ apiRouter.patch('/profile', requireSession, async (req: Request, res: Response) 
       privacyMode: parsed.data.privacyMode,
       workingHoursStart: parsed.data.workingHoursStart,
       workingHoursEnd: parsed.data.workingHoursEnd,
+      defaultMeetingLengthMinutes: parsed.data.defaultMeetingLengthMinutes,
+      meetingTimePreference: parsed.data.meetingTimePreference,
+      appendSetupFieldAnswered: parsed.data.setupFieldAnswered,
       markOnboardingComplete: Boolean(parsed.data.timezone || parsed.data.privacyMode),
     });
     updated.calendarConnected = Boolean(await getOAuthClientForUser(session.userId));
@@ -180,6 +191,26 @@ apiRouter.post('/sessions/:token/proposals/:index', requireSession, async (req: 
   } catch (err) {
     logger.error('proposal action failed', { err: String(err), token });
     res.status(500).json({ error: 'failed' });
+  }
+});
+
+apiRouter.get('/calendar/week', requireSession, async (req: Request, res: Response) => {
+  const session = (req as Request & { session: { userId: string } }).session;
+  const startParam = typeof req.query.start === 'string' ? req.query.start : undefined;
+  if (startParam) {
+    const parsed = new Date(startParam);
+    if (Number.isNaN(parsed.getTime())) {
+      res.status(400).json({ error: 'Invalid start parameter — use an ISO 8601 date' });
+      return;
+    }
+  }
+  try {
+    const week = await listWeekEventsWithSource(session.userId, startParam);
+    const payload = WeekCalendarResponseSchema.parse(week);
+    res.json(payload);
+  } catch (err) {
+    logger.error('calendar week failed', { err: String(err) });
+    res.status(500).json({ error: 'Could not load calendar week' });
   }
 });
 

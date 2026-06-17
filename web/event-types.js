@@ -397,12 +397,6 @@ export function createEventTypesManager({ api, onNavigate }) {
         onNavigate?.('event-types');
       });
     }
-    for (const id of ['nav-settings', 'nav-settings-et']) {
-      document.getElementById(id)?.addEventListener('click', (e) => {
-        e.preventDefault();
-        onNavigate?.('settings');
-      });
-    }
   }
 
   return {

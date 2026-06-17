@@ -88,7 +88,9 @@ import {
   updateEvent,
   getEventById,
   cancelEvent,
+  dedupeCalendarEvents,
 } from '../../../src/db/events.js';
+import type { CalendarEvent } from '../../../src/core/adts.js';
 
 describe('events db', () => {
   beforeEach(() => {
@@ -135,5 +137,43 @@ describe('events db', () => {
     });
     const updated = await updateEvent(ev.id, { title: 'New title' });
     expect(updated.title).toBe('New title');
+  });
+});
+
+describe('dedupeCalendarEvents', () => {
+  const base: CalendarEvent = {
+    id: '1',
+    userId: 'u1',
+    title: 'Vibecoding',
+    start: '2026-06-17T01:30:00.000Z',
+    end: '2026-06-17T02:00:00.000Z',
+    participants: [],
+    tier: 2,
+    isRecurring: false,
+    status: 'confirmed',
+    gcalEventId: 'gcal-abc',
+    proposedForSession: null,
+    description: null,
+  };
+
+  it('collapses rows with the same gcal_event_id', () => {
+    const dupes = [
+      base,
+      { ...base, id: '2' },
+      { ...base, id: '3' },
+    ];
+    expect(dedupeCalendarEvents(dupes)).toHaveLength(1);
+    expect(dedupeCalendarEvents(dupes)[0].id).toBe('1');
+  });
+
+  it('collapses rows with same slot when no gcal id', () => {
+    const noGcal = { ...base, gcalEventId: null };
+    const dupes = [noGcal, { ...noGcal, id: '2' }];
+    expect(dedupeCalendarEvents(dupes)).toHaveLength(1);
+  });
+
+  it('keeps distinct events', () => {
+    const other = { ...base, id: '2', gcalEventId: 'gcal-xyz', title: 'Other' };
+    expect(dedupeCalendarEvents([base, other])).toHaveLength(2);
   });
 });

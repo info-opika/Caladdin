@@ -4,8 +4,11 @@ import request from 'supertest';
 
 const mockGetPolicy = vi.fn();
 const mockGetUserById = vi.fn();
+const mockEnsureDefaultPolicy = vi.fn();
 const mockGetConversationContext = vi.fn();
 const mockGetPendingEmailConfirmation = vi.fn();
+const mockGetPendingSetupIntent = vi.fn();
+const mockSavePendingSetupIntent = vi.fn();
 const mockMapVoiceUtteranceToIntent = vi.fn();
 const mockOrchestrate = vi.fn();
 const mockHandleEmailConfirmationGate = vi.fn();
@@ -13,15 +16,28 @@ const mockApplyConversationContext = vi.fn();
 const mockApprovePendingConfirmation = vi.fn();
 const mockRejectPendingConfirmation = vi.fn();
 const mockVoiceRateCheck = vi.fn();
+const mockInsertCommandLog = vi.fn();
+const mockUpdateCommandLogParsed = vi.fn();
 
 vi.mock('../../src/db/users.js', () => ({
   getPolicy: (...args: unknown[]) => mockGetPolicy(...args),
   getUserById: (...args: unknown[]) => mockGetUserById(...args),
+  ensureDefaultPolicy: (...args: unknown[]) => mockEnsureDefaultPolicy(...args),
+  recordSetupFieldAnswer: vi.fn(),
 }));
 
 vi.mock('../../src/db/conversation-context.js', () => ({
   getConversationContext: (...args: unknown[]) => mockGetConversationContext(...args),
   getPendingEmailConfirmation: (...args: unknown[]) => mockGetPendingEmailConfirmation(...args),
+  getPendingSetupIntent: (...args: unknown[]) => mockGetPendingSetupIntent(...args),
+  savePendingSetupIntent: (...args: unknown[]) => mockSavePendingSetupIntent(...args),
+  clearPendingSetupIntent: vi.fn(),
+}));
+
+vi.mock('../../src/db/command_logs.js', () => ({
+  insertCommandLog: (...args: unknown[]) => mockInsertCommandLog(...args),
+  updateCommandLogParsed: (...args: unknown[]) => mockUpdateCommandLogParsed(...args),
+  markCommandLogConfirmed: vi.fn(),
 }));
 
 vi.mock('../../src/core/voice-intent-pipeline.js', () => ({
@@ -94,6 +110,10 @@ const basePolicy = {
   userId: USER_ID,
   schemaVersion: 1,
   timezone: 'America/Chicago',
+  workingHoursStart: '09:00',
+  workingHoursEnd: '18:00',
+  defaultMeetingLengthMinutes: 30,
+  setupFieldsAnswered: ['timezone', 'workingHours', 'meetingTimePreference', 'defaultMeetingLength'],
   shareAvailabilityOnInvite: true,
 };
 
@@ -102,9 +122,13 @@ describe('voice route — validation and happy path', () => {
     vi.clearAllMocks();
     mockVoiceRateCheck.mockResolvedValue({ allowed: true });
     mockGetPolicy.mockResolvedValue(basePolicy);
+    mockEnsureDefaultPolicy.mockResolvedValue(basePolicy);
     mockGetUserById.mockResolvedValue({ id: USER_ID, email: 'host@test.com' });
     mockGetConversationContext.mockResolvedValue(null);
     mockGetPendingEmailConfirmation.mockResolvedValue(null);
+    mockGetPendingSetupIntent.mockResolvedValue(null);
+    mockInsertCommandLog.mockResolvedValue('cmd-log-test-1');
+    mockUpdateCommandLogParsed.mockResolvedValue(undefined);
     mockApplyConversationContext.mockImplementation((_parsed) => _parsed);
     mockHandleEmailConfirmationGate.mockResolvedValue({
       proceed: true,

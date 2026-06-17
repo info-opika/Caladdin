@@ -5,19 +5,50 @@ import { validateUserId, validateUtterance } from '../core/safety.js';
 import { WARM_REDIRECT_MESSAGE } from '../core/adts.js';
 import { requireSession } from '../middleware/session.js';
 import { getRequestId } from '../middleware/requestId.js';
-import { getPolicy, getUserById } from '../db/users.js';
+import { getPolicy, getUserById, ensureDefaultPolicy, recordSetupFieldAnswer } from '../db/users.js';
 import { config } from '../config.js';
 import { voiceHttpRateLimiter } from '../core/rate-limiter.js';
 import { classifyVoiceRateLimitBucket } from '../core/voice-rate-limit-bucket.js';
 import { getOAuthClientForUser } from '../services/auth_service.js';
 import { approvePendingConfirmation, rejectPendingConfirmation } from '../core/confirmation-actions.js';
-import { getConversationContext, getPendingEmailConfirmation } from '../db/conversation-context.js';
+import {
+  getConversationContext,
+  getPendingEmailConfirmation,
+  getPendingSetupIntent,
+  savePendingSetupIntent,
+  clearPendingSetupIntent,
+} from '../db/conversation-context.js';
 import { applyConversationContext } from '../core/conversation-context.js';
 import { handleEmailConfirmationGate } from '../core/email-confirmation.js';
 import { resolveSystemMode } from '../core/system-mode.js';
 import { logger } from '../logger.js';
+import {
+  checkContextualSetup,
+  parseSetupAnswer,
+  type SetupFieldId,
+} from '../core/contextual-setup.js';
+import {
+  insertCommandLog,
+  updateCommandLogParsed,
+} from '../db/command_logs.js';
+import type { ParsedIntent } from '../core/adts.js';
 
 export const voiceRouter = Router();
+
+async function tryResolvePendingSetup(
+  userId: string,
+  utterance: string,
+): Promise<ParsedIntent | null> {
+  const pending = await getPendingSetupIntent(userId);
+  if (!pending) return null;
+
+  const parsedAnswer = parseSetupAnswer(pending.setupField, utterance);
+  if (!parsedAnswer) return null;
+
+  await recordSetupFieldAnswer(userId, pending.setupField, parsedAnswer);
+  await clearPendingSetupIntent(userId);
+  return pending.deferredParsed;
+}
 
 voiceRouter.post('/', requireSession, async (req: Request, res: Response) => {
   const requestId = getRequestId(req);
@@ -53,6 +84,18 @@ voiceRouter.post('/', requireSession, async (req: Request, res: Response) => {
     return;
   }
 
+  const inputMode = req.body.source === 'text' ? 'text' : 'voice';
+  let commandLogId: string | undefined;
+  try {
+    commandLogId = await insertCommandLog({
+      userId,
+      rawInput: utterance,
+      inputMode,
+    });
+  } catch (e) {
+    logger.warn('Command log insert failed', { userId, error: String(e) });
+  }
+
   try {
     const [policy, conversationContext, pendingEmail, oauthClient, systemMode] = await Promise.all([
       getPolicy(userId),
@@ -75,46 +118,86 @@ voiceRouter.post('/', requireSession, async (req: Request, res: Response) => {
     }
 
     const tz = policy?.timezone ?? 'America/Chicago';
-    const { intent: pipelineIntent } = await mapVoiceUtteranceToIntent(utterance, { userId, timezone: tz });
-    let parsed = pipelineIntent;
+    let parsed: ParsedIntent | null = await tryResolvePendingSetup(userId, utterance);
 
-    if (parsed.intent === 'WARM_REDIRECT') {
-      if (pendingEmail) {
-        parsed = { ...parsed, intent: 'RESOLVE_MANUAL' as const, params: {} };
-      } else {
+    if (!parsed) {
+      const { intent: pipelineIntent } = await mapVoiceUtteranceToIntent(utterance, { userId, timezone: tz });
+      parsed = pipelineIntent;
+
+      if (parsed.intent === 'WARM_REDIRECT') {
+        if (pendingEmail) {
+          parsed = { ...parsed, intent: 'RESOLVE_MANUAL' as const, params: {} };
+        } else {
+          res.setHeader('x-request-id', requestId);
+          res.json({
+            intent: 'RESOLVE_MANUAL',
+            success: true,
+            requiresConfirmation: false,
+            messageToUser: WARM_REDIRECT_MESSAGE,
+            schemaVersion: 1,
+          });
+          return;
+        }
+      }
+
+      parsed = applyConversationContext(parsed, conversationContext);
+
+      const emailGate = await handleEmailConfirmationGate(
+        parsed,
+        userId,
+        conversationContext,
+        inputMode,
+      );
+      if (!emailGate.proceed) {
         res.setHeader('x-request-id', requestId);
-        res.json({
-          intent: 'RESOLVE_MANUAL',
-          success: true,
-          requiresConfirmation: false,
-          messageToUser: WARM_REDIRECT_MESSAGE,
-          schemaVersion: 1,
-        });
+        res.json(emailGate.result);
         return;
+      }
+      parsed = emailGate.parsed;
+    }
+
+    if (commandLogId) {
+      try {
+        await updateCommandLogParsed(commandLogId, {
+          intent: parsed.intent,
+          params: parsed.params ?? {},
+        });
+      } catch (e) {
+        logger.warn('Command log parse update failed', { commandLogId, error: String(e) });
       }
     }
 
-    parsed = applyConversationContext(parsed, conversationContext);
-
-    const emailGate = await handleEmailConfirmationGate(
-      parsed,
-      userId,
-      conversationContext,
-      req.body.source === 'text' ? 'text' : 'voice',
-    );
-    if (!emailGate.proceed) {
+    const effectivePolicy = policy ?? (await ensureDefaultPolicy(userId));
+    const setupGap = checkContextualSetup(effectivePolicy, parsed.intent, parsed);
+    if (setupGap) {
+      await savePendingSetupIntent(userId, {
+        setupField: setupGap.field as SetupFieldId,
+        deferredParsed: parsed,
+        originalUtterance: utterance,
+      });
       res.setHeader('x-request-id', requestId);
-      res.json(emailGate.result);
+      res.json({
+        outcome: 'needs_setup',
+        intent: parsed.intent,
+        success: false,
+        requiresConfirmation: false,
+        setupField: setupGap.field,
+        formType: setupGap.formType,
+        showFormFallback: true,
+        pendingUtterance: utterance,
+        messageToUser: setupGap.question,
+        schemaVersion: 1,
+      });
       return;
     }
-    parsed = emailGate.parsed;
 
     const result = await orchestrate(parsed, {
       userId,
       requestId,
-      timezone: policy?.timezone,
+      timezone: effectivePolicy.timezone,
       oauthClient: oauthClient ?? undefined,
       conversationContext,
+      commandLogId,
     });
     res.setHeader('x-request-id', requestId);
     res.json(result);

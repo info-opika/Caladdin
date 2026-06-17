@@ -50,7 +50,10 @@
         </article>
       </div>
 
-      <a href="/auth/start" class="btn primary" id="signup-btn" aria-label="Sign in with Google">Sign in with Google</a>
+      <div class="auth-cta-row">
+        <a href="/auth/start?mode=signup" class="btn primary" id="signup-btn" aria-label="Sign up with Google">Sign up with Google</a>
+        <a href="/auth/start?mode=signin" class="btn secondary" id="signin-btn" aria-label="Sign in with Google">Sign in with Google</a>
+      </div>
       <p class="hint">We recommend a test Google account for your first try.</p>
 
       <div id="waitlist-panel" class="panel hidden">
@@ -76,26 +79,23 @@
         </div>
 
         <fieldset class="privacy-options">
-          <legend>Who can see your calendar details?</legend>
+          <legend>Who can see your calendar on shared links?</legend>
           <label class="privacy-option">
             <input type="radio" name="privacy" value="private" checked />
             <span class="privacy-option-text">
-              <strong>Private</strong>
-              <span>Only you see event titles and details.</span>
+              <strong>Just me</strong>
             </span>
           </label>
           <label class="privacy-option">
             <input type="radio" name="privacy" value="trusted" />
             <span class="privacy-option-text">
-              <strong>Trusted</strong>
-              <span>Close contacts see more context on shared links.</span>
+              <strong>People I share a link with see times only</strong>
             </span>
           </label>
           <label class="privacy-option">
             <input type="radio" name="privacy" value="open" />
             <span class="privacy-option-text">
-              <strong>Open</strong>
-              <span>Guests see titles on your public availability view.</span>
+              <strong>People I share a link with see full details</strong>
             </span>
           </label>
         </fieldset>
@@ -106,13 +106,8 @@
     </section>
 
     <section id="chat" class="screen hidden">
-      <header class="app-header">
+      <header class="app-header app-header-minimal">
         <h2>Caladdin</h2>
-        <nav class="app-nav" aria-label="Host navigation">
-          <a href="#" id="nav-chat" class="app-nav-link is-active" aria-current="page">Chat</a>
-          <a href="#" id="nav-event-types" class="app-nav-link">Booking links</a>
-          <a href="#" id="nav-settings" class="app-nav-link">Settings</a>
-        </nav>
         <div class="app-header-actions">
           <label class="theme-toggle" title="Color theme">
             <span class="sr-only">Color theme</span>
@@ -128,9 +123,11 @@
 
       <div id="reconnect-banner" class="banner hidden" role="alert">
         <span>Your calendar connection needs to be refreshed.</span>
-        <a href="/auth/start">Reconnect Google Calendar</a>
+        <a href="/auth/start?mode=signin">Reconnect Google Calendar</a>
       </div>
 
+      <div class="home-layout">
+        <div class="home-chat">
       <div id="messages" class="messages" aria-live="polite" aria-relevant="additions">
         <div id="empty-state" class="empty-state">
           <div class="empty-state-icon" aria-hidden="true">
@@ -142,9 +139,9 @@
           <h3>Ready when you are</h3>
           <p>Ask about your schedule or try one of these:</p>
           <div class="suggestion-chips" role="group" aria-label="Suggested prompts">
-            <button type="button" class="chip" data-prompt="What's on my calendar today?">Today's agenda</button>
-            <button type="button" class="chip" data-prompt="What meetings do I have this week?">This week</button>
-            <button type="button" class="chip" data-prompt="Find time for a 30 minute call next week">Find a slot</button>
+            <button type="button" class="chip" data-prompt="What's on my calendar today?">Plan for today</button>
+            <button type="button" class="chip" data-prompt="Invite someone@example.com to a meeting with me">Invite to a meeting</button>
+            <button type="button" class="chip" data-prompt="Block 30 minutes for meditation">Block personal time</button>
           </div>
         </div>
       </div>
@@ -179,6 +176,10 @@
         <button type="button" id="thumbs-up" class="btn ghost" aria-label="Good response">Helpful</button>
         <button type="button" id="thumbs-down" class="btn ghost" aria-label="Bad response">Not helpful</button>
       </div>
+        </div>
+
+        <aside id="calendar-week" class="home-calendar" aria-label="Weekly calendar"></aside>
+      </div>
     </section>
 
     <section id="event-types" class="screen screen-wide hidden">
@@ -187,7 +188,6 @@
         <nav class="app-nav" aria-label="Host navigation">
           <a href="#" id="nav-chat-et" class="app-nav-link">Chat</a>
           <a href="#" id="nav-event-types-et" class="app-nav-link is-active" aria-current="page">Booking links</a>
-          <a href="#" id="nav-settings-et" class="app-nav-link">Settings</a>
         </nav>
         <div class="app-header-actions">
           <label class="theme-toggle" title="Color theme">
@@ -276,7 +276,6 @@
         <nav class="app-nav" aria-label="Host navigation">
           <a href="#" id="nav-chat-st" class="app-nav-link">Chat</a>
           <a href="#" id="nav-event-types-st" class="app-nav-link">Booking links</a>
-          <a href="#" id="nav-settings-st" class="app-nav-link is-active" aria-current="page">Settings</a>
         </nav>
         <div class="app-header-actions">
           <label class="theme-toggle" title="Color theme">
@@ -307,26 +306,23 @@
         <div class="panel settings-panel">
           <h3>Privacy</h3>
           <fieldset class="privacy-options">
-            <legend class="sr-only">Calendar privacy</legend>
+            <legend class="sr-only">Calendar privacy on shared links</legend>
             <label class="privacy-option">
               <input type="radio" name="settings-privacy" value="private" checked />
               <span class="privacy-option-text">
-                <strong>Private</strong>
-                <span>Only you see event titles and details.</span>
+                <strong>Just me</strong>
               </span>
             </label>
             <label class="privacy-option">
               <input type="radio" name="settings-privacy" value="trusted" />
               <span class="privacy-option-text">
-                <strong>Trusted</strong>
-                <span>Close contacts see more context on shared links.</span>
+                <strong>People I share a link with see times only</strong>
               </span>
             </label>
             <label class="privacy-option">
               <input type="radio" name="settings-privacy" value="open" />
               <span class="privacy-option-text">
-                <strong>Open</strong>
-                <span>Guests see titles on your public availability view.</span>
+                <strong>People I share a link with see full details</strong>
               </span>
             </label>
           </fieldset>
@@ -340,6 +336,22 @@
           <button type="button" id="save-settings-hours" class="btn primary settings-save">Save availability</button>
           <p id="settings-hours-error" class="hint hidden" role="alert" style="color: var(--color-error);"></p>
         </div>
+
+        <details class="settings-advanced settings-panel-wide">
+          <summary class="settings-advanced-summary">Advanced</summary>
+          <div class="settings-advanced-body">
+            <div class="panel settings-panel" id="settings-webhooks-panel">
+              <h3>Webhooks</h3>
+              <p class="hint">Notify external services when bookings are confirmed or cancelled.</p>
+              <div id="settings-webhooks-list" aria-label="Webhook subscriptions"></div>
+            </div>
+            <div class="panel settings-panel" id="settings-team-panel">
+              <h3>Team scheduling</h3>
+              <p class="hint">Round-robin and shared availability for team booking links.</p>
+              <div id="settings-team-scheduling" aria-label="Team scheduling settings"></div>
+            </div>
+          </div>
+        </details>
       </div>
     </section>
   </div>
