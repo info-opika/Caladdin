@@ -20,17 +20,19 @@ function parseEventBounds(ev: calendar_v3.Schema$Event, profileZone: string): { 
   const st = ev.start;
   const en = ev.end;
   if (st?.dateTime && en?.dateTime) {
-    const s = DateTime.fromISO(st.dateTime, { setZone: true });
-    const e = DateTime.fromISO(en.dateTime, { setZone: true });
+    const startZone = st.timeZone?.trim() || profileZone;
+    const endZone = en.timeZone?.trim() || startZone;
+    const s = DateTime.fromISO(st.dateTime, { zone: startZone });
+    const e = DateTime.fromISO(en.dateTime, { zone: endZone });
     if (!s.isValid || !e.isValid) return null;
-    return { start: s, end: e };
+    return { start: s.toUTC(), end: e.toUTC() };
   }
   if (st?.date && en?.date) {
     const zs = `${st.date}T00:00:00`;
     const ze = `${en.date}T23:59:59`;
     return {
-      start: DateTime.fromISO(zs, { zone: profileZone }),
-      end: DateTime.fromISO(ze, { zone: profileZone }),
+      start: DateTime.fromISO(zs, { zone: profileZone }).toUTC(),
+      end: DateTime.fromISO(ze, { zone: profileZone }).toUTC(),
     };
   }
   return null;
@@ -60,7 +62,9 @@ export function enumerateProtectOccurrences(
       const hhmm = (h: number, m: number) => `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
       const os = DateTime.fromISO(`${iso}T${hhmm(sh, sm)}:00`, { zone });
       const oe = DateTime.fromISO(`${iso}T${hhmm(eh, em)}:00`, { zone });
-      if (os.isValid && oe.isValid && oe > os) out.push({ start: os, end: oe });
+      if (os.isValid && oe.isValid && oe > os) {
+        out.push({ start: os.toUTC(), end: oe.toUTC() });
+      }
     }
     d = d.plus({ days: 1 });
   }
@@ -94,9 +98,11 @@ export function collectOverlapsForProtectBlock(
       if (seenIds.has(id)) continue;
       seenIds.add(id);
       const title = ev.summary?.trim() || '(untitled event)';
-      const rangeLabel = `${bounds.start.toFormat('EEE MMM d')}, ${bounds.start.toFormat(
+      const localStart = bounds.start.setZone(profileZone);
+      const localEnd = bounds.end.setZone(profileZone);
+      const rangeLabel = `${localStart.toFormat('EEE MMM d')}, ${localStart.toFormat(
         'h:mm a'
-      )}–${bounds.end.toFormat('h:mm a')} — ${title}`;
+      )}–${localEnd.toFormat('h:mm a')} — ${title}`;
       hits.push({
         eventId: ev.id,
         title,

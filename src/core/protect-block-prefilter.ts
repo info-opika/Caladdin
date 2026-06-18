@@ -292,6 +292,39 @@ export function inferProtectBlockParams(utterance: string, profileTimezone: stri
   const raw = utterance.trim();
   const zone = profileTimezone?.trim() || 'UTC';
 
+  /** "Block 1 hour for lunch tomorrow 12pm to 1pm Texas time titled Team Lunch" */
+  const oneShotTitled = raw.match(
+    /\bblock\s+(?:\d+\s+(?:hour|hr|hrs?|minute|min|mins?)\s+)?(?:for\s+)?\w+\s+(?:tmrw|tomorrow)\s+(\d{1,2})(?::(\d{2}))?\s*(am|pm)\s+to\s+(\d{1,2})(?::(\d{2}))?\s*(am|pm)(?:\s+(?:\w+\s+)*time)?\s+titled\s+(.+)$/i,
+  );
+  if (oneShotTitled) {
+    const a = parseSpokenClock(
+      'a',
+      `${oneShotTitled[1]!}${oneShotTitled[2] ? `:${oneShotTitled[2]}` : ''} ${oneShotTitled[3]!}`.trim(),
+    );
+    const b = parseSpokenClock(
+      'b',
+      `${oneShotTitled[4]!}${oneShotTitled[5] ? `:${oneShotTitled[5]}` : ''} ${oneShotTitled[6]!}`.trim(),
+    );
+    const title = oneShotTitled[7]!.trim().replace(/\s+/g, ' ').slice(0, 140);
+    if (a && b && title && a.hh * 60 + a.mm < b.hh * 60 + b.mm) {
+      const t0 = DateTime.now().setZone(zone).plus({ days: 1 }).startOf('day');
+      const luxW = t0.weekday;
+      const dow = luxW === 7 ? 0 : luxW;
+      return {
+        label: title,
+        startTime: padTime(a.hh, a.mm),
+        endTime: padTime(b.hh, b.mm),
+        daysOfWeek: [dow],
+        startDate: t0.toISODate()!,
+        rangeEnd: t0.toISODate()!,
+        timezone: zone,
+        tier: 1,
+        rawUtterance: raw,
+        source: 'infer_block_titled_tomorrow',
+      };
+    }
+  }
+
   const DAY_WORD = `(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday)`;
 
   /** "Block Tuesday morning from 9 AM Texas Time to 9:30 AM" */

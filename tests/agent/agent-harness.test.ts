@@ -61,6 +61,7 @@ vi.mock('../../src/handlers/undo.js', () => ({
 vi.mock('../../src/db/conversation-context.js', () => ({
   recordLastEvent: vi.fn().mockResolvedValue(undefined),
   getConversationContext: vi.fn().mockResolvedValue(null),
+  getPendingFrame: vi.fn().mockResolvedValue(null),
 }));
 
 vi.mock('../../src/db/users.js', () => ({

@@ -36,7 +36,8 @@ export const config = {
     process.env.FREELLMAPI_BASE_URL ??
     'https://freellmapiserver-production-df6f.up.railway.app/v1',
   freellmapiApiKey: required('FREELLMAPI_API_KEY'),
-  agentModel: process.env.CALADDIN_AGENT_MODEL ?? 'auto:caladdin-agent',
+  /** FreeLLMAPI open routing — `auto:smart` works without a custom dashboard profile. */
+  agentModel: process.env.CALADDIN_AGENT_MODEL ?? 'auto:smart',
   agentEscalationModel: process.env.CALADDIN_AGENT_ESCALATION_MODEL ?? 'auto:smart',
   llmTemperature: 0,
   parallelToolCalls: false,

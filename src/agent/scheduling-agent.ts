@@ -6,7 +6,16 @@ import { createLlmClient, type LlmClient, type LlmMessage } from '../services/ll
 import { CORE_TOOL_NAMES, selectToolsForUtterance } from './tool-pruning.js';
 import { checkWrongTool } from './tool-call-guard.js';
 import { validateHonestReply } from './honesty-validator.js';
+import { stripLlmReasoningLeak } from './reply-sanitizer.js';
+import { assembleAgentContext } from './agent-context-assembler.js';
 import { runAgentPrefilter } from './agent-prefilter.js';
+import { getPendingFrame } from '../db/conversation-context.js';
+import {
+  appendAgentChatTurn,
+  clearAgentChatSession,
+  getAgentChatHistory,
+} from './agent-chat-session.js';
+import { WARM_REDIRECT_MESSAGE } from '../core/adts.js';
 import type {
   AgentContext,
   AgentMessage,
@@ -85,6 +94,11 @@ function buildTrace(
   };
 }
 
+function isMissingRoutingProfileError(err: unknown): boolean {
+  const msg = err instanceof Error ? err.message : String(err);
+  return /Profile\s+'[^']+'\s+not found/i.test(msg);
+}
+
 async function completeWithOptionalStream(
   llm: LlmClient,
   req: Parameters<LlmClient['complete']>[0],
@@ -105,13 +119,47 @@ async function completeWithOptionalStream(
     }
     if (response) return response;
     throw new Error('stream ended without response');
-  } catch {
+  } catch (streamErr) {
+    if (isMissingRoutingProfileError(streamErr)) throw streamErr;
     const res = await llm.complete(req);
     if (res.text && onToken) {
       onToken(res.text);
     }
     return res;
   }
+}
+
+/** Retry with escalation model when a custom routing profile is missing on FreeLLMAPI. */
+async function completeResilient(
+  llm: LlmClient,
+  req: Parameters<LlmClient['complete']>[0],
+  onToken?: (text: string) => void,
+): Promise<Awaited<ReturnType<LlmClient['complete']>>> {
+  try {
+    return await completeWithOptionalStream(llm, req, onToken);
+  } catch (err) {
+    const fallback = config.agentEscalationModel;
+    if (!isMissingRoutingProfileError(err) || req.model === fallback || req.model === 'auto') {
+      throw err;
+    }
+    return completeWithOptionalStream(llm, { ...req, model: fallback }, onToken);
+  }
+}
+
+function llmUnavailableResult(model: string): SchedulingAgentResult {
+  return {
+    reply:
+      "I'm having trouble reaching the scheduling AI right now. Please try again in a moment.",
+    toolCalls: [],
+    rounds: 0,
+    trace: {
+      model,
+      rounds: 0,
+      totalLatencyMs: 0,
+      tools: [],
+      requestedModel: model,
+    },
+  };
 }
 
 async function runAgentLoop(
@@ -142,11 +190,23 @@ async function runAgentLoop(
     ? [...CORE_TOOL_NAMES]
     : selectToolsForUtterance(userMessage, history);
   const tools = buildOpenAiToolDefinitions(toolNames);
-  const system = buildSystemPrompt(built.systemContextBlock, toolNames);
 
+  const pendingIntent = await getPendingFrame(params.userId).catch(() => null);
+  const contextAssembly = assembleAgentContext({
+    userUtterance: userMessage,
+    chatHistory: history,
+    agentContext: agentCtx,
+    baseContextBlock: built.systemContextBlock,
+    pendingIntent,
+  });
+  const system = buildSystemPrompt(contextAssembly.enrichedContextBlock, toolNames);
+
+  const userContent = contextAssembly.userMessagePrefix
+    ? `${contextAssembly.userMessagePrefix}\n\n${userMessage}`
+    : userMessage;
   const messages: LlmMessage[] = [
     ...toOpenAiHistory(history),
-    { role: 'user', content: userMessage },
+    { role: 'user', content: userContent },
   ];
 
   const toolCalls: SchedulingAgentResult['toolCalls'] = [];
@@ -160,7 +220,7 @@ async function runAgentLoop(
   while (rounds < maxRounds) {
     rounds += 1;
 
-    const res = await completeWithOptionalStream(
+    const res = await completeResilient(
       llm,
       {
         model,
@@ -185,7 +245,7 @@ async function runAgentLoop(
     lastReply = res.text;
 
     if (res.finishReason !== 'tool_calls' || res.toolCalls.length === 0) {
-      const honest = validateHonestReply(lastReply, toolCalls);
+      const honest = stripLlmReasoningLeak(validateHonestReply(lastReply, toolCalls));
       return {
         reply: honest,
         toolCalls,
@@ -275,9 +335,11 @@ async function runAgentLoop(
     }
   }
 
-  const honest = validateHonestReply(
-    lastReply || 'I need a bit more information to continue.',
-    toolCalls,
+  const honest = stripLlmReasoningLeak(
+    validateHonestReply(
+      lastReply || 'I need a bit more information to continue.',
+      toolCalls,
+    ),
   );
 
   return {
@@ -295,6 +357,38 @@ async function runAgentLoop(
       maxFallbackAttempts,
     ),
   };
+}
+
+function isAlreadyProtectedToolResult(data: unknown): boolean {
+  return (
+    typeof data === 'object' &&
+    data !== null &&
+    'alreadyProtected' in data &&
+    (data as { alreadyProtected?: boolean }).alreadyProtected === true
+  );
+}
+
+export function shouldClearAgentChatSession(result: SchedulingAgentResult): boolean {
+  if (result.toolCalls.length === 0) return false;
+  const successful = result.toolCalls.filter((t) => t.result.ok);
+  if (successful.length === 0) return false;
+  if (successful.every((t) => isAlreadyProtectedToolResult(t.result.data))) return false;
+  return successful.some((t) => !isAlreadyProtectedToolResult(t.result.data));
+}
+
+async function persistAgentSession(
+  userId: string,
+  userMessage: string,
+  result: SchedulingAgentResult,
+): Promise<void> {
+  if (shouldClearAgentChatSession(result)) {
+    await clearAgentChatSession(userId).catch(() => undefined);
+    return;
+  }
+  if (!result.reply.trim() || result.reply === WARM_REDIRECT_MESSAGE) {
+    return;
+  }
+  await appendAgentChatTurn(userId, userMessage, result.reply).catch(() => undefined);
 }
 
 export async function runSchedulingAgent(
@@ -315,8 +409,12 @@ export async function runSchedulingAgent(
     conversationContext: built.conversationContext,
   };
 
-  const prefilter = await runAgentPrefilter(userMessage, agentCtx, model);
+  const chatHistory =
+    history.length > 0 ? history : await getAgentChatHistory(params.userId);
+
+  const prefilter = await runAgentPrefilter(userMessage, agentCtx, model, chatHistory);
   if (prefilter.bypassed) {
+    await persistAgentSession(params.userId, userMessage, prefilter);
     return {
       reply: prefilter.reply,
       toolCalls: prefilter.toolCalls,
@@ -326,16 +424,25 @@ export async function runSchedulingAgent(
   }
 
   const maxRounds = options.maxRounds ?? MAX_AGENT_ROUNDS;
-  const primary = await runAgentLoop(userMessage, params, history, options, built, false);
 
-  const exhausted = primary.rounds >= maxRounds;
-  const weakReply = !primary.reply.trim() || primary.reply === 'I need a bit more information to continue.';
-  const failedTools = primary.toolCalls.length > 0 && primary.toolCalls.every((t) => !t.result.ok);
+  try {
+    const primary = await runAgentLoop(userMessage, params, chatHistory, options, built, false);
 
-  if (exhausted && (weakReply || failedTools)) {
-    const escalated = await runAgentLoop(userMessage, params, history, options, built, true);
-    if (escalated.reply.trim()) return escalated;
+    const exhausted = primary.rounds >= maxRounds;
+    const weakReply = !primary.reply.trim() || primary.reply === 'I need a bit more information to continue.';
+    const failedTools = primary.toolCalls.length > 0 && primary.toolCalls.every((t) => !t.result.ok);
+
+    if (exhausted && (weakReply || failedTools)) {
+      const escalated = await runAgentLoop(userMessage, params, chatHistory, options, built, true);
+      if (escalated.reply.trim()) {
+        await persistAgentSession(params.userId, userMessage, escalated);
+        return escalated;
+      }
+    }
+
+    await persistAgentSession(params.userId, userMessage, primary);
+    return primary;
+  } catch {
+    return llmUnavailableResult(model);
   }
-
-  return primary;
 }

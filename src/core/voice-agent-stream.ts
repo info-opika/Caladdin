@@ -148,8 +148,19 @@ export async function* runAgentStream(
       return result;
     })
     .catch((err) => {
+      logger.error('Agent stream failed', { error: String(err), requestId: ctx.requestId });
+      const fallback = buildAgentVoiceBody(
+        {
+          reply:
+            "I'm having trouble reaching the scheduling AI right now. Please try again in a moment.",
+          toolCalls: [],
+          rounds: 0,
+          trace: { model: config.agentModel, rounds: 0, totalLatencyMs: 0, tools: [] },
+        },
+        ctx.timezone,
+      );
+      queue.push({ type: 'result', payload: fallback });
       wake?.();
-      throw err;
     });
 
   while (true) {

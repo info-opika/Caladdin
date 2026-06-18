@@ -26,7 +26,10 @@ export async function classifyIntent(
   });
 }
 
-export function isCalendarRelated(utterance: string): boolean {
+export function isCalendarRelated(
+  utterance: string,
+  options?: { activeAgentSession?: boolean },
+): boolean {
   const lower = utterance.toLowerCase();
   if (/\bwhat\s+is\s+the\s+capital\s+of\b/.test(lower)) return false;
   if (/\bwhat\s+time\s+is\s+it\s+in\b/.test(lower)) return false;
@@ -45,11 +48,23 @@ export function isCalendarRelated(utterance: string): boolean {
     return false;
   }
 
+  if (/\bfor\s+the\s+next\s+(\d+|four|4)\s+weeks?\b/i.test(lower)) return true;
+
   const keywords = [
     'calendar', 'meet', 'schedule', 'scheduling', 'time', 'block', 'protect', 'shield',
     'reserve', 'hold', 'cancel', 'move', 'book', 'appointment', 'call', 'lunch', 'evening',
     'tomorrow', 'tmrw', 'friday', 'tuesday', 'monday', 'wednesday', 'thursday', 'saturday',
     'sunday', 'morning', 'afternoon', 'push', 'flush', 'session', 'gym', 'events',
+    'recurring', 'everyday', 'every day', 'daily', 'weekday', 'meditation', 'minutes',
+    'minute', 'am', 'pm', 'texas', 'central', 'label', 'weeks', 'week', 'next', 'deep',
+    'work', 'hour', 'hours',
   ];
-  return keywords.some((kw) => lower.includes(kw));
+  if (keywords.some((kw) => lower.includes(kw))) return true;
+
+  // Short follow-ups during an active agent session ("Meditation Time", "Recurring every day").
+  if (options?.activeAgentSession && utterance.trim().length <= 120) {
+    return true;
+  }
+
+  return false;
 }

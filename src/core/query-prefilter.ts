@@ -79,6 +79,17 @@ const CANONICAL: Record<string, QueryCalendarParams> = {
   'tomorrow schedule': { queryType: 'tomorrow', day: 'tomorrow' },
   'my schedule tomorrow': { queryType: 'tomorrow', day: 'tomorrow' },
   'whats on tomorrow': { queryType: 'tomorrow', day: 'tomorrow' },
+  // This week / next week agenda
+  'what is on my calendar this week': { queryType: 'week_range', weekRangeKind: 'this_week' },
+  'whats on my calendar this week': { queryType: 'week_range', weekRangeKind: 'this_week' },
+  'whats on my cal this week': { queryType: 'week_range', weekRangeKind: 'this_week' },
+  'what do i have this week': { queryType: 'week_range', weekRangeKind: 'this_week' },
+  'show my calendar this week': { queryType: 'week_range', weekRangeKind: 'this_week' },
+  'show my meetings this week': { queryType: 'week_range', weekRangeKind: 'this_week' },
+  'what is on my calendar next week': { queryType: 'week_range', weekRangeKind: 'next_week' },
+  'whats on my calendar next week': { queryType: 'week_range', weekRangeKind: 'next_week' },
+  'whats on my cal next week': { queryType: 'week_range', weekRangeKind: 'next_week' },
+  'what do i have next week': { queryType: 'week_range', weekRangeKind: 'next_week' },
   // Next
   'whats next': { queryType: 'next' },
   'whats the next': { queryType: 'next' },

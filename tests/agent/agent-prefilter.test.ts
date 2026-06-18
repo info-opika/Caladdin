@@ -65,4 +65,43 @@ describe('runAgentPrefilter', () => {
       expect(mockExecute).toHaveBeenCalledWith('get_calendar_summary', expect.any(Object), CTX);
     }
   });
+
+  it('allows short follow-ups during an active session', async () => {
+    mockExecute.mockResolvedValue({ ok: true, data: { message: 'Block created.' } });
+    const history = [
+      { role: 'user' as const, content: 'Block 30 minutes for meditation' },
+      { role: 'assistant' as const, content: 'Which day and time?' },
+      { role: 'user' as const, content: 'Everyday from 7 AM to 7:30 AM' },
+      { role: 'assistant' as const, content: 'What label?' },
+    ];
+    const out = await runAgentPrefilter('Recurring every day', CTX, 'auto:smart', history);
+    expect(out.bypassed).toBe(true);
+    if (out.bypassed) {
+      expect(out.prefilter).not.toBe('off_topic');
+    }
+  });
+
+  it('assembles recurring block from merged session turns', async () => {
+    mockExecute.mockResolvedValue({ ok: true, data: { message: 'Block created.' } });
+    const history = [
+      { role: 'user' as const, content: 'Block 30 minutes for meditation' },
+      { role: 'assistant' as const, content: 'Which day and time?' },
+      { role: 'user' as const, content: 'Everyday from 7 AM Texas time to 7:30 AM Texas time' },
+      { role: 'assistant' as const, content: 'What label?' },
+    ];
+    const out = await runAgentPrefilter('Meditation Time', CTX, 'auto:smart', history);
+    expect(out.bypassed).toBe(true);
+    if (out.bypassed) {
+      expect(out.prefilter).toBe('protect_block');
+      expect(mockExecute).toHaveBeenCalledWith(
+        'create_recurring_block',
+        expect.objectContaining({
+          label: 'Meditation Time',
+          startTime: '07:00',
+          endTime: '07:30',
+        }),
+        CTX,
+      );
+    }
+  });
 });

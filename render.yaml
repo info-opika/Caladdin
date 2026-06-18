@@ -30,7 +30,7 @@ envVarGroups:
       - key: FREELLMAPI_BASE_URL
         value: https://freellmapiserver-production-df6f.up.railway.app/v1
       - key: CALADDIN_AGENT_MODEL
-        value: auto:caladdin-agent
+        value: auto:smart
       - key: FREELLMAPI_API_KEY
         sync: false
       - key: SUPABASE_URL

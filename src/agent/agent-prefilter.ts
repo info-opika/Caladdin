@@ -5,13 +5,23 @@ import { tryMatchSchedulingLink, extractDurationMinutes } from '../core/scheduli
 import { isCalendarRelated } from '../services/llm.js';
 import { WARM_REDIRECT_MESSAGE } from '../core/adts.js';
 import { executeAgentTool } from './tools/registry.js';
-import type { AgentContext, SchedulingAgentResult } from './types.js';
+import { tryAssembleRecurringBlockFromTurns } from './recurring-block-assembler.js';
+import type { AgentContext, AgentMessage, SchedulingAgentResult } from './types.js';
 
 export type AgentPrefilterOutcome =
   | { bypassed: false }
   | ({ bypassed: true; prefilter: string } & SchedulingAgentResult);
 
-function formatCalendarSummaryReply(result: Awaited<ReturnType<typeof executeAgentTool>>): string {
+function formatEventTimeLabel(iso: string, timezone: string): string {
+  const dt = DateTime.fromISO(iso, { setZone: true });
+  if (!dt.isValid) return iso;
+  return dt.setZone(timezone).toFormat('ccc M/d h:mm a');
+}
+
+function formatCalendarSummaryReply(
+  result: Awaited<ReturnType<typeof executeAgentTool>>,
+  timezone: string,
+): string {
   if (!result.ok) {
     return result.error ?? 'I could not read your calendar right now.';
   }
@@ -20,7 +30,12 @@ function formatCalendarSummaryReply(result: Awaited<ReturnType<typeof executeAge
   if (events.length === 0) {
     return 'Nothing on your calendar for that period.';
   }
-  const lines = events.slice(0, 8).map((e) => `- ${e.title}: ${e.start}`);
+  const zone = timezone.trim() || 'America/Chicago';
+  const lines = events.slice(0, 8).map((e) => {
+    const start = formatEventTimeLabel(e.start, zone);
+    const end = formatEventTimeLabel(e.end, zone);
+    return `- ${e.title}: ${start} – ${end}`;
+  });
   return `Here is what I see:\n${lines.join('\n')}`;
 }
 
@@ -98,14 +113,53 @@ export async function runAgentPrefilter(
   utterance: string,
   agentCtx: AgentContext,
   model: string,
+  history: AgentMessage[] = [],
 ): Promise<AgentPrefilterOutcome> {
   const tz = agentCtx.timezone;
+  const sessionActive = history.length > 0;
 
-  if (!isCalendarRelated(utterance)) {
+  if (!isCalendarRelated(utterance, { activeAgentSession: sessionActive })) {
     return prefilterResult('off_topic', WARM_REDIRECT_MESSAGE, [], model);
   }
 
-  const protectIntent = tryProtectBlockFromInfer(utterance, tz);
+  const userTurns = [
+    ...history.filter((m) => m.role === 'user').map((m) => m.content),
+    utterance,
+  ];
+  const combinedUtterance = userTurns.join(' ');
+
+  const queryHit = tryMatchQueryCalendar(utterance);
+  if (queryHit && (queryHit.queryType === 'today' || queryHit.queryType === 'tomorrow' || queryHit.weekRangeKind)) {
+    const range = queryParamsToRange(queryHit, tz);
+    const result = await executeAgentTool('get_calendar_summary', range, agentCtx);
+    return prefilterResult(
+      'query',
+      formatCalendarSummaryReply(result, tz),
+      [{ name: 'get_calendar_summary', input: range, result }],
+      model,
+    );
+  }
+
+  const assembled = tryAssembleRecurringBlockFromTurns(userTurns, tz);
+  if (assembled) {
+    const result = await executeAgentTool('create_recurring_block', assembled, agentCtx);
+    const reply = result.ok
+      ? (typeof result.data === 'object' &&
+        result.data !== null &&
+        'message' in result.data &&
+        typeof (result.data as { message: string }).message === 'string'
+          ? (result.data as { message: string }).message
+          : `Your daily ${assembled.label} block is set from ${assembled.startTime} to ${assembled.endTime}.`)
+      : (result.error ?? 'I could not create that block.');
+    return prefilterResult(
+      'protect_block',
+      reply,
+      [{ name: 'create_recurring_block', input: assembled, result }],
+      model,
+    );
+  }
+
+  const protectIntent = tryProtectBlockFromInfer(combinedUtterance, tz);
   if (protectIntent?.intent === 'PROTECT_BLOCK') {
     const input = protectParamsToBlockInput(protectIntent.params ?? {});
     const result = await executeAgentTool('create_recurring_block', input, agentCtx);
@@ -118,18 +172,6 @@ export async function runAgentPrefilter(
           : 'Your recurring block is set.')
       : (result.error ?? 'I could not create that block.');
     return prefilterResult('protect_block', reply, [{ name: 'create_recurring_block', input, result }], model);
-  }
-
-  const queryHit = tryMatchQueryCalendar(utterance);
-  if (queryHit && (queryHit.queryType === 'today' || queryHit.queryType === 'tomorrow' || queryHit.weekRangeKind)) {
-    const range = queryParamsToRange(queryHit, tz);
-    const result = await executeAgentTool('get_calendar_summary', range, agentCtx);
-    return prefilterResult(
-      'query',
-      formatCalendarSummaryReply(result),
-      [{ name: 'get_calendar_summary', input: range, result }],
-      model,
-    );
   }
 
   const linkHit = tryMatchSchedulingLink(utterance);
