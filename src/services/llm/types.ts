@@ -37,6 +37,11 @@ export type LlmCompleteResponse = {
   fallbackAttempts?: number;
 };
 
+export type LlmStreamEvent =
+  | { type: 'delta'; text: string }
+  | { type: 'done'; response: LlmCompleteResponse };
+
 export type LlmClient = {
   complete(req: LlmCompleteRequest): Promise<LlmCompleteResponse>;
+  completeStream?(req: LlmCompleteRequest): AsyncIterable<LlmStreamEvent>;
 };

@@ -27,5 +27,28 @@ export function mockLlmClient(sequence: MockLlmStep[]): LlmClient {
         fallbackAttempts: step.fallbackAttempts,
       };
     }),
+    completeStream: vi.fn(async function* (_req: LlmCompleteRequest) {
+      const step = sequence[call] ?? sequence[sequence.length - 1]!;
+      call += 1;
+      const text = step.text ?? '';
+      if (text) {
+        yield { type: 'delta' as const, text };
+      }
+      const toolCalls = (step.toolCalls ?? []).map((t) => ({
+        id: t.id,
+        type: 'function' as const,
+        function: { name: t.name, arguments: JSON.stringify(t.input) },
+      }));
+      yield {
+        type: 'done' as const,
+        response: {
+          text,
+          toolCalls,
+          finishReason: toolCalls.length > 0 ? 'tool_calls' : 'stop',
+          routedVia: step.routedVia,
+          fallbackAttempts: step.fallbackAttempts,
+        },
+      };
+    }),
   };
 }

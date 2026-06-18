@@ -48,6 +48,7 @@ export type AgentTrace = {
   routedViaRounds?: string[];
   requestedModel?: string;
   prefilterBypass?: boolean;
+  fallbackAttempts?: number;
 };
 
 export type SchedulingAgentResult = {

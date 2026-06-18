@@ -5,6 +5,7 @@ export type {
   OpenAiToolDefinition,
   LlmCompleteRequest,
   LlmCompleteResponse,
+  LlmStreamEvent,
 } from './types.js';
 export { createOpenAiCompatClient } from './openai-compat-client.js';
 import { createOpenAiCompatClient } from './openai-compat-client.js';

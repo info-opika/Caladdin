@@ -1,4 +1,4 @@
-import type { ClassifiedIntent } from '../services/anthropic-config.js';
+import type { ClassifiedIntent } from '../services/intent-types.js';
 
 export type HaikuMapperContext = {
   timezone: string;

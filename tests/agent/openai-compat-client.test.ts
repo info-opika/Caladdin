@@ -98,4 +98,50 @@ describe('createOpenAiCompatClient', () => {
     expect(res.toolCalls).toHaveLength(1);
     expect(res.toolCalls[0]?.function.name).toBe('create_event');
   });
+
+  it('completeStream parses SSE deltas and done event', async () => {
+    const sseBody = [
+      'data: {"choices":[{"delta":{"content":"Hel"},"finish_reason":null}]}\n',
+      'data: {"choices":[{"delta":{"content":"lo"},"finish_reason":"stop"}]}\n',
+      'data: [DONE]\n',
+    ].join('');
+
+    const fetchFn = vi.fn(async () =>
+      new Response(new ReadableStream({
+        start(controller) {
+          controller.enqueue(new TextEncoder().encode(sseBody));
+          controller.close();
+        },
+      }), {
+        status: 200,
+        headers: { 'X-Routed-Via': 'gemini-2.5-flash' },
+      }),
+    );
+
+    const client = createOpenAiCompatClient({
+      baseUrl: 'http://localhost/v1',
+      apiKey: 'k',
+      fetchFn,
+    });
+
+    const deltas: string[] = [];
+    let done: Awaited<ReturnType<typeof client.complete>> | undefined;
+    for await (const event of client.completeStream!({
+      model: 'auto:caladdin-agent',
+      system: 'sys',
+      messages: [{ role: 'user', content: 'hi' }],
+      tools: [],
+      sessionId: 'caladdin:u:r',
+    })) {
+      if (event.type === 'delta') deltas.push(event.text);
+      else done = event.response;
+    }
+
+    expect(deltas.join('')).toBe('Hello');
+    expect(done?.text).toBe('Hello');
+    expect(done?.routedVia).toBe('gemini-2.5-flash');
+
+    const body = JSON.parse(String((fetchFn.mock.calls[0] as [string, RequestInit])[1].body));
+    expect(body.stream).toBe(true);
+  });
 });

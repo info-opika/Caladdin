@@ -3,7 +3,7 @@ import { buildAgentContext, type BuiltAgentContext } from './context-builder.js'
 import { buildSchedulingSystemPrompt } from './prompts/system.js';
 import { buildOpenAiToolDefinitions, executeAgentTool } from './tools/registry.js';
 import { createLlmClient, type LlmClient, type LlmMessage } from '../services/llm/index.js';
-import { selectToolsForUtterance } from './tool-pruning.js';
+import { CORE_TOOL_NAMES, selectToolsForUtterance } from './tool-pruning.js';
 import { checkWrongTool } from './tool-call-guard.js';
 import { validateHonestReply } from './honesty-validator.js';
 import { runAgentPrefilter } from './agent-prefilter.js';
@@ -23,6 +23,8 @@ export type SchedulingAgentOptions = {
   model?: string;
   maxRounds?: number;
   prebuiltContext?: AgentContext & { systemContextBlock?: string };
+  /** When set, streams final reply tokens from the LLM (falls back to non-streaming on error). */
+  onToken?: (text: string) => void;
 };
 
 function parseToolArguments(raw: string): { ok: true; value: unknown } | { ok: false; error: string } {
@@ -60,6 +62,58 @@ async function resolveBuiltContext(
   return buildAgentContext(params);
 }
 
+function buildTrace(
+  model: string,
+  rounds: number,
+  startedAt: number,
+  toolTrace: AgentTrace['tools'],
+  sessionId: string,
+  toolNames: string[],
+  routedViaRounds: string[],
+  fallbackAttempts?: number,
+): AgentTrace {
+  return {
+    model,
+    rounds,
+    totalLatencyMs: Date.now() - startedAt,
+    tools: toolTrace,
+    sessionId,
+    toolSubset: toolNames,
+    routedViaRounds,
+    requestedModel: model,
+    fallbackAttempts,
+  };
+}
+
+async function completeWithOptionalStream(
+  llm: LlmClient,
+  req: Parameters<LlmClient['complete']>[0],
+  onToken?: (text: string) => void,
+): Promise<Awaited<ReturnType<LlmClient['complete']>>> {
+  if (!onToken || !llm.completeStream) {
+    return llm.complete(req);
+  }
+
+  try {
+    let response: Awaited<ReturnType<LlmClient['complete']>> | null = null;
+    for await (const event of llm.completeStream(req)) {
+      if (event.type === 'delta') {
+        onToken(event.text);
+      } else {
+        response = event.response;
+      }
+    }
+    if (response) return response;
+    throw new Error('stream ended without response');
+  } catch {
+    const res = await llm.complete(req);
+    if (res.text && onToken) {
+      onToken(res.text);
+    }
+    return res;
+  }
+}
+
 async function runAgentLoop(
   userMessage: string,
   params: { userId: string; requestId: string; timezone?: string },
@@ -85,7 +139,7 @@ async function runAgentLoop(
   };
 
   const toolNames = escalation
-    ? selectToolsForUtterance(userMessage, history)
+    ? [...CORE_TOOL_NAMES]
     : selectToolsForUtterance(userMessage, history);
   const tools = buildOpenAiToolDefinitions(toolNames);
   const system = buildSystemPrompt(built.systemContextBlock, toolNames);
@@ -98,6 +152,7 @@ async function runAgentLoop(
   const toolCalls: SchedulingAgentResult['toolCalls'] = [];
   const toolTrace: AgentTrace['tools'] = [];
   const routedViaRounds: string[] = [];
+  let maxFallbackAttempts: number | undefined;
   let rounds = 0;
   let lastReply = '';
   const startedAt = Date.now();
@@ -105,18 +160,28 @@ async function runAgentLoop(
   while (rounds < maxRounds) {
     rounds += 1;
 
-    const res = await llm.complete({
-      model,
-      system,
-      messages,
-      tools,
-      sessionId,
-      temperature: config.llmTemperature,
-      parallelToolCalls: config.parallelToolCalls,
-      maxTokens: 1024,
-    });
+    const res = await completeWithOptionalStream(
+      llm,
+      {
+        model,
+        system,
+        messages,
+        tools,
+        sessionId,
+        temperature: config.llmTemperature,
+        parallelToolCalls: config.parallelToolCalls,
+        maxTokens: 1024,
+      },
+      options.onToken,
+    );
 
     if (res.routedVia) routedViaRounds.push(res.routedVia);
+    if (res.fallbackAttempts !== undefined) {
+      maxFallbackAttempts =
+        maxFallbackAttempts === undefined
+          ? res.fallbackAttempts
+          : Math.max(maxFallbackAttempts, res.fallbackAttempts);
+    }
     lastReply = res.text;
 
     if (res.finishReason !== 'tool_calls' || res.toolCalls.length === 0) {
@@ -125,16 +190,16 @@ async function runAgentLoop(
         reply: honest,
         toolCalls,
         rounds,
-        trace: {
+        trace: buildTrace(
           model,
           rounds,
-          totalLatencyMs: Date.now() - startedAt,
-          tools: toolTrace,
+          startedAt,
+          toolTrace,
           sessionId,
-          toolSubset: toolNames,
+          toolNames,
           routedViaRounds,
-          requestedModel: model,
-        },
+          maxFallbackAttempts,
+        ),
       };
     }
 
@@ -219,16 +284,16 @@ async function runAgentLoop(
     reply: honest,
     toolCalls,
     rounds,
-    trace: {
+    trace: buildTrace(
       model,
       rounds,
-      totalLatencyMs: Date.now() - startedAt,
-      tools: toolTrace,
+      startedAt,
+      toolTrace,
       sessionId,
-      toolSubset: toolNames,
+      toolNames,
       routedViaRounds,
-      requestedModel: model,
-    },
+      maxFallbackAttempts,
+    ),
   };
 }
 

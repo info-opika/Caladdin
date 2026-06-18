@@ -1,5 +1,5 @@
 import { type ParsedIntent, ParsedIntentSchema, ProtectBlockParamsSchema, VALID_INTENTS } from './adts.js';
-import type { ClassifiedIntent } from '../services/anthropic-config.js';
+import type { ClassifiedIntent } from '../services/intent-types.js';
 import { logger } from '../logger.js';
 
 const ALLOWED_TOP_LEVEL = new Set([

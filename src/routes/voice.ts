@@ -25,6 +25,7 @@ export type VoiceRouteOutcome = {
   body: Record<string, unknown>;
   retryAfter?: string;
   streamable: boolean;
+  commandLogId?: string;
 };
 
 /** Agent path — FreeLLMAPI scheduling agent with deterministic prefilters. */
@@ -34,7 +35,17 @@ async function executeAgentVoicePath(
   requestId: string,
   tz: string,
   commandLogId?: string,
+  deferAgentExecution = false,
 ): Promise<VoiceRouteOutcome> {
+  if (deferAgentExecution) {
+    return {
+      status: 200,
+      streamable: true,
+      body: { timezone: tz, deferredAgent: true },
+      commandLogId,
+    };
+  }
+
   try {
     const result = await runSchedulingAgent(
       utterance,
@@ -58,6 +69,7 @@ async function executeAgentVoicePath(
       status: 200,
       streamable: true,
       body: buildAgentVoiceBody(result, tz),
+      commandLogId,
     };
   } catch (err) {
     logger.error('Agent voice pipeline failed', { requestId, userId, error: String(err) });
@@ -73,6 +85,7 @@ async function executeAgentVoicePath(
 export async function executeVoiceRequest(
   req: Request,
   session: { userId: string; email: string },
+  options?: { deferAgentExecution?: boolean },
 ): Promise<VoiceRouteOutcome> {
   const requestId = getRequestId(req);
   const userId = (req.body.userId as string) ?? session.userId;
@@ -142,7 +155,14 @@ export async function executeVoiceRequest(
     const tz = policy?.timezone ?? 'America/Chicago';
 
     if (agentEnabledFor(userId)) {
-      return executeAgentVoicePath(userId, utterance, requestId, tz, commandLogId);
+      return executeAgentVoicePath(
+        userId,
+        utterance,
+        requestId,
+        tz,
+        commandLogId,
+        options?.deferAgentExecution === true,
+      );
     }
 
     return {
@@ -177,7 +197,9 @@ voiceRouter.post('/', requireSession, async (req: Request, res: Response) => {
   const requestId = getRequestId(req);
   const session = (req as Request & { session: { userId: string; email: string } }).session;
   const useStream = wantsVoiceStream(req);
-  const outcome = await executeVoiceRequest(req, session);
+  const outcome = await executeVoiceRequest(req, session, {
+    deferAgentExecution: useStream && agentEnabledFor(session.userId),
+  });
 
   if (useStream && outcome.streamable && outcome.status === 200) {
     const utterance = String(req.body.utterance ?? '');
@@ -192,6 +214,7 @@ voiceRouter.post('/', requireSession, async (req: Request, res: Response) => {
         utterance,
         requestId,
         timezone: tz,
+        commandLogId: outcome.commandLogId,
       },
       outcome.body,
     );

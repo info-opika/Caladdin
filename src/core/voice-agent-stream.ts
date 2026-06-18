@@ -11,12 +11,18 @@ import {
 import { config, agentEnabledFor } from '../config.js';
 import { runSchedulingAgent } from '../agent/scheduling-agent.js';
 import type { SchedulingAgentResult } from '../agent/types.js';
+import {
+  updateCommandLogAgentTrace,
+  updateCommandLogParsed,
+} from '../db/command_logs.js';
+import { logger } from '../logger.js';
 
 export type AgentStreamContext = {
   userId: string;
   utterance: string;
   requestId: string;
   timezone: string;
+  commandLogId?: string;
 };
 
 export type AgentStreamYield =
@@ -74,6 +80,22 @@ function chunkReplyForStream(reply: string): string[] {
   return chunks.length ? chunks : [reply];
 }
 
+async function persistAgentCommandLog(
+  commandLogId: string | undefined,
+  result: SchedulingAgentResult,
+): Promise<void> {
+  if (!commandLogId) return;
+  try {
+    await updateCommandLogParsed(commandLogId, {
+      intent: 'RESOLVE_MANUAL',
+      params: { agentPath: true, agentRounds: result.rounds },
+    });
+    await updateCommandLogAgentTrace(commandLogId, result.trace);
+  } catch (e) {
+    logger.warn('Command log agent update failed', { commandLogId, error: String(e) });
+  }
+}
+
 /**
  * Lane B agent loop hook. When the scheduling agent is enabled for the user,
  * streams the agent reply and tool summary for voice SSE clients.
@@ -91,7 +113,11 @@ export async function* runAgentStream(
     return;
   }
 
-  const result = await runSchedulingAgent(
+  const queue: AgentStreamYield[] = [];
+  let wake: (() => void) | undefined;
+  let streamedTokens = false;
+
+  const agentPromise = runSchedulingAgent(
     ctx.utterance,
     {
       userId: ctx.userId,
@@ -99,16 +125,47 @@ export async function* runAgentStream(
       timezone: ctx.timezone,
     },
     [],
-  );
+    {
+      onToken: (text) => {
+        streamedTokens = true;
+        queue.push({ type: 'token', text });
+        wake?.();
+      },
+    },
+  )
+    .then(async (result) => {
+      await persistAgentCommandLog(ctx.commandLogId, result);
+      if (!streamedTokens && result.reply.trim()) {
+        for (const chunk of chunkReplyForStream(result.reply)) {
+          queue.push({ type: 'token', text: chunk });
+        }
+      }
+      queue.push({
+        type: 'result',
+        payload: buildAgentVoiceBody(result, ctx.timezone),
+      });
+      wake?.();
+      return result;
+    })
+    .catch((err) => {
+      wake?.();
+      throw err;
+    });
 
-  for (const chunk of chunkReplyForStream(result.reply)) {
-    yield { type: 'token', text: chunk };
+  while (true) {
+    while (queue.length > 0) {
+      const event = queue.shift()!;
+      if (event.type === 'result') {
+        yield event;
+        await agentPromise;
+        return;
+      }
+      yield event;
+    }
+    await new Promise<void>((resolve) => {
+      wake = resolve;
+    });
   }
-
-  yield {
-    type: 'result',
-    payload: buildAgentVoiceBody(result, ctx.timezone),
-  };
 }
 
 export async function deliverAgentOrStubStream(

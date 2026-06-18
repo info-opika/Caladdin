@@ -1,11 +1,8 @@
 import { mapUtteranceWithHaiku } from '../core/haiku-intent-mapper.js';
 import { getPendingIntent } from '../core/pending-intent-memory.js';
-import {
-  resolveAnthropicClassifyModel,
-  type ClassifiedIntent,
-} from './anthropic-config.js';
+import type { ClassifiedIntent } from './intent-types.js';
 
-export { resolveAnthropicClassifyModel, type ClassifiedIntent } from './anthropic-config.js';
+export type { ClassifiedIntent } from './intent-types.js';
 
 export type ClassifyIntentContext = {
   timezone?: string;

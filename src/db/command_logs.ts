@@ -14,6 +14,12 @@ export type AgentTrace = {
   rounds: number;
   totalLatencyMs: number;
   tools: AgentToolTraceEntry[];
+  sessionId?: string;
+  toolSubset?: string[];
+  routedViaRounds?: string[];
+  requestedModel?: string;
+  prefilterBypass?: boolean;
+  fallbackAttempts?: number;
 };
 
 export interface CommandLogRow {

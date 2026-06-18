@@ -11,7 +11,7 @@ import { prefilterDestructive } from './destructive-prefilter.js';
 import { tryMatchQueryCalendar } from './query-prefilter.js';
 import { validateHaikuMapperOutput } from './parsed-intent-validator.js';
 import { classifyIntent, isCalendarRelated } from '../services/llm.js';
-import type { ClassifiedIntent } from '../services/anthropic-config.js';
+import type { ClassifiedIntent } from '../services/intent-types.js';
 import { insertFailureLog } from '../db/failures.js';
 import { logger } from '../logger.js';
 import { hydrateModifyIntentContract } from './modify-event-target.js';

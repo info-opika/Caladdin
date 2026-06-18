@@ -1,7 +1,7 @@
 import type { AgentMessage } from './types.js';
 import type { ToolName } from './tools/schemas.js';
 
-const CORE_TOOLS: ToolName[] = [
+export const CORE_TOOL_NAMES: ToolName[] = [
   'get_calendar_summary',
   'create_event',
   'find_available_slots',
@@ -85,7 +85,7 @@ export function selectToolsForUtterance(utterance: string, history: AgentMessage
   } else if (/\b(what'?s on|summary|tomorrow|today|calendar|agenda|meetings?)\b/.test(text)) {
     subset = SUMMARY_TOOLS;
   } else {
-    subset = CORE_TOOLS;
+    subset = CORE_TOOL_NAMES;
   }
 
   if (hadRecentWrite(history)) {
