@@ -1,10 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import type { Message } from '@anthropic-ai/sdk/resources/messages/messages.mjs';
 import type { UserPolicyProfile } from '../../src/core/adts.js';
 import type { AgentContext } from '../../src/agent/types.js';
 import { runSchedulingAgent } from '../../src/agent/scheduling-agent.js';
 import { executeAgentTool } from '../../src/agent/tools/registry.js';
 import { buildSchedulingSystemPrompt } from '../../src/agent/prompts/system.js';
+import { mockLlmClient } from './mock-llm-client.js';
 
 const mockGenerateSlots = vi.fn();
 const mockCreateEventWithSync = vi.fn();
@@ -80,6 +80,10 @@ vi.mock('../../src/db/scheduling_sessions.js', async (importOriginal) => {
   };
 });
 
+vi.mock('../../src/agent/agent-prefilter.js', () => ({
+  runAgentPrefilter: vi.fn().mockResolvedValue({ bypassed: false }),
+}));
+
 const BASE_POLICY: UserPolicyProfile = {
   schemaVersion: 1,
   protectedBlocks: [],
@@ -107,40 +111,6 @@ const AGENT_CTX: AgentContext = {
   policy: BASE_POLICY,
   conversationContext: null,
 };
-
-function assistantMessage(text: string, toolUses?: Array<{ id: string; name: string; input: unknown }>): Message {
-  const content: Message['content'] = [];
-  if (text) content.push({ type: 'text', text });
-  for (const t of toolUses ?? []) {
-    content.push({
-      type: 'tool_use',
-      id: t.id,
-      name: t.name,
-      input: t.input,
-    });
-  }
-  return {
-    id: 'msg',
-    type: 'message',
-    role: 'assistant',
-    model: 'test',
-    stop_reason: toolUses?.length ? 'tool_use' : 'end_turn',
-    stop_sequence: null,
-    usage: { input_tokens: 1, output_tokens: 1 },
-    content,
-  };
-}
-
-function mockAnthropic(sequence: Message[]) {
-  let call = 0;
-  return {
-    create: vi.fn(async () => {
-      const msg = sequence[call] ?? sequence[sequence.length - 1]!;
-      call += 1;
-      return msg;
-    }),
-  };
-}
 
 describe('agent harness', () => {
   beforeEach(() => {
@@ -191,13 +161,12 @@ describe('agent harness', () => {
     expect(prompt).toContain('mutual availability');
     expect(prompt).toContain('PROTECT_BLOCK');
     expect(prompt).toContain('ONE short clarifying question');
+    expect(prompt).toContain('valid JSON');
   });
 
   it('book a slot on my calendar — agent asks clarifying question without hallucinating booking', async () => {
-    const anthropic = mockAnthropic([
-      assistantMessage(
-        'What should I call the meeting, and when works for you?',
-      ),
+    const llm = mockLlmClient([
+      { text: 'What should I call the meeting, and when works for you?' },
     ]);
 
     const result = await runSchedulingAgent(
@@ -205,7 +174,7 @@ describe('agent harness', () => {
       { userId: AGENT_CTX.userId, requestId: 'req-1', timezone: AGENT_CTX.timezone },
       [],
       {
-        anthropic,
+        llm,
         prebuiltContext: { ...AGENT_CTX, systemContextBlock: 'Today: Wednesday' },
       },
     );
@@ -221,24 +190,18 @@ describe('agent harness', () => {
       hasCalendarConnected: false,
     });
 
-    const anthropic = mockAnthropic([
-      assistantMessage('', [
-        {
-          id: 'tu1',
-          name: 'lookup_user',
-          input: { email: 'jane@example.com' },
-        },
-      ]),
-      assistantMessage('', [
-        {
-          id: 'tu2',
-          name: 'send_invite',
-          input: { inviteeEmail: 'jane@example.com', durationMinutes: 30 },
-        },
-      ]),
-      assistantMessage(
-        'I sent Jane a link. Once she shares her availability I can find a mutual time — for now here is a slot on your calendar.',
-      ),
+    const llm = mockLlmClient([
+      {
+        toolCalls: [{ id: 'tu1', name: 'lookup_user', input: { email: 'jane@example.com' } }],
+      },
+      {
+        toolCalls: [
+          { id: 'tu2', name: 'send_invite', input: { inviteeEmail: 'jane@example.com', durationMinutes: 30 } },
+        ],
+      },
+      {
+        text: 'I sent Jane a link. Once she shares her availability I can find a mutual time — for now here is a slot on your calendar.',
+      },
     ]);
 
     const result = await runSchedulingAgent(
@@ -246,7 +209,7 @@ describe('agent harness', () => {
       { userId: AGENT_CTX.userId, requestId: 'req-1' },
       [],
       {
-        anthropic,
+        llm,
         prebuiltContext: { ...AGENT_CTX, systemContextBlock: 'Today: Wednesday' },
       },
     );
@@ -271,20 +234,17 @@ describe('agent harness', () => {
       reason: 'Host has a conflict at that time',
     });
 
-    const anthropic = mockAnthropic([
-      assistantMessage('', [
-        {
-          id: 'tu1',
-          name: 'check_specific_slot',
-          input: {
-            start: '2026-06-17T15:00:00-05:00',
-            durationMinutes: 30,
+    const llm = mockLlmClient([
+      {
+        toolCalls: [
+          {
+            id: 'tu1',
+            name: 'check_specific_slot',
+            input: { start: '2026-06-17T15:00:00-05:00', durationMinutes: 30 },
           },
-        },
-      ]),
-      assistantMessage(
-        'Tuesday at 3pm is not free on your calendar — you have a conflict then.',
-      ),
+        ],
+      },
+      { text: 'Tuesday at 3pm is not free on your calendar — you have a conflict then.' },
     ]);
 
     const result = await runSchedulingAgent(
@@ -292,7 +252,7 @@ describe('agent harness', () => {
       { userId: AGENT_CTX.userId, requestId: 'req-1' },
       [],
       {
-        anthropic,
+        llm,
         prebuiltContext: { ...AGENT_CTX, systemContextBlock: 'Today: Tuesday' },
       },
     );
@@ -315,41 +275,43 @@ describe('agent harness', () => {
       { start: '2026-06-18T14:00:00.000-05:00', end: '2026-06-18T14:30:00.000-05:00', score: 0.9 },
     ]);
 
-    const anthropic = mockAnthropic([
-      assistantMessage('', [
-        {
-          id: 'tu1',
-          name: 'check_specific_slot',
-          input: {
-            start: '2026-06-17T15:00:00-05:00',
-            durationMinutes: 30,
-            inviteeEmail: 'jane@example.com',
+    const llm = mockLlmClient([
+      {
+        toolCalls: [
+          {
+            id: 'tu1',
+            name: 'check_specific_slot',
+            input: {
+              start: '2026-06-17T15:00:00-05:00',
+              durationMinutes: 30,
+              inviteeEmail: 'jane@example.com',
+            },
           },
-        },
-      ]),
-      assistantMessage('', [
-        {
-          id: 'tu2',
-          name: 'find_available_slots',
-          input: { inviteeEmail: 'jane@example.com', durationMinutes: 30 },
-        },
-      ]),
-      assistantMessage('', [
-        {
-          id: 'tu3',
-          name: 'update_session_slots',
-          input: {
-            sessionToken: 'tok-loop',
-            slots: [
-              { start: '2026-06-18T10:00:00.000-05:00', end: '2026-06-18T10:30:00.000-05:00' },
-              { start: '2026-06-18T14:00:00.000-05:00', end: '2026-06-18T14:30:00.000-05:00' },
-            ],
+        ],
+      },
+      {
+        toolCalls: [
+          { id: 'tu2', name: 'find_available_slots', input: { inviteeEmail: 'jane@example.com', durationMinutes: 30 } },
+        ],
+      },
+      {
+        toolCalls: [
+          {
+            id: 'tu3',
+            name: 'update_session_slots',
+            input: {
+              sessionToken: 'tok-loop',
+              slots: [
+                { start: '2026-06-18T10:00:00.000-05:00', end: '2026-06-18T10:30:00.000-05:00' },
+                { start: '2026-06-18T14:00:00.000-05:00', end: '2026-06-18T14:30:00.000-05:00' },
+              ],
+            },
           },
-        },
-      ]),
-      assistantMessage(
-        'Tuesday 3pm does not work. I updated your invite with Thursday 10am and 2pm alternatives.',
-      ),
+        ],
+      },
+      {
+        text: 'Tuesday 3pm does not work. I updated your invite with Thursday 10am and 2pm alternatives.',
+      },
     ]);
 
     const checkResult = await executeAgentTool(
@@ -377,7 +339,7 @@ describe('agent harness', () => {
       { userId: AGENT_CTX.userId, requestId: 'req-loop' },
       [],
       {
-        anthropic,
+        llm,
         prebuiltContext: { ...AGENT_CTX, systemContextBlock: 'Today: Tuesday' },
       },
     );
@@ -439,21 +401,21 @@ describe('agent harness', () => {
 
     mockCreateEventWithSync.mockRejectedValue(new Error('Invalid attendee email'));
 
-    const anthropic = mockAnthropic([
-      assistantMessage('', [
-        {
-          id: 'tu1',
-          name: 'create_event',
-          input: {
-            title: 'Sync',
-            start: '2026-06-18T15:00:00.000-05:00',
-            attendeeEmail: 'guest@example.com',
+    const llm = mockLlmClient([
+      {
+        toolCalls: [
+          {
+            id: 'tu1',
+            name: 'create_event',
+            input: {
+              title: 'Sync',
+              start: '2026-06-18T15:00:00.000-05:00',
+              attendeeEmail: 'guest@example.com',
+            },
           },
-        },
-      ]),
-      assistantMessage(
-        'That did not work — Invalid attendee email. I did not create the event.',
-      ),
+        ],
+      },
+      { text: 'That did not work — Invalid attendee email. I did not create the event.' },
     ]);
 
     const agentResult = await runSchedulingAgent(
@@ -461,7 +423,7 @@ describe('agent harness', () => {
       { userId: AGENT_CTX.userId, requestId: 'req-1' },
       [],
       {
-        anthropic,
+        llm,
         prebuiltContext: { ...AGENT_CTX, systemContextBlock: 'Today: Tuesday' },
       },
     );

@@ -31,9 +31,9 @@ describe('LC10 Wave 1 v4 — finish wave 1', () => {
     _resetPendingIntentStoreForTests();
   });
 
-  it('1. P0 voice route imports pipeline not legacy parser', () => {
+  it('1. P0 voice route uses scheduling agent not legacy parser', () => {
     const voiceSrc = readFileSync(join(process.cwd(), 'src/routes/voice.ts'), 'utf8');
-    expect(voiceSrc).toContain('mapVoiceUtteranceToIntent');
+    expect(voiceSrc).toContain('runSchedulingAgent');
     expect(voiceSrc).not.toMatch(/from ['"].*\/parser\.js['"]/);
     expect(voiceSrc).not.toMatch(/\bparseIntent\s*\(/);
   });
@@ -58,10 +58,9 @@ describe('LC10 Wave 1 v4 — finish wave 1', () => {
     expect(hits).toEqual([]);
   });
 
-  it('4. Haiku prompt anchors relative dates to current clock', () => {
+  it('4. legacy Haiku mapper prompt stubbed after FreeLLMAPI migration', () => {
     const prompt = buildHaikuMapperSystemPrompt(TZ, ANCHOR_MS);
-    expect(prompt).toContain('2026-05-19');
-    expect(prompt).toContain('CURRENT DATE ANCHOR');
+    expect(prompt).toBe('');
   });
 
   it('5. deterministic query bypasses Haiku', async () => {

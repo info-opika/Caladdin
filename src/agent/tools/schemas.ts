@@ -133,23 +133,18 @@ export const TOOL_NAMES = [
 export type ToolName = (typeof TOOL_NAMES)[number];
 
 const TOOL_DESCRIPTIONS: Record<ToolName, string> = {
-  find_available_slots:
-    'Find open meeting slots on the host calendar, or mutual slots when the invitee is a connected Caladdin user.',
-  check_specific_slot:
-    'Check whether a specific date/time is free for the host, or for both host and invitee when mutual data exists.',
-  create_event: 'Create a single calendar event. Requires title and start time.',
-  create_recurring_block:
-    'Create a recurring personal time block (PROTECT_BLOCK). Requires label, daily times, weekdays, and end date.',
-  send_invite: 'Send a scheduling invite with grant link. Pass proposedSlots when the user names specific times (ISO with timezone).',
-  get_invite_status:
-    'Check invite grant status, offered slots, and whether mutual slot recompute is available for a scheduling session.',
-  update_session_slots:
-    'Replace offered slots on an open scheduling session. sessionToken may be the bare token or full /s/... URL. Slots need ISO start (end optional — defaults to session duration).',
-  lookup_user: 'Check if an email belongs to a Caladdin user with calendar connected.',
+  find_available_slots: 'Find open meeting slots on the host or mutual calendar.',
+  check_specific_slot: 'Check if a specific date/time is free.',
+  create_event: 'Create a single calendar event with title and start time.',
+  create_recurring_block: 'Create a recurring personal time block (PROTECT_BLOCK).',
+  send_invite: 'Send a scheduling invite; pass proposedSlots for named times (ISO with timezone).',
+  get_invite_status: 'Check invite grant status and offered slots for a session.',
+  update_session_slots: 'Replace offered slots on an open scheduling session.',
+  lookup_user: 'Check if an email is a Caladdin user with calendar connected.',
   get_calendar_summary: 'Read-only summary of calendar events for a day or week.',
-  update_preferences: 'Update stored scheduling preferences (timezone, hours, default duration).',
-  modify_event: 'Modify an existing event (time, title, or add attendee).',
-  cancel_events_in_range: 'Cancel events in a date range or delete by title.',
+  update_preferences: 'Update scheduling preferences (timezone, hours, duration).',
+  modify_event: 'Modify an existing event (time, title, or attendee).',
+  cancel_events_in_range: 'Cancel events in a date range or by title.',
   undo_last_action: 'Undo the most recent reversible calendar action.',
 };
 
@@ -173,10 +168,23 @@ export function getToolInputSchema(name: ToolName): z.ZodTypeAny {
   return SCHEMA_BY_TOOL[name];
 }
 
-export function buildAnthropicToolDefinitions() {
-  return TOOL_NAMES.map((name) => ({
-    name,
-    description: TOOL_DESCRIPTIONS[name],
-    input_schema: zodToJsonSchema(getToolInputSchema(name)),
+export function buildOpenAiToolDefinitions(names?: ToolName[]) {
+  const selected = names ?? [...TOOL_NAMES];
+  return selected.map((name) => ({
+    type: 'function' as const,
+    function: {
+      name,
+      description: TOOL_DESCRIPTIONS[name],
+      parameters: zodToJsonSchema(getToolInputSchema(name)),
+    },
+  }));
+}
+
+/** @deprecated Use buildOpenAiToolDefinitions */
+export function buildAnthropicToolDefinitions(names?: ToolName[]) {
+  return buildOpenAiToolDefinitions(names).map((t) => ({
+    name: t.function.name,
+    description: t.function.description,
+    input_schema: t.function.parameters,
   }));
 }

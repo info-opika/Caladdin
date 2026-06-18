@@ -4,29 +4,40 @@ import request from 'supertest';
 
 const mockGetPolicy = vi.fn();
 const mockLoggerError = vi.fn();
+const mockVoiceRateCheck = vi.fn();
+const mockInsertCommandLog = vi.fn();
+const mockRunSchedulingAgent = vi.fn();
+
+vi.mock('../../src/config.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../src/config.js')>();
+  return { ...actual, agentEnabledFor: vi.fn().mockReturnValue(true) };
+});
+
+vi.mock('../../src/agent/scheduling-agent.js', () => ({
+  runSchedulingAgent: (...args: unknown[]) => mockRunSchedulingAgent(...args),
+}));
 
 vi.mock('../../src/db/users.js', () => ({
   getPolicy: (...args: unknown[]) => mockGetPolicy(...args),
   getUserById: vi.fn().mockResolvedValue({ id: 'u1', email: 'u@test.com' }),
 }));
 
-vi.mock('../../src/db/conversation-context.js', () => ({
-  getConversationContext: vi.fn().mockResolvedValue({}),
-  getPendingEmailConfirmation: vi.fn().mockResolvedValue(null),
+vi.mock('../../src/db/command_logs.js', () => ({
+  insertCommandLog: (...args: unknown[]) => mockInsertCommandLog(...args),
+  updateCommandLogParsed: vi.fn(),
+  updateCommandLogAgentTrace: vi.fn(),
 }));
 
-vi.mock('../../src/core/parser.js', () => ({
-  parseIntent: vi.fn(),
-  parseSchedulingLinkIntent: vi.fn(),
-  WARM_REDIRECT_MESSAGE: 'calendar only',
+vi.mock('../../src/core/system-mode.js', () => ({
+  resolveSystemMode: vi.fn().mockResolvedValue('FULL'),
 }));
 
-vi.mock('../../src/core/orchestrator.js', () => ({
-  orchestrate: vi.fn(),
+vi.mock('../../src/core/rate-limiter.js', () => ({
+  voiceHttpRateLimiter: { check: (...args: unknown[]) => mockVoiceRateCheck(...args) },
 }));
 
-vi.mock('../../src/services/auth_service.js', () => ({
-  getOAuthClientForUser: vi.fn().mockResolvedValue(null),
+vi.mock('../../src/core/voice-rate-limit-bucket.js', () => ({
+  classifyVoiceRateLimitBucket: vi.fn().mockReturnValue('mutation'),
 }));
 
 vi.mock('../../src/middleware/session.js', () => ({
@@ -63,6 +74,14 @@ function app() {
 describe('voice route error handling', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockVoiceRateCheck.mockResolvedValue({ allowed: true });
+    mockInsertCommandLog.mockResolvedValue('cmd-log-1');
+    mockRunSchedulingAgent.mockResolvedValue({
+      reply: 'ok',
+      toolCalls: [],
+      rounds: 1,
+      trace: { model: 'test', rounds: 1, totalLatencyMs: 1, tools: [] },
+    });
   });
 
   it('logs and returns 503 with x-request-id when pipeline throws', async () => {

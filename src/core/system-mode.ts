@@ -27,7 +27,7 @@ async function pingDB(): Promise<boolean> {
 }
 
 function pingLLM(): boolean {
-  return Boolean(config.anthropicApiKey && config.anthropicApiKey.length > 10);
+  return Boolean(config.freellmapiApiKey && config.freellmapiApiKey.length > 10);
 }
 
 function pingCalendar(): boolean {

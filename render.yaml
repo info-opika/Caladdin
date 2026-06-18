@@ -27,7 +27,11 @@ envVarGroups:
       - key: EMAIL_FROM
         value: Caladdin <onboarding@caladdin.app>
       # Set in Dashboard (sync: false) — never commit secrets
-      - key: ANTHROPIC_API_KEY
+      - key: FREELLMAPI_BASE_URL
+        value: https://freellmapiserver-production-df6f.up.railway.app/v1
+      - key: CALADDIN_AGENT_MODEL
+        value: auto:caladdin-agent
+      - key: FREELLMAPI_API_KEY
         sync: false
       - key: SUPABASE_URL
         sync: false

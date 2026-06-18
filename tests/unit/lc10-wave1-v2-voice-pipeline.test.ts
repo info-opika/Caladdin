@@ -35,10 +35,10 @@ describe('LC10 Wave 1 v2 — voice pipeline', () => {
     _resetPendingIntentStoreForTests();
   });
 
-  it('1. /voice route does not call parser-brain parseIntent', () => {
+  it('1. /voice route uses scheduling agent not legacy parser', () => {
     const voiceSrc = readFileSync(join(process.cwd(), 'src/routes/voice.ts'), 'utf8');
     expect(voiceSrc).not.toMatch(/\bparseIntent\s*\(/);
-    expect(voiceSrc).toContain('mapVoiceUtteranceToIntent');
+    expect(voiceSrc).toContain('runSchedulingAgent');
   });
 
   it('2. Haiku is primary semantic mapper on /voice path', async () => {

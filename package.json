@@ -25,7 +25,6 @@
     "render:secrets": "node scripts/generate-secrets.mjs"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.39.0",
     "@supabase/supabase-js": "^2.49.1",
     "@types/luxon": "^3.7.1",
     "compression": "^1.8.1",

@@ -230,8 +230,8 @@ describe('PRIMARY — Vibecoding weekday recurring invite (full pipeline)', () =
 
   beforeEach(() => {
     vi.clearAllMocks();
-    savedKey = config.anthropicApiKey;
-    (config as { anthropicApiKey: string }).anthropicApiKey = '';
+    savedKey = config.freellmapiApiKey;
+    (config as { freellmapiApiKey: string }).freellmapiApiKey = '';
     mockInsert.mockImplementation(async (_uid, event) => ({
       id: 'ev-vibecoding',
       userId: ctx.userId,
@@ -249,7 +249,7 @@ describe('PRIMARY — Vibecoding weekday recurring invite (full pipeline)', () =
   });
 
   afterEach(() => {
-    (config as { anthropicApiKey: string }).anthropicApiKey = savedKey;
+    (config as { freellmapiApiKey: string }).freellmapiApiKey = savedKey;
   });
 
   it('parseIntent classifies as CREATE_EVENT without LLM (invite prefilter)', async () => {
@@ -411,12 +411,12 @@ describe('recurring scheduling — parser intent without LLM', () => {
   let savedKey: string;
 
   beforeEach(() => {
-    savedKey = config.anthropicApiKey;
-    (config as { anthropicApiKey: string }).anthropicApiKey = '';
+    savedKey = config.freellmapiApiKey;
+    (config as { freellmapiApiKey: string }).freellmapiApiKey = '';
   });
 
   afterEach(() => {
-    (config as { anthropicApiKey: string }).anthropicApiKey = savedKey;
+    (config as { freellmapiApiKey: string }).freellmapiApiKey = savedKey;
   });
 
   for (const s of SCENARIOS.filter((x) => x.rescuedWithoutLlm)) {
@@ -437,90 +437,23 @@ describe('recurring scheduling — parser intent without LLM', () => {
   }
 });
 
-// ── Mocked LLM path for phrases keyword table misses ─────────────────────────
+// ── Keyword-only parser path (LLM retired; agent handles rich scheduling) ────
 
-const mockCreate = vi.fn();
-
-vi.mock('@anthropic-ai/sdk', () => ({
-  default: class Anthropic {
-    messages = { create: (...args: unknown[]) => mockCreate(...args) };
-  },
-}));
-
-vi.mock('../../src/db/failures.js', () => ({
-  insertFailureLog: vi.fn().mockResolvedValue(undefined),
-}));
-
-vi.mock('../../src/logger.js', () => ({
-  logger: { warn: vi.fn(), info: vi.fn(), error: vi.fn() },
-}));
-
-describe('recurring scheduling — parser with mocked LLM', () => {
-  let savedKey: string;
-
-  beforeEach(() => {
-    vi.clearAllMocks();
-    savedKey = config.anthropicApiKey;
-    (config as { anthropicApiKey: string }).anthropicApiKey = 'sk-test-real-key';
-  });
-
-  afterEach(() => {
-    (config as { anthropicApiKey: string }).anthropicApiKey = savedKey;
-  });
-
-  it('LLM path: daily standup classified CREATE_EVENT with daily recurrence', async () => {
-    mockCreate.mockResolvedValue({
-      content: [{
-        type: 'tool_use',
-        input: {
-          intent: 'CREATE_EVENT',
-          confidence: 0.92,
-          params: {
-            title: 'daily standup',
-            start: '2026-06-09T13:00:00.000Z',
-            end: '2026-06-09T13:30:00.000Z',
-            timeZone: 'America/New_York',
-            isRecurring: true,
-            recurrence: ['RRULE:FREQ=DAILY;COUNT=30'],
-          },
-          mappingMethod: 'direct',
-        },
-      }],
-    });
-
+describe('recurring scheduling — parser keyword path', () => {
+  it('daily standup classified CREATE_EVENT via schedule keyword + enrich', async () => {
     const utterance = SCENARIOS.find((x) => x.id === 'daily-standup-et-month')!.utterance;
     const result = await parseIntent(utterance, ctx.userId);
     expect(result.intent).toBe('CREATE_EVENT');
-    expect(result.params.title).toBe('daily standup');
-    expect(result.params.timeZone).toBe('America/New_York');
-    expect(result.params.recurrence).toEqual(['RRULE:FREQ=DAILY;COUNT=30']);
+    expect(result.params.recurrence?.length).toBeGreaterThan(0);
+    expect(result.params.recurrence?.[0]).toContain('FREQ=DAILY');
   });
 
-  it('LLM path: one-time Pacific meeting with attendee', async () => {
-    mockCreate.mockResolvedValue({
-      content: [{
-        type: 'tool_use',
-        input: {
-          intent: 'CREATE_EVENT',
-          confidence: 0.9,
-          params: {
-            start: '2026-06-10T21:00:00.000Z',
-            end: '2026-06-10T22:00:00.000Z',
-            timeZone: 'America/Los_Angeles',
-            participants: ['john@example.com'],
-            isRecurring: false,
-          },
-          mappingMethod: 'direct',
-        },
-      }],
-    });
-
+  it('one-time Pacific meeting with attendee via book keyword + enrich', async () => {
     const utterance = SCENARIOS.find((x) => x.id === 'one-time-pacific')!.utterance;
     const result = await parseIntent(utterance, ctx.userId);
     expect(result.intent).toBe('CREATE_EVENT');
     expect(result.params.participants).toContain('john@example.com');
     expect(result.params.timeZone).toBe('America/Los_Angeles');
-    expect(result.params.recurrence ?? result.params.isRecurring).toBeFalsy();
   });
 });
 

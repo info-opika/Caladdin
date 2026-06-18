@@ -143,7 +143,7 @@ const basePolicy = {
 describe('voice route — validation and happy path', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockAgentEnabledFor.mockReturnValue(false);
+    mockAgentEnabledFor.mockReturnValue(true);
     mockRunSchedulingAgent.mockResolvedValue({
       reply: 'Agent reply.',
       toolCalls: [],
@@ -215,73 +215,61 @@ describe('voice route — validation and happy path', () => {
   });
 
   it('returns warm redirect for off-topic without pending email', async () => {
-    mockMapVoiceUtteranceToIntent.mockResolvedValue({
-      intent: {
-        intent: 'WARM_REDIRECT',
-        confidence: 1,
-        params: {},
-        mappingMethod: 'direct',
-        rawUtterance: 'tell me a joke',
-      },
-      meta: { haikuCalled: false, usedPendingTemplate: false, storedPendingTemplate: false, ambiguousFollowUpTime: false },
+    mockRunSchedulingAgent.mockResolvedValue({
+      reply: 'I only help with calendar and scheduling.',
+      toolCalls: [],
+      rounds: 0,
+      trace: mockAgentTrace,
     });
     const res = await request(app()).post('/voice').send({ utterance: 'tell me a joke' });
     expect(res.status).toBe(200);
-    expect(res.body.messageToUser).toMatch(/calendar/i);
+    expect(res.body.messageToUser).toMatch(/calendar|scheduling/i);
     expect(mockOrchestrate).not.toHaveBeenCalled();
+    expect(mockRunSchedulingAgent).toHaveBeenCalled();
   });
 
-  it('rescues warm redirect when pending email confirmation exists', async () => {
-    mockGetPendingEmailConfirmation.mockResolvedValue({
-      email: 'guest@test.com',
-      originalIntent: 'OFFER_SPECIFIC',
-      originalParams: {},
-      originalUtterance: 'send booking link',
-    });
-    mockMapVoiceUtteranceToIntent.mockResolvedValue({
-      intent: {
-        intent: 'WARM_REDIRECT',
-        confidence: 1,
-        params: {},
-        mappingMethod: 'direct',
-        rawUtterance: 'yes',
-      },
-      meta: { haikuCalled: false, usedPendingTemplate: false, storedPendingTemplate: false, ambiguousFollowUpTime: false },
-    });
-    mockHandleEmailConfirmationGate.mockResolvedValue({
-      proceed: true,
-      parsed: {
-        intent: 'OFFER_SPECIFIC',
-        confidence: 0.7,
-        params: { recipientEmail: 'guest@test.com' },
-        mappingMethod: 'fuzzy',
-        rawUtterance: 'yes',
-      },
-    });
-    mockOrchestrate.mockResolvedValue({ intent: 'OFFER_SPECIFIC', success: true, schemaVersion: 1 });
-    const res = await request(app()).post('/voice').send({ utterance: 'yes', source: 'text' });
-    expect(res.status).toBe(200);
-    expect(mockOrchestrate).toHaveBeenCalled();
+  it('returns 503 when agent disabled for user', async () => {
+    mockAgentEnabledFor.mockReturnValue(false);
+    const res = await request(app()).post('/voice').send({ utterance: 'what is on my calendar today' });
+    expect(res.status).toBe(503);
+    expect(res.body.error).toMatch(/scheduling agent/i);
+    expect(mockRunSchedulingAgent).not.toHaveBeenCalled();
   });
 
-  it('orchestrates calendar query and sets x-request-id', async () => {
+  it('agent path handles calendar query and sets x-request-id', async () => {
+    mockRunSchedulingAgent.mockResolvedValue({
+      reply: 'You are free.',
+      toolCalls: [],
+      rounds: 1,
+      trace: mockAgentTrace,
+    });
     const res = await request(app()).post('/voice').send({ utterance: 'what is on my calendar today' });
     expect(res.status).toBe(200);
     expect(res.headers['x-request-id']).toBe('req-voice-1');
-    expect(mockOrchestrate).toHaveBeenCalledWith(
-      expect.objectContaining({ intent: 'QUERY_CALENDAR' }),
-      expect.objectContaining({ userId: USER_ID, requestId: 'req-voice-1' }),
-    );
+    expect(res.body.messageToUser).toBe('You are free.');
+    expect(mockRunSchedulingAgent).toHaveBeenCalled();
+    expect(mockOrchestrate).not.toHaveBeenCalled();
   });
 
-  it('returns email gate result without orchestrating', async () => {
-    mockHandleEmailConfirmationGate.mockResolvedValue({
-      proceed: false,
-      result: { intent: 'RESOLVE_MANUAL', success: true, messageToUser: 'Confirm email?', schemaVersion: 1 },
+  it('streams SSE tokens when stream:true on agent path', async () => {
+    mockRunSchedulingAgent.mockResolvedValue({
+      reply: 'You are free.',
+      toolCalls: [],
+      rounds: 1,
+      trace: mockAgentTrace,
     });
-    const res = await request(app()).post('/voice').send({ utterance: 'yes', source: 'text' });
+    const res = await request(app())
+      .post('/voice')
+      .set('Accept', 'text/event-stream')
+      .send({ utterance: 'what is on my calendar today', stream: true });
+
     expect(res.status).toBe(200);
-    expect(res.body.messageToUser).toMatch(/Confirm email/);
+    expect(res.headers['content-type']).toContain('text/event-stream');
+    expect(res.text).toContain('event: status');
+    expect(res.text).toContain('event: token');
+    expect(res.text).toContain('event: done');
+    expect(res.text).toContain('You are free.');
+    expect(mockRunSchedulingAgent).toHaveBeenCalled();
     expect(mockOrchestrate).not.toHaveBeenCalled();
   });
 
@@ -297,21 +285,6 @@ describe('voice route — validation and happy path', () => {
     const res = await request(app()).post('/voice/confirm/tok-abc/reject');
     expect(res.status).toBe(200);
     expect(mockRejectPendingConfirmation).toHaveBeenCalledWith('tok-abc', USER_ID);
-  });
-
-  it('streams SSE tokens when stream:true', async () => {
-    const res = await request(app())
-      .post('/voice')
-      .set('Accept', 'text/event-stream')
-      .send({ utterance: 'what is on my calendar today', stream: true });
-
-    expect(res.status).toBe(200);
-    expect(res.headers['content-type']).toContain('text/event-stream');
-    expect(res.text).toContain('event: status');
-    expect(res.text).toContain('event: token');
-    expect(res.text).toContain('event: done');
-    expect(res.text).toContain('You are free.');
-    expect(mockOrchestrate).toHaveBeenCalled();
   });
 
   it('uses agent path when agentEnabledFor and skips classifier + orchestrator', async () => {

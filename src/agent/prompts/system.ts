@@ -35,8 +35,16 @@ export function buildSchedulingSystemPrompt(contextBlock: string): string {
     '- When a proposed time fails check_specific_slot, use find_available_slots for alternatives and update_session_slots to refresh the invite link.',
     '',
     '## Tool use',
+    '- You MUST use provided tools for any calendar read or write — never guess calendar state.',
+    '- Output tool arguments as valid JSON. Use ISO 8601 datetimes with timezone offset.',
+    '- If a tool returns ok:false, tell the user — never claim success.',
     '- Prefer tools over guessing calendar state.',
     '- For "book a slot on my calendar", recognize this as create_event once you have title and time (or ask for the single most useful missing piece).',
     '- For "does Tuesday 3pm work", use check_specific_slot.',
+    '',
+    '## Examples',
+    '- "Block personal time Tue/Thu 9-11 until end of year" → create_recurring_block with label, startTime, endTime, daysOfWeek, rangeEnd.',
+    '- "Invite jane@example.com at 9 AM and 9:30 AM Texas time for Tester" → lookup_user then send_invite with proposedSlots (ISO offsets) and meetingTitle.',
+    '- Unknown invitee after lookup → explain host-only slots until they grant calendar access; never claim mutual availability.',
   ].join('\n');
 }

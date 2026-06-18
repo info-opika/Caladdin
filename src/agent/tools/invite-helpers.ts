@@ -11,7 +11,8 @@ export function sessionTokenFromSchedulingLink(link: string): string | null {
   return m?.[1] ?? null;
 }
 
-export type SlotPair = { start: string; end: string };
+export type SlotPair = { start: string; end?: string };
+export type NormalizedSlotPair = { start: string; end: string };
 
 /** Accept bare token or full scheduling / grant URL. */
 export function normalizeSessionToken(raw: string): string | null {
@@ -27,9 +28,9 @@ export function normalizeSessionToken(raw: string): string | null {
 export function normalizeSlotPairs(
   slots: SlotPair[],
   opts?: { defaultDurationMinutes?: number },
-): { ok: true; slots: SlotPair[] } | { ok: false; error: string } {
+): { ok: true; slots: NormalizedSlotPair[] } | { ok: false; error: string } {
   const duration = opts?.defaultDurationMinutes ?? 30;
-  const out: SlotPair[] = [];
+  const out: NormalizedSlotPair[] = [];
 
   for (const [i, slot] of slots.entries()) {
     const start = DateTime.fromISO(slot.start, { setZone: true });
@@ -63,7 +64,7 @@ export function buildOfferedSlotsFromInviteInput(
     proposedStart?: string;
   },
   durationMinutes: number,
-): { ok: true; slots: SlotPair[] } | { ok: false; error: string } | { ok: true; slots: undefined } {
+): { ok: true; slots: NormalizedSlotPair[] } | { ok: false; error: string } | { ok: true; slots: undefined } {
   if (input.proposedSlots && input.proposedSlots.length > 0) {
     return normalizeSlotPairs(input.proposedSlots, { defaultDurationMinutes: durationMinutes });
   }

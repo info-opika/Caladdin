@@ -3,11 +3,11 @@
  * Documents behavioral differences between legacy Haiku classifier and scheduling agent.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import type { Message } from '@anthropic-ai/sdk/resources/messages/messages.mjs';
 import type { ParsedIntent, UserPolicyProfile } from '../../src/core/adts.js';
 import type { AgentContext } from '../../src/agent/types.js';
 import { runSchedulingAgent } from '../../src/agent/scheduling-agent.js';
 import { executeAgentTool } from '../../src/agent/tools/registry.js';
+import { mockLlmClient } from './mock-llm-client.js';
 
 const mockGenerateSlots = vi.fn();
 const mockCreateEventWithSync = vi.fn();
@@ -60,6 +60,10 @@ vi.mock('../../src/services/auth_service.js', () => ({
   getOAuth2AuthForUser: (...args: unknown[]) => mockGetOAuth(...args),
 }));
 
+vi.mock('../../src/agent/agent-prefilter.js', () => ({
+  runAgentPrefilter: vi.fn().mockResolvedValue({ bypassed: false }),
+}));
+
 const BASE_POLICY: UserPolicyProfile = {
   schemaVersion: 1,
   protectedBlocks: [],
@@ -90,35 +94,6 @@ const AGENT_CTX: AgentContext = {
 
 const TZ = 'America/Chicago';
 const UID = AGENT_CTX.userId;
-
-function assistantMessage(text: string, toolUses?: Array<{ id: string; name: string; input: unknown }>): Message {
-  const content: Message['content'] = [];
-  if (text) content.push({ type: 'text', text });
-  for (const t of toolUses ?? []) {
-    content.push({ type: 'tool_use', id: t.id, name: t.name, input: t.input });
-  }
-  return {
-    id: 'msg',
-    type: 'message',
-    role: 'assistant',
-    model: 'test',
-    stop_reason: toolUses?.length ? 'tool_use' : 'end_turn',
-    stop_sequence: null,
-    usage: { input_tokens: 1, output_tokens: 1 },
-    content,
-  };
-}
-
-function mockAnthropic(sequence: Message[]) {
-  let call = 0;
-  return {
-    create: vi.fn(async () => {
-      const msg = sequence[call] ?? sequence[sequence.length - 1]!;
-      call += 1;
-      return msg;
-    }),
-  };
-}
 
 /** Stub classifier outputs — representative legacy Haiku mappings for comparison. */
 function classifierIntentFor(utterance: string): ParsedIntent {
@@ -196,14 +171,14 @@ describe('classifier vs agent pilot comparison (harness only)', () => {
     const utterance = 'book a slot on my calendar';
     const classifier = classifierIntentFor(utterance);
 
-    const anthropic = mockAnthropic([
-      assistantMessage('What should I call the meeting, and when works for you?'),
+    const llm = mockLlmClient([
+      { text: 'What should I call the meeting, and when works for you?' },
     ]);
     const agent = await runSchedulingAgent(
       utterance,
       { userId: UID, requestId: 'req-1', timezone: TZ },
       [],
-      { anthropic, prebuiltContext: { ...AGENT_CTX, systemContextBlock: 'Today: Wednesday' } },
+      { llm, prebuiltContext: { ...AGENT_CTX, systemContextBlock: 'Today: Wednesday' } },
     );
 
     expect(classifier.intent).toBe('RESOLVE_MANUAL');
@@ -216,22 +191,20 @@ describe('classifier vs agent pilot comparison (harness only)', () => {
     const utterance = 'invite jane@example.com to a 30 minute meeting';
     const classifier = classifierIntentFor(utterance);
 
-    const anthropic = mockAnthropic([
-      assistantMessage('', [
-        { id: 'tu1', name: 'lookup_user', input: { email: 'jane@example.com' } },
-      ]),
-      assistantMessage('', [
-        { id: 'tu2', name: 'send_invite', input: { inviteeEmail: 'jane@example.com', durationMinutes: 30 } },
-      ]),
-      assistantMessage(
-        'I sent Jane a link. Once she shares her availability I can find a mutual time.',
-      ),
+    const llm = mockLlmClient([
+      { toolCalls: [{ id: 'tu1', name: 'lookup_user', input: { email: 'jane@example.com' } }] },
+      {
+        toolCalls: [
+          { id: 'tu2', name: 'send_invite', input: { inviteeEmail: 'jane@example.com', durationMinutes: 30 } },
+        ],
+      },
+      { text: 'I sent Jane a link. Once she shares her availability I can find a mutual time.' },
     ]);
     const agent = await runSchedulingAgent(
       utterance,
       { userId: UID, requestId: 'req-2', timezone: TZ },
       [],
-      { anthropic, prebuiltContext: { ...AGENT_CTX, systemContextBlock: 'Today: Wednesday' } },
+      { llm, prebuiltContext: { ...AGENT_CTX, systemContextBlock: 'Today: Wednesday' } },
     );
 
     expect(classifier.intent).toBe('OFFER_SPECIFIC');

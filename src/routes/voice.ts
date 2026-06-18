@@ -1,41 +1,22 @@
 import { Router, Request, Response } from 'express';
-import { mapVoiceUtteranceToIntent } from '../core/voice-intent-pipeline.js';
-import { orchestrate } from '../core/orchestrator.js';
 import { validateUserId, validateUtterance } from '../core/safety.js';
-import { WARM_REDIRECT_MESSAGE } from '../core/adts.js';
 import { requireSession } from '../middleware/session.js';
 import { getRequestId } from '../middleware/requestId.js';
-import { getPolicy, getUserById, ensureDefaultPolicy, recordSetupFieldAnswer } from '../db/users.js';
+import { getPolicy, getUserById } from '../db/users.js';
 import { agentEnabledFor, config } from '../config.js';
 import { voiceHttpRateLimiter } from '../core/rate-limiter.js';
 import { classifyVoiceRateLimitBucket } from '../core/voice-rate-limit-bucket.js';
-import { getOAuthClientForUser } from '../services/auth_service.js';
-import { approvePendingConfirmation, rejectPendingConfirmation } from '../core/confirmation-actions.js';
-import {
-  getConversationContext,
-  getPendingEmailConfirmation,
-  getPendingSetupIntent,
-  savePendingSetupIntent,
-  clearPendingSetupIntent,
-} from '../db/conversation-context.js';
-import { applyConversationContext } from '../core/conversation-context.js';
-import { handleEmailConfirmationGate } from '../core/email-confirmation.js';
 import { resolveSystemMode } from '../core/system-mode.js';
 import { logger } from '../logger.js';
-import {
-  checkContextualSetup,
-  parseSetupAnswer,
-  type SetupFieldId,
-} from '../core/contextual-setup.js';
 import {
   insertCommandLog,
   updateCommandLogParsed,
   updateCommandLogAgentTrace,
 } from '../db/command_logs.js';
-import type { ParsedIntent } from '../core/adts.js';
 import { wantsVoiceStream } from '../core/voice-stream.js';
 import { buildAgentVoiceBody, deliverAgentOrStubStream } from '../core/voice-agent-stream.js';
 import { runSchedulingAgent } from '../agent/scheduling-agent.js';
+import { approvePendingConfirmation, rejectPendingConfirmation } from '../core/confirmation-actions.js';
 
 export const voiceRouter = Router();
 
@@ -46,22 +27,7 @@ export type VoiceRouteOutcome = {
   streamable: boolean;
 };
 
-async function tryResolvePendingSetup(
-  userId: string,
-  utterance: string,
-): Promise<ParsedIntent | null> {
-  const pending = await getPendingSetupIntent(userId);
-  if (!pending) return null;
-
-  const parsedAnswer = parseSetupAnswer(pending.setupField, utterance);
-  if (!parsedAnswer) return null;
-
-  await recordSetupFieldAnswer(userId, pending.setupField, parsedAnswer);
-  await clearPendingSetupIntent(userId);
-  return pending.deferredParsed;
-}
-
-/** Agent path for pilot / globally enabled users — skips Haiku classifier + orchestrator. */
+/** Agent path — FreeLLMAPI scheduling agent with deterministic prefilters. */
 async function executeAgentVoicePath(
   userId: string,
   utterance: string,
@@ -153,11 +119,10 @@ export async function executeVoiceRequest(
   }
 
   try {
-    const [policy, conversationContext, pendingEmail, oauthClient, systemMode] = await Promise.all([
+    const [policy, , , systemMode] = await Promise.all([
       getPolicy(userId),
-      getConversationContext(userId),
-      getPendingEmailConfirmation(userId),
-      getOAuthClientForUser(userId),
+      Promise.resolve(null),
+      Promise.resolve(null),
       resolveSystemMode(),
     ]);
 
@@ -180,100 +145,13 @@ export async function executeVoiceRequest(
       return executeAgentVoicePath(userId, utterance, requestId, tz, commandLogId);
     }
 
-    let parsed: ParsedIntent | null = await tryResolvePendingSetup(userId, utterance);
-
-    if (!parsed) {
-      // @deprecated Legacy Haiku classifier hot path — bypassed when agentEnabledFor(userId).
-      // Retained for users not on the agent pilot until full rollout (M5+).
-      const { intent: pipelineIntent } = await mapVoiceUtteranceToIntent(utterance, { userId, timezone: tz });
-      parsed = pipelineIntent;
-
-      if (parsed.intent === 'WARM_REDIRECT') {
-        if (pendingEmail) {
-          parsed = { ...parsed, intent: 'RESOLVE_MANUAL' as const, params: {} };
-        } else {
-          return {
-            status: 200,
-            streamable: true,
-            body: {
-              intent: 'RESOLVE_MANUAL',
-              success: true,
-              requiresConfirmation: false,
-              messageToUser: WARM_REDIRECT_MESSAGE,
-              schemaVersion: 1,
-            },
-          };
-        }
-      }
-
-      parsed = applyConversationContext(parsed, conversationContext);
-
-      const emailGate = await handleEmailConfirmationGate(
-        parsed,
-        userId,
-        conversationContext,
-        inputMode,
-      );
-      if (!emailGate.proceed) {
-        return {
-          status: 200,
-          streamable: true,
-          body: emailGate.result as Record<string, unknown>,
-        };
-      }
-      parsed = emailGate.parsed;
-    }
-
-    if (commandLogId) {
-      try {
-        await updateCommandLogParsed(commandLogId, {
-          intent: parsed.intent,
-          params: parsed.params ?? {},
-        });
-      } catch (e) {
-        logger.warn('Command log parse update failed', { commandLogId, error: String(e) });
-      }
-    }
-
-    const effectivePolicy = policy ?? (await ensureDefaultPolicy(userId));
-    const setupGap = checkContextualSetup(effectivePolicy, parsed.intent, parsed);
-    if (setupGap) {
-      await savePendingSetupIntent(userId, {
-        setupField: setupGap.field as SetupFieldId,
-        deferredParsed: parsed,
-        originalUtterance: utterance,
-      });
-      return {
-        status: 200,
-        streamable: true,
-        body: {
-          outcome: 'needs_setup',
-          intent: parsed.intent,
-          success: false,
-          requiresConfirmation: false,
-          setupField: setupGap.field,
-          formType: setupGap.formType,
-          showFormFallback: true,
-          pendingUtterance: utterance,
-          messageToUser: setupGap.question,
-          schemaVersion: 1,
-        },
-      };
-    }
-
-    const result = await orchestrate(parsed, {
-      userId,
-      requestId,
-      timezone: effectivePolicy.timezone,
-      oauthClient: oauthClient ?? undefined,
-      conversationContext,
-      commandLogId,
-    });
-
     return {
-      status: 200,
-      streamable: true,
-      body: result as Record<string, unknown>,
+      status: 503,
+      body: {
+        error: 'Legacy voice classifier is retired. Enable the scheduling agent for this user.',
+      },
+      retryAfter: '30',
+      streamable: false,
     };
   } catch (err) {
     logger.error('Voice pipeline failed', { requestId, userId, error: String(err) });

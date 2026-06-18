@@ -1,4 +1,4 @@
-export { buildAnthropicToolDefinitions, TOOL_NAMES, type ToolName } from './schemas.js';
+export { buildOpenAiToolDefinitions, buildAnthropicToolDefinitions, TOOL_NAMES, type ToolName } from './schemas.js';
 export { executeAgentTool } from './executors.js';
 export {
   FindAvailableSlotsInputSchema,

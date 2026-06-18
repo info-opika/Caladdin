@@ -7,7 +7,6 @@ import express from 'express';
 import request from 'supertest';
 import { readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
-import type { Message } from '@anthropic-ai/sdk/resources/messages/messages.mjs';
 import { agentEnabledFor } from '../../src/config.js';
 import { validateProductionConfig } from '../../src/validate-production.js';
 import { isKillSwitchActive, checkOperationAllowed } from '../../src/pilot/pilot_controls.js';
@@ -15,14 +14,21 @@ import { mapVoiceUtteranceToIntent } from '../../src/core/voice-intent-pipeline.
 import { lookupInviteeAvailability } from '../../src/services/invitee_lookup.js';
 import { runSessionExpiry } from '../../src/jobs/session-expiry.js';
 import { runSchedulingAgent } from '../../src/agent/scheduling-agent.js';
+import { mockLlmClient } from '../agent/mock-llm-client.js';
 import schedulePublicRoutes from '../../src/routes/schedule_public.js';
 import inviteGrantRoutes from '../../src/routes/invite_grant_auth.js';
 
 const mockExecuteAgentTool = vi.fn();
 
 vi.mock('../../src/agent/tools/registry.js', () => ({
-  buildAnthropicToolDefinitions: () => [{ name: 'create_event', description: 'x', input_schema: { type: 'object' } }],
+  buildOpenAiToolDefinitions: () => [
+    { type: 'function', function: { name: 'create_event', description: 'x', parameters: { type: 'object' } } },
+  ],
   executeAgentTool: (...args: unknown[]) => mockExecuteAgentTool(...args),
+}));
+
+vi.mock('../../src/agent/agent-prefilter.js', () => ({
+  runAgentPrefilter: vi.fn().mockResolvedValue({ bypassed: false }),
 }));
 
 vi.mock('../../src/services/llm.js', async (importOriginal) => {
@@ -78,21 +84,10 @@ vi.mock('../../src/db/users.js', () => ({
 
 const UID = '5bf20398-930a-4afc-8460-7668d7423916';
 
-function assistantMessage(text: string, toolUses?: Array<{ id: string; name: string; input: unknown }>): Message {
-  const content: Message['content'] = [];
-  if (text) content.push({ type: 'text', text });
-  for (const t of toolUses ?? []) {
-    content.push({ type: 'tool_use', id: t.id, name: t.name, input: t.input });
-  }
+function assistantMessage(text: string, toolUses?: Array<{ id: string; name: string; input: unknown }>) {
   return {
-    id: 'msg',
-    type: 'message',
-    role: 'assistant',
-    model: 'test',
-    stop_reason: toolUses?.length ? 'tool_use' : 'end_turn',
-    stop_sequence: null,
-    usage: { input_tokens: 1, output_tokens: 1 },
-    content,
+    text,
+    toolCalls: toolUses?.map((t) => ({ id: t.id, name: t.name, input: t.input })),
   };
 }
 
@@ -114,25 +109,17 @@ describe('PRD v4 Phase 10 E2E checklist', () => {
   });
 
   it('1. Host chat create event — agent path returns reply after tool loop (mocked)', async () => {
-    let call = 0;
-    const anthropic = {
-      create: vi.fn(async () => {
-        call += 1;
-        if (call === 1) {
-          return assistantMessage('', [
-            { id: 't1', name: 'create_event', input: { title: 'Focus' } },
-          ]);
-        }
-        return assistantMessage('Booked focus time on your calendar.');
-      }),
-    };
+    const llm = mockLlmClient([
+      assistantMessage('', [{ id: 't1', name: 'create_event', input: { title: 'Focus' } }]),
+      assistantMessage('Booked focus time on your calendar.'),
+    ]);
 
     const result = await runSchedulingAgent(
       'book a slot on my calendar tomorrow morning',
       { userId: UID, requestId: 'phase10-1', timezone: 'America/Chicago' },
       [],
       {
-        anthropic,
+        llm,
         prebuiltContext: {
           userId: UID,
           requestId: 'phase10-1',

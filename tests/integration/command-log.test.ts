@@ -4,36 +4,28 @@ import request from 'supertest';
 
 const mockGetPolicy = vi.fn();
 const mockGetUserById = vi.fn();
-const mockEnsureDefaultPolicy = vi.fn();
-const mockGetConversationContext = vi.fn();
-const mockGetPendingEmailConfirmation = vi.fn();
-const mockGetPendingSetupIntent = vi.fn();
-const mockSavePendingSetupIntent = vi.fn();
-const mockMapVoiceUtteranceToIntent = vi.fn();
-const mockOrchestrate = vi.fn();
-const mockHandleEmailConfirmationGate = vi.fn();
-const mockApplyConversationContext = vi.fn();
 const mockInsertCommandLog = vi.fn();
 const mockUpdateCommandLogParsed = vi.fn();
+const mockUpdateCommandLogAgentTrace = vi.fn();
 const mockVoiceRateCheck = vi.fn();
+const mockRunSchedulingAgent = vi.fn();
+const mockAgentEnabledFor = vi.fn();
+
+vi.mock('../../src/config.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../src/config.js')>();
+  return {
+    ...actual,
+    agentEnabledFor: (...args: unknown[]) => mockAgentEnabledFor(...args),
+  };
+});
+
+vi.mock('../../src/agent/scheduling-agent.js', () => ({
+  runSchedulingAgent: (...args: unknown[]) => mockRunSchedulingAgent(...args),
+}));
 
 vi.mock('../../src/db/users.js', () => ({
   getPolicy: (...args: unknown[]) => mockGetPolicy(...args),
   getUserById: (...args: unknown[]) => mockGetUserById(...args),
-  ensureDefaultPolicy: (...args: unknown[]) => mockEnsureDefaultPolicy(...args),
-  recordSetupFieldAnswer: vi.fn(),
-}));
-
-vi.mock('../../src/db/conversation-context.js', () => ({
-  getConversationContext: (...args: unknown[]) => mockGetConversationContext(...args),
-  getPendingEmailConfirmation: (...args: unknown[]) => mockGetPendingEmailConfirmation(...args),
-  getPendingSetupIntent: (...args: unknown[]) => mockGetPendingSetupIntent(...args),
-  savePendingSetupIntent: (...args: unknown[]) => mockSavePendingSetupIntent(...args),
-  clearPendingSetupIntent: vi.fn(),
-}));
-
-vi.mock('../../src/core/voice-intent-pipeline.js', () => ({
-  mapVoiceUtteranceToIntent: (...args: unknown[]) => mockMapVoiceUtteranceToIntent(...args),
 }));
 
 vi.mock('../../src/core/system-mode.js', () => ({
@@ -44,25 +36,9 @@ vi.mock('../../src/core/voice-rate-limit-bucket.js', () => ({
   classifyVoiceRateLimitBucket: vi.fn().mockReturnValue('mutation'),
 }));
 
-vi.mock('../../src/core/orchestrator.js', () => ({
-  orchestrate: (...args: unknown[]) => mockOrchestrate(...args),
-}));
-
-vi.mock('../../src/core/conversation-context.js', () => ({
-  applyConversationContext: (...args: unknown[]) => mockApplyConversationContext(...args),
-}));
-
-vi.mock('../../src/core/email-confirmation.js', () => ({
-  handleEmailConfirmationGate: (...args: unknown[]) => mockHandleEmailConfirmationGate(...args),
-}));
-
 vi.mock('../../src/core/confirmation-actions.js', () => ({
   approvePendingConfirmation: vi.fn(),
   rejectPendingConfirmation: vi.fn(),
-}));
-
-vi.mock('../../src/services/auth_service.js', () => ({
-  getOAuthClientForUser: vi.fn().mockResolvedValue(null),
 }));
 
 vi.mock('../../src/core/rate-limiter.js', () => ({
@@ -72,6 +48,7 @@ vi.mock('../../src/core/rate-limiter.js', () => ({
 vi.mock('../../src/db/command_logs.js', () => ({
   insertCommandLog: (...args: unknown[]) => mockInsertCommandLog(...args),
   updateCommandLogParsed: (...args: unknown[]) => mockUpdateCommandLogParsed(...args),
+  updateCommandLogAgentTrace: (...args: unknown[]) => mockUpdateCommandLogAgentTrace(...args),
   markCommandLogConfirmed: vi.fn(),
 }));
 
@@ -111,39 +88,32 @@ const basePolicy = {
   setupFieldsAnswered: ['timezone', 'workingHours', 'meetingTimePreference', 'defaultMeetingLength'],
 };
 
+const mockAgentTrace = {
+  model: 'auto:caladdin-agent',
+  rounds: 1,
+  totalLatencyMs: 12,
+  tools: [] as Array<{ name: string; latencyMs: number; ok: boolean }>,
+};
+
 describe('voice route — command log instrumentation', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockAgentEnabledFor.mockReturnValue(true);
     mockVoiceRateCheck.mockResolvedValue({ allowed: true });
-    mockGetConversationContext.mockResolvedValue(null);
-    mockGetPendingEmailConfirmation.mockResolvedValue(null);
-    mockGetPendingSetupIntent.mockResolvedValue(null);
     mockGetPolicy.mockResolvedValue(basePolicy);
-    mockEnsureDefaultPolicy.mockResolvedValue(basePolicy);
     mockGetUserById.mockResolvedValue({ id: USER_ID, email: 'host@test.com' });
-    mockApplyConversationContext.mockImplementation((p) => p);
-    mockHandleEmailConfirmationGate.mockImplementation(async (p) => ({ proceed: true, parsed: p }));
     mockInsertCommandLog.mockResolvedValue('cmd-log-uuid-1');
     mockUpdateCommandLogParsed.mockResolvedValue(undefined);
+    mockUpdateCommandLogAgentTrace.mockResolvedValue(undefined);
+    mockRunSchedulingAgent.mockResolvedValue({
+      reply: 'Nothing scheduled.',
+      toolCalls: [],
+      rounds: 1,
+      trace: mockAgentTrace,
+    });
   });
 
-  it('inserts command log and updates parsed intent on happy path', async () => {
-    const parsed = {
-      intent: 'QUERY_CALENDAR',
-      confidence: 1,
-      rawUtterance: 'what is on my calendar',
-      mappingMethod: 'direct',
-      params: {},
-    };
-    mockMapVoiceUtteranceToIntent.mockResolvedValue({ intent: parsed });
-    mockOrchestrate.mockResolvedValue({
-      intent: 'QUERY_CALENDAR',
-      success: true,
-      requiresConfirmation: false,
-      messageToUser: 'Nothing scheduled.',
-      schemaVersion: 1,
-    });
-
+  it('inserts command log and updates agent trace on happy path', async () => {
     const res = await request(app()).post('/voice').send({ utterance: 'what is on my calendar', source: 'text' });
 
     expect(res.status).toBe(200);
@@ -153,33 +123,10 @@ describe('voice route — command log instrumentation', () => {
       inputMode: 'text',
     });
     expect(mockUpdateCommandLogParsed).toHaveBeenCalledWith('cmd-log-uuid-1', {
-      intent: 'QUERY_CALENDAR',
-      params: {},
+      intent: 'RESOLVE_MANUAL',
+      params: { agentPath: true, agentRounds: 1 },
     });
-    expect(mockOrchestrate).toHaveBeenCalledWith(
-      expect.objectContaining({ intent: 'QUERY_CALENDAR' }),
-      expect.objectContaining({ commandLogId: 'cmd-log-uuid-1' }),
-    );
-  });
-
-  it('returns needs_setup when policy lacks answered fields', async () => {
-    mockGetPolicy.mockResolvedValue({ ...basePolicy, setupFieldsAnswered: [] });
-    mockEnsureDefaultPolicy.mockResolvedValue({ ...basePolicy, setupFieldsAnswered: [] });
-    const parsed = {
-      intent: 'OFFER_SPECIFIC',
-      confidence: 0.95,
-      rawUtterance: 'invite guest@example.com',
-      mappingMethod: 'direct',
-      params: { recipientEmail: 'guest@example.com' },
-    };
-    mockMapVoiceUtteranceToIntent.mockResolvedValue({ intent: parsed });
-
-    const res = await request(app()).post('/voice').send({ utterance: parsed.rawUtterance });
-
-    expect(res.status).toBe(200);
-    expect(res.body.outcome).toBe('needs_setup');
-    expect(res.body.setupField).toBe('timezone');
-    expect(mockSavePendingSetupIntent).toHaveBeenCalled();
-    expect(mockOrchestrate).not.toHaveBeenCalled();
+    expect(mockUpdateCommandLogAgentTrace).toHaveBeenCalledWith('cmd-log-uuid-1', mockAgentTrace);
+    expect(mockRunSchedulingAgent).toHaveBeenCalled();
   });
 });

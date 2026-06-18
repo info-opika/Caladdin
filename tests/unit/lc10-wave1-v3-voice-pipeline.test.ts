@@ -56,11 +56,11 @@ describe('LC10 Wave 1 v3 — voice pipeline', () => {
     expect(meta.haikuCalled).toBe(false);
   });
 
-  it('2. old parser brain is not imported by voice route', () => {
+  it('2. voice route uses scheduling agent not legacy parser', () => {
     const voiceSrc = readFileSync(join(process.cwd(), 'src/routes/voice.ts'), 'utf8');
     expect(voiceSrc).not.toMatch(/\bparseIntent\s*\(/);
     expect(voiceSrc).not.toMatch(/from ['"].*\/parser\.js['"]/);
-    expect(voiceSrc).toContain('mapVoiceUtteranceToIntent');
+    expect(voiceSrc).toContain('runSchedulingAgent');
   });
 
   it('3. parseIntent is not the /voice semantic path', () => {

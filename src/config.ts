@@ -32,7 +32,14 @@ export const config = {
   port: parseInt(process.env.PORT ?? '3000', 10),
   nodeEnv: process.env.NODE_ENV ?? 'development',
   isProd: process.env.NODE_ENV === 'production',
-  anthropicApiKey: required('ANTHROPIC_API_KEY'),
+  freellmapiBaseUrl:
+    process.env.FREELLMAPI_BASE_URL ??
+    'https://freellmapiserver-production-df6f.up.railway.app/v1',
+  freellmapiApiKey: required('FREELLMAPI_API_KEY'),
+  agentModel: process.env.CALADDIN_AGENT_MODEL ?? 'auto:caladdin-agent',
+  agentEscalationModel: process.env.CALADDIN_AGENT_ESCALATION_MODEL ?? 'auto:smart',
+  llmTemperature: 0,
+  parallelToolCalls: false,
   supabaseUrl: required('SUPABASE_URL'),
   supabaseServiceKey: required('SUPABASE_SERVICE_ROLE_KEY'),
   googleClientId: required('GOOGLE_OAUTH_CLIENT_ID'),
