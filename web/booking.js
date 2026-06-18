@@ -24,26 +24,44 @@ function setButtonLoading(btn, loading) {
   btn.setAttribute('aria-busy', loading ? 'true' : 'false');
 }
 
-function formatSlotLabel(isoStart) {
+function formatSlotLabel(isoStart, timeZone) {
   try {
-    return new Date(isoStart).toLocaleString(undefined, {
+    const opts = {
       weekday: 'short',
       hour: 'numeric',
       minute: '2-digit',
-    });
+    };
+    if (timeZone) {
+      opts.timeZone = timeZone;
+      opts.timeZoneName = 'short';
+    }
+    return new Date(isoStart).toLocaleString(undefined, opts);
   } catch {
     return isoStart;
   }
 }
 
-function renderSlotButtons(slots) {
+function renderSlotButtons(slots, { slotLabels, slotMeta } = {}) {
+  const root = document.getElementById('booking-root');
   const grid = document.querySelector('.slot-grid');
   if (!grid || !slots?.length) return;
-  grid.innerHTML = slots.slice(0, 2).map((s, i) => `
-    <button type="button" class="slot-btn choose-btn" data-index="${i}" aria-label="Select ${formatSlotLabel(s.start)}">
-      ${formatSlotLabel(s.start)}
-    </button>`).join('');
-  bindSlotButtons(grid.closest('#booking-root')?.dataset.token);
+  const timeZone = root?.dataset.timezone;
+  grid.innerHTML = slots.slice(0, 2).map((s, i) => {
+    const label = slotLabels?.[i] ?? formatSlotLabel(s.start, timeZone);
+    const busy = slotMeta?.[i]?.inviteeConflict;
+    if (busy) {
+      return `
+    <button type="button" class="slot-btn choose-btn is-busy" data-index="${i}" disabled aria-label="${label} — You are busy at this hour">
+      <span class="slot-btn-time">${label}</span>
+      <span class="slot-btn-busy-note">You're busy at this hour</span>
+    </button>`;
+    }
+    return `
+    <button type="button" class="slot-btn choose-btn" data-index="${i}" aria-label="Select ${label}">
+      ${label}
+    </button>`;
+  }).join('');
+  bindSlotButtons(root?.dataset.token);
 }
 
 function renderSuccessView(root, { slotLabel, actions }) {
@@ -120,7 +138,7 @@ function bindSlotButtons(token) {
   document.querySelectorAll('.slot-btn.choose-btn').forEach((btn) => {
     btn.replaceWith(btn.cloneNode(true));
   });
-  document.querySelectorAll('.slot-btn.choose-btn').forEach((btn) => {
+  document.querySelectorAll('.slot-btn.choose-btn:not(:disabled)').forEach((btn) => {
     btn.addEventListener('click', () => {
       const index = parseInt(btn.dataset.index ?? '0', 10);
       selectSlot(token, index, btn);
@@ -135,7 +153,10 @@ async function findNextSlots(token, btn) {
     const res = await fetch(`/s/${token}/next-slots`, { method: 'POST' });
     const body = res.headers.get('content-type')?.includes('json') ? await res.json() : null;
     if (res.ok && body?.slots?.length) {
-      renderSlotButtons(body.slots);
+      renderSlotButtons(body.slots, {
+        slotLabels: body.slotLabels,
+        slotMeta: body.slotMeta,
+      });
       showBookingStatus('Here are the next available times.', 'success');
       return;
     }

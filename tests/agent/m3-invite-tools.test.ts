@@ -11,6 +11,7 @@ import type { InviteCalendarGrantRow } from '../../src/db/invite_calendar_grants
 
 const mockLookupInvitee = vi.fn();
 const mockHandleOfferSpecific = vi.fn();
+const mockCheckInviteeConflicts = vi.fn();
 const mockGetSession = vi.fn();
 const mockGetLatestSession = vi.fn();
 const mockGetGrant = vi.fn();
@@ -18,6 +19,17 @@ const mockReplaceSlots = vi.fn();
 
 vi.mock('../../src/services/invitee_lookup.js', () => ({
   lookupInviteeAvailability: (...a: unknown[]) => mockLookupInvitee(...a),
+}));
+
+vi.mock('../../src/services/invitee_slot_conflicts.js', () => ({
+  checkInviteeConflictsForSlots: (...a: unknown[]) => mockCheckInviteeConflicts(...a),
+  buildInviteeConflictWarnings: (
+    email: string,
+    conflicts: Array<{ inviteeConflict: boolean; start: string; end: string }>,
+  ) => {
+    const hit = conflicts.some((c) => c.inviteeConflict);
+    return hit ? `${email} is on Caladdin — Fri 2pm conflicts with their calendar.` : '';
+  },
 }));
 
 vi.mock('../../src/handlers/offer-specific.js', () => ({
@@ -111,6 +123,7 @@ describe('M3 agent tools', () => {
       isCaladdinUser: false,
       hasCalendarConnected: false,
     });
+    mockCheckInviteeConflicts.mockResolvedValue([]);
     mockHandleOfferSpecific.mockResolvedValue({
       success: true,
       intent: 'OFFER_SPECIFIC',
@@ -172,6 +185,51 @@ describe('M3 agent tools', () => {
       expect.any(Object),
       AGENT_CTX.cal,
     );
+  });
+
+  it('send_invite warns when proposed slots conflict with known Caladdin user', async () => {
+    const proposedSlots = [
+      { start: '2026-06-18T14:00:00-05:00', end: '2026-06-18T14:30:00-05:00' },
+      { start: '2026-06-18T15:00:00-05:00', end: '2026-06-18T15:30:00-05:00' },
+    ];
+    mockLookupInvitee.mockResolvedValue({
+      isCaladdinUser: true,
+      hasCalendarConnected: true,
+      userId: 'invitee-1',
+    });
+    mockCheckInviteeConflicts.mockResolvedValue([
+      { ...proposedSlots[0]!, inviteeConflict: true, hostConflict: false },
+      { ...proposedSlots[1]!, inviteeConflict: false, hostConflict: false },
+    ]);
+    mockHandleOfferSpecific.mockResolvedValue({
+      success: true,
+      intent: 'OFFER_SPECIFIC',
+      requiresConfirmation: false,
+      messageToUser:
+        'jane@co.com is on Caladdin — Fri 2pm conflicts with their calendar. Invite sent.',
+      schedulingLink: 'http://localhost:3000/s/tok-mutual',
+      sessionToken: 'tok-mutual',
+      slotSource: 'mutual_known_user',
+      slots: proposedSlots,
+      schemaVersion: 1,
+    });
+
+    const result = await executeAgentTool(
+      'send_invite',
+      {
+        inviteeEmail: 'jane@co.com',
+        meetingTitle: 'Sync',
+        proposedSlots,
+        durationMinutes: 30,
+      },
+      AGENT_CTX,
+    );
+
+    expect(result.ok).toBe(true);
+    expect(mockCheckInviteeConflicts).toHaveBeenCalled();
+    expect(result.data?.inviteeRecognized).toBe(true);
+    expect(result.data?.message).toContain('jane@co.com is on Caladdin');
+    expect(result.data?.messageTemplate).toContain('conflicts with their calendar');
   });
 
   it('get_invite_status reports grant active and mutual recompute', async () => {

@@ -114,7 +114,11 @@ export function buildInviteMessageTemplate(opts: {
   slotSource: SlotSource;
   inviteeEmail: string;
   grantUrl?: string;
+  conflictWarning?: string;
 }): string {
+  if (opts.conflictWarning) {
+    return opts.conflictWarning;
+  }
   if (opts.slotSource === 'mutual_known_user') {
     return `${opts.inviteeEmail} is a Caladdin user with calendar connected — offered times use mutual availability on both calendars.`;
   }

@@ -7,10 +7,14 @@ import { createEventWithSync, listBusyFromGCal } from '../../services/calendar_a
 import { listEventsFromGCalSafe } from '../../services/calendar_api.js';
 import { normalizeGCalRange } from '../../core/date-utils.js';
 import { recordLastEvent } from '../../db/conversation-context.js';
-import { upsertPolicy } from '../../db/users.js';
+import { upsertPolicy, getUserByEmail } from '../../db/users.js';
 import { getOAuth2AuthForUser, getOAuthClientForUser } from '../../services/auth_service.js';
 import { lookupInviteeAvailability } from '../../services/invitee_lookup.js';
 import { checkSpecificSlot } from '../../services/mutual_slot_engine.js';
+import {
+  buildInviteeConflictWarnings,
+  checkInviteeConflictsForSlots,
+} from '../../services/invitee_slot_conflicts.js';
 import { getCachedBusyFromGCal } from '../../services/freebusy-cache.js';
 import { handleOfferSpecific } from '../../handlers/offer-specific.js';
 import { handleModifyEvent } from '../../handlers/modify-event.js';
@@ -326,6 +330,26 @@ export async function executeSendInvite(
   const slotSource: 'mutual' | 'host-only' =
     invitee.isCaladdinUser && invitee.hasCalendarConnected ? 'mutual' : 'host-only';
 
+  let inviteeConflicts: Awaited<ReturnType<typeof checkInviteeConflictsForSlots>> | undefined;
+  let preConflictWarning = '';
+  if (
+    offeredFromInput.slots &&
+    offeredFromInput.slots.length > 0 &&
+    invitee.isCaladdinUser &&
+    invitee.hasCalendarConnected
+  ) {
+    inviteeConflicts = await checkInviteeConflictsForSlots(
+      input.inviteeEmail,
+      offeredFromInput.slots,
+      { hostCal: ctx.cal, timezone: ctx.timezone },
+    );
+    preConflictWarning = buildInviteeConflictWarnings(
+      input.inviteeEmail,
+      inviteeConflicts,
+      ctx.timezone,
+    );
+  }
+
   const meetingLabel = input.meetingTitle ?? input.context;
 
   const intent = ParsedIntentSchema.parse({
@@ -360,18 +384,23 @@ export async function executeSendInvite(
     slotSource: sessionSlotSource,
     inviteeEmail: input.inviteeEmail,
     grantUrl,
+    conflictWarning: preConflictWarning || undefined,
   });
 
   if (!result.success) {
     return failure(result.messageToUser ?? 'Failed to send invite', {
       mutualChecked,
       slotSource: agentSlotSource,
+      inviteeRecognized: invitee.isCaladdinUser && invitee.hasCalendarConnected,
+      inviteeConflicts,
     });
   }
 
+  const hostMessage = result.messageToUser;
+
   return success(
     {
-      message: result.messageToUser,
+      message: hostMessage,
       schedulingLink: result.schedulingLink,
       sessionToken,
       slots: result.slots,
@@ -379,6 +408,8 @@ export async function executeSendInvite(
       grantUrl: sessionSlotSource === 'host_only_pending_grant' ? grantUrl : undefined,
       grantLinkRequired: sessionSlotSource === 'host_only_pending_grant',
       messageTemplate,
+      inviteeRecognized: invitee.isCaladdinUser && invitee.hasCalendarConnected,
+      inviteeConflicts,
     },
     { mutualChecked, slotSource: agentSlotSource },
   );
@@ -495,7 +526,11 @@ export async function executeLookupUser(
   }
 
   const info = await lookupInviteeAvailability(parsed.data.email);
-  return success(info);
+  const user = await getUserByEmail(parsed.data.email.trim());
+  return success({
+    ...info,
+    displayName: user?.display_name ?? undefined,
+  });
 }
 
 export async function executeGetCalendarSummary(

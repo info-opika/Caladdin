@@ -22,6 +22,20 @@ vi.mock('../../../src/services/invitee_lookup.js', () => ({
   lookupInviteeAvailability: (...a: unknown[]) => mockLookupInvitee(...a),
 }));
 
+const mockCheckInviteeConflicts = vi.fn();
+
+vi.mock('../../../src/services/invitee_slot_conflicts.js', () => ({
+  checkInviteeConflictsForSlots: (...a: unknown[]) => mockCheckInviteeConflicts(...a),
+  buildInviteeConflictWarnings: (
+    email: string,
+    conflicts: Array<{ inviteeConflict: boolean; start: string; end: string }>,
+    _tz: string,
+  ) => {
+    const hit = conflicts.some((c) => c.inviteeConflict);
+    return hit ? `${email} is on Caladdin — Fri 2pm conflicts with their calendar.` : '';
+  },
+}));
+
 vi.mock('../../../src/db/events.js', () => ({
   insertEvent: (...a: unknown[]) => mockInsertEvent(...a),
 }));
@@ -74,6 +88,7 @@ describe('handleOfferSpecific', () => {
     mockGetUser.mockResolvedValue({ display_name: 'Host', email: 'host@example.com' });
     mockSendEmail.mockResolvedValue({ ok: true });
     mockLookupInvitee.mockResolvedValue({ isCaladdinUser: false, hasCalendarConnected: false });
+    mockCheckInviteeConflicts.mockResolvedValue([]);
   });
 
   it('returns fax message when no slots available', async () => {
@@ -241,5 +256,41 @@ describe('handleOfferSpecific', () => {
       'user-1',
       expect.objectContaining({ title: '[Proposed] Tester' }),
     );
+  });
+
+  it('warns when explicit slots conflict with known Caladdin user calendar', async () => {
+    const explicit = [
+      { start: '2026-06-18T14:00:00-05:00', end: '2026-06-18T14:30:00-05:00' },
+      { start: '2026-06-18T15:00:00-05:00', end: '2026-06-18T15:30:00-05:00' },
+    ];
+    mockLookupInvitee.mockResolvedValue({
+      isCaladdinUser: true,
+      hasCalendarConnected: true,
+      userId: 'invitee-1',
+    });
+    mockCheckInviteeConflicts.mockResolvedValue([
+      { ...explicit[0]!, inviteeConflict: true, hostConflict: false },
+      { ...explicit[1]!, inviteeConflict: false, hostConflict: false },
+    ]);
+    mockInsertEvent.mockImplementation(async (_uid, ev) => ({ id: `ev-${ev.title}`, ...ev, userId: 'user-1' }));
+    mockCreateSession.mockResolvedValue({ token: 'warn-tok' });
+
+    const parsed = ParsedIntentSchema.parse({
+      intent: 'OFFER_SPECIFIC',
+      confidence: 0.9,
+      params: {
+        recipientEmail: 'known@example.com',
+        context: 'Sync',
+        offeredSlots: explicit,
+      },
+      mappingMethod: 'direct',
+      rawUtterance: 'send conflicting slots',
+    });
+    const result = await handleOfferSpecific(parsed, ctx, {} as never);
+
+    expect(result.success).toBe(true);
+    expect(mockCheckInviteeConflicts).toHaveBeenCalled();
+    expect(result.messageToUser).toContain('known@example.com is on Caladdin');
+    expect(result.messageToUser).toContain('conflicts with their calendar');
   });
 });

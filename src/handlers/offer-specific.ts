@@ -10,6 +10,10 @@ import { generateFaxEffectMessage } from '../core/fax-effect.js';
 import { sendEmail, schedulingLinkEmailHtml, schedulingLinkEmailText } from '../services/email.js';
 import { lookupInviteeAvailability } from '../services/invitee_lookup.js';
 import type { SlotSource } from '../db/scheduling_sessions.js';
+import {
+  buildInviteeConflictWarnings,
+  checkInviteeConflictsForSlots,
+} from '../services/invitee_slot_conflicts.js';
 
 export async function handleOfferSpecific(
   parsed: ParsedIntent,
@@ -60,6 +64,7 @@ export async function handleOfferSpecific(
     : [];
 
   let slots;
+  let conflictWarning = '';
   if (explicitSlots.length > 0) {
     slots = explicitSlots.map((s) => ({
       start: s.start,
@@ -69,6 +74,13 @@ export async function handleOfferSpecific(
       energyScore: 0.5,
       createsFragment: false,
     }));
+    if (slotSource === 'mutual_known_user' && recipientEmail) {
+      const conflicts = await checkInviteeConflictsForSlots(recipientEmail, explicitSlots, {
+        hostCal: cal,
+        timezone: policy.timezone,
+      });
+      conflictWarning = buildInviteeConflictWarnings(recipientEmail, conflicts, policy.timezone);
+    }
   } else {
     slots = await generateSlots(ctx.userId, policy, duration, 7, {
       recipientEmail: mutualRecipientEmail,
@@ -147,11 +159,12 @@ export async function handleOfferSpecific(
     policy,
   );
 
+  const warningPrefix = conflictWarning ? `${conflictWarning} ` : '';
   return {
     intent: 'OFFER_SPECIFIC',
     success: true,
     requiresConfirmation: false,
-    messageToUser: `${faxMsg} Share this link: ${link}`,
+    messageToUser: `${warningPrefix}${faxMsg} Share this link: ${link}`,
     slots,
     schedulingLink: link,
     sessionToken: session.token,

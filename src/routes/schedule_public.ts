@@ -29,32 +29,18 @@ import { dispatchBookingWebhooks } from '../services/webhooks.js';
 import { recordUsageEvent } from '../db/usage_events.js';
 import { checkOperationAllowed } from '../pilot/pilot_controls.js';
 import { bookingSelectRateLimiter } from '../core/rate-limiter.js';
-import { getGrantBySessionId, revokeGrantForSession } from '../db/invite_calendar_grants.js';
+import { getGrantBySessionId, revokeGrantForSession, type InviteCalendarGrantRow } from '../db/invite_calendar_grants.js';
 import { listBusyFromGCal } from '../services/calendar_api.js';
 import { findMutualSlots } from '../services/mutual_slot_engine.js';
 import { migratePolicy } from '../core/adts.js';
 import { getSupabase } from '../db/client.js';
+import { formatSlotButtonLabel, formatSlotLabel } from '../services/schedule_formatting.js';
+import { markGrantInviteeConflicts } from '../services/invitee_slot_conflicts.js';
 
 const router = Router();
 
 function isExpired(session: SchedulingSessionRow): boolean {
   return new Date(session.expires_at) < new Date();
-}
-
-function formatTimezoneLabel(tz: string): string {
-  const sample = DateTime.now().setZone(tz);
-  if (!sample.isValid) return tz.replace(/_/g, ' ');
-  const short = sample.offsetNameShort;
-  if (short) return short;
-  return sample.toFormat('ZZZZ');
-}
-
-function formatSlotLabel(slot: { start: string; end: string }, tz: string): string {
-  const start = DateTime.fromISO(slot.start, { zone: tz });
-  const end = DateTime.fromISO(slot.end, { zone: tz });
-  if (!start.isValid) return slot.start;
-  const tzLabel = formatTimezoneLabel(tz);
-  return `${start.toFormat('cccc, MMM d')} · ${start.toFormat('h:mm a')} – ${end.toFormat('h:mm a')} (${tzLabel})`;
 }
 
 function escapeHtml(value: string): string {
@@ -63,12 +49,6 @@ function escapeHtml(value: string): string {
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;');
-}
-
-function formatSlotButtonLabel(slot: { start: string; end: string }, tz: string): string {
-  const start = DateTime.fromISO(slot.start, { zone: tz });
-  if (!start.isValid) return slot.start;
-  return start.toFormat('ccc, h:mm a');
 }
 
 function parseHourFromTime(hhmm: string, fallback: number): number {
@@ -81,7 +61,10 @@ function parseHourFromTime(hhmm: string, fallback: number): number {
 const INVITE_HEAD = `
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
-  <meta name="theme-color" content="#0f0f0f"/>
+  <meta name="theme-color" content="#d97706"/>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23d97706'/%3E%3Ctext x='16' y='22' text-anchor='middle' fill='white' font-family='Georgia,serif' font-size='18' font-weight='600'%3EC%3C/text%3E%3C/svg%3E"/>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=Fraunces:wght@600&display=swap" rel="stylesheet"/>
+  <link rel="stylesheet" href="/tokens.css"/>
   <link rel="stylesheet" href="/invite.css"/>
 `;
 
@@ -112,10 +95,18 @@ function bookingShell(content: string, { title = 'Meeting invite', script = true
 <html lang="en">
 <head>
   ${INVITE_HEAD}
-  <title>${escapeHtml(title)}</title>
+  <title>${escapeHtml(title)} — Caladdin</title>
 </head>
 <body class="invite-page">
-  <main id="booking-root" ${rootAttrs}>${content}</main>
+  <div class="invite-shell">
+    <header class="invite-topbar">
+      <div class="invite-brand">
+        <div class="invite-brand-mark" aria-hidden="true">C</div>
+        <p class="invite-brand-name">Caladdin</p>
+      </div>
+    </header>
+    <main id="booking-root" ${rootAttrs}>${content}</main>
+  </div>
   ${script ? '<script type="module" src="/booking.js"></script>' : ''}
 </body>
 </html>`;
@@ -137,6 +128,36 @@ function renderExpired(): string {
       <p class="invite-sub">Ask your host for a fresh link.</p>
     </div>
   `, { title: 'Link expired', script: false });
+}
+
+type SlotButtonMeta = { inviteeConflict?: boolean };
+
+function renderSlotButtonHtml(
+  slot: { start: string; end: string },
+  index: number,
+  tz: string,
+  meta?: SlotButtonMeta,
+): string {
+  const label = formatSlotButtonLabel(slot, tz);
+  if (meta?.inviteeConflict) {
+    return `
+    <button type="button" class="slot-btn choose-btn is-busy" data-index="${index}" disabled aria-label="${escapeHtml(label)} — You are busy at this hour">
+      <span class="slot-btn-time">${escapeHtml(label)}</span>
+      <span class="slot-btn-busy-note">You&apos;re busy at this hour</span>
+    </button>`;
+  }
+  return `
+    <button type="button" class="slot-btn choose-btn" data-index="${index}" aria-label="Select ${escapeHtml(label)}">
+      ${escapeHtml(label)}
+    </button>`;
+}
+
+function bookingRootAttrs(session: SchedulingSessionRow, grantConnected: boolean, tz: string): string {
+  return [
+    `data-token="${escapeHtml(session.token)}"`,
+    `data-grant="${grantConnected ? 'active' : 'none'}"`,
+    `data-timezone="${escapeHtml(tz)}"`,
+  ].join(' ');
 }
 
 function grantSectionHtml(session: SchedulingSessionRow, grantConnected: boolean): string {
@@ -163,7 +184,11 @@ function grantSectionHtml(session: SchedulingSessionRow, grantConnected: boolean
     </div>`;
 }
 
-function renderPage(session: SchedulingSessionRow, grantConnected = false): string {
+function renderPage(
+  session: SchedulingSessionRow,
+  grantConnected = false,
+  slotMeta: SlotButtonMeta[] = [],
+): string {
   const tz = session.host_timezone ?? 'America/Chicago';
   const host = session.host_name ?? 'Your host';
   const slots = session.offered_slots ?? [];
@@ -205,17 +230,17 @@ function renderPage(session: SchedulingSessionRow, grantConnected = false): stri
         </form>
         ${grantSectionHtml(session, grantConnected)}
       </div>
-    `, { title: 'Options unavailable', rootAttrs: `data-token="${escapeHtml(session.token)}" data-grant="${grantConnected ? 'active' : 'none'}"` });
+    `, { title: 'Options unavailable', rootAttrs: bookingRootAttrs(session, grantConnected, tz) });
   }
 
   const hostLine = session.host_name
     ? `${escapeHtml(host)} is inviting you to a meeting.`
     : 'You\u2019re invited to a meeting.';
 
-  const slotButtons = slots.slice(0, 2).map((s, i) => `
-    <button type="button" class="slot-btn choose-btn" data-index="${i}" aria-label="Select ${escapeHtml(formatSlotButtonLabel(s, tz))}">
-      ${escapeHtml(formatSlotButtonLabel(s, tz))}
-    </button>`).join('');
+  const slotButtons = slots
+    .slice(0, 2)
+    .map((s, i) => renderSlotButtonHtml(s, i, tz, slotMeta[i]))
+    .join('');
 
   return bookingShell(`
     <p class="invite-host-line">${hostLine}</p>
@@ -228,7 +253,7 @@ function renderPage(session: SchedulingSessionRow, grantConnected = false): stri
       <button type="submit">Send</button>
     </form>
     ${grantSectionHtml(session, grantConnected)}
-  `, { title: 'Pick a time', rootAttrs: `data-token="${escapeHtml(session.token)}" data-grant="${grantConnected ? 'active' : 'none'}"` });
+  `, { title: 'Pick a time', rootAttrs: bookingRootAttrs(session, grantConnected, tz) });
 }
 
 function renderCancelPage(session: SchedulingSessionRow, actionToken: string): string {
@@ -356,7 +381,11 @@ router.get('/s/:token', async (req: Request, res: Response) => {
       grant.oauth_access_token &&
       new Date(grant.expires_at) > new Date(),
   );
-  res.type('html').send(renderPage(session, grantConnected));
+  let slotMeta: SlotButtonMeta[] = [];
+  if (grantConnected && grant && (session.offered_slots?.length ?? 0) >= 2) {
+    slotMeta = await markGrantInviteeConflicts(session, grant, session.offered_slots!.slice(0, 2));
+  }
+  res.type('html').send(renderPage(session, grantConnected, slotMeta));
 });
 
 router.get('/s/:token/cancel', async (req: Request, res: Response) => {
@@ -713,6 +742,23 @@ router.post('/s/:token/propose', async (req: Request, res: Response) => {
   }
 });
 
+async function buildNextSlotsPayload(
+  session: SchedulingSessionRow,
+  slots: Array<{ start: string; end: string }>,
+  source: string,
+  grant?: InviteCalendarGrantRow | null,
+  grantActive = false,
+) {
+  const tz = session.host_timezone ?? 'America/Chicago';
+  const offered = slots.slice(0, 2);
+  const slotLabels = offered.map((slot) => formatSlotButtonLabel(slot, tz));
+  let slotMeta: Array<{ inviteeConflict: boolean }> | undefined;
+  if (grantActive && grant) {
+    slotMeta = await markGrantInviteeConflicts(session, grant, offered);
+  }
+  return { ok: true, slots: offered, slotLabels, slotMeta, timezone: tz, source };
+}
+
 router.post('/s/:token/next-slots', async (req: Request, res: Response) => {
   const token = String(req.params.token);
   const session = await getSchedulingSessionByToken(token);
@@ -732,7 +778,7 @@ router.post('/s/:token/next-slots', async (req: Request, res: Response) => {
     const slots = await computeMutualSlotsForSession(session, grant);
     if (slots.length >= 2) {
       await replaceSessionOfferedSlots(token, slots);
-      res.json({ ok: true, slots, source: 'mutual' });
+      res.json(await buildNextSlotsPayload(session, slots, 'mutual', grant, true));
       return;
     }
   }
@@ -771,7 +817,7 @@ router.post('/s/:token/next-slots', async (req: Request, res: Response) => {
 
   const next = slots.slice(0, 2);
   await replaceSessionOfferedSlots(token, next);
-  res.json({ ok: true, slots: next, source: grantActive ? 'host_fallback' : 'host' });
+  res.json(await buildNextSlotsPayload(session, next, grantActive ? 'host_fallback' : 'host', grant, grantActive));
 });
 
 export default router;

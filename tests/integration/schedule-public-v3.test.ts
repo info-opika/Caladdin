@@ -124,23 +124,25 @@ describe('schedule-public v3 invitee HTML', () => {
     mockGetSession.mockResolvedValue(baseSession({ host_name: 'Kanth' }));
   });
 
-  it('renders minimal dark invite without Caladdin branding', async () => {
+  it('renders branded invite page with slot options', async () => {
     const res = await request(app()).get('/s/tok123');
     expect(res.status).toBe(200);
     expect(res.type).toMatch(/html/);
     expect(res.text).toContain('invite.css');
+    expect(res.text).toContain('tokens.css');
+    expect(res.text).toContain('family=DM+Sans');
+    expect(res.text).toContain('family=Fraunces');
+    expect(res.text).toContain('theme-color" content="#d97706"');
+    expect(res.text).toContain('invite-brand');
+    expect(res.text).toContain('Caladdin');
     expect(res.text).toContain('Kanth is inviting you to a meeting.');
     expect(res.text).toContain('Find next common slot');
     expect(res.text).toContain('Type a preferred time');
     expect(res.text).toContain('Share your availability for this meeting only');
     expect((res.text.match(/class="slot-btn/g) || []).length).toBe(2);
+    expect(res.text).toContain('data-timezone="America/Chicago"');
 
-    expect(res.text).not.toContain('Caladdin');
-    expect(res.text).not.toContain('DM Sans');
-    expect(res.text).not.toContain('Fraunces');
-    expect(res.text).not.toContain('tokens.css');
     expect(res.text).not.toContain('booking.css');
-    expect(res.text).not.toContain('booking-brand');
     expect(res.text).not.toContain('guest-intake');
     expect(res.text).not.toContain('Suggest another time');
     expect(res.text).not.toContain('Choose this time');

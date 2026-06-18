@@ -9,6 +9,7 @@ const STATIC_ASSETS = [
   'booking.css',
   'booking.js',
   'book-page.js',
+  'invite.css',
   'tokens.css',
   'theme.js',
   'a11y.js',
