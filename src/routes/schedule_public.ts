@@ -768,10 +768,11 @@ router.post('/s/:token/next-slots', async (req: Request, res: Response) => {
   }
 
   const grant = await getGrantBySessionId(session.id);
-  const grantActive =
+  const grantActive = Boolean(
     grant?.status === 'active' &&
-    grant.oauth_access_token &&
-    new Date(grant.expires_at) > new Date();
+      grant.oauth_access_token &&
+      new Date(grant.expires_at) > new Date(),
+  );
 
   if (grantActive && grant) {
     const { computeMutualSlotsForSession } = await import('./invite_grant_auth.js');

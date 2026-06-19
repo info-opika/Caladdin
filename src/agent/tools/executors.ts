@@ -391,8 +391,6 @@ export async function executeSendInvite(
     return failure(result.messageToUser ?? 'Failed to send invite', {
       mutualChecked,
       slotSource: agentSlotSource,
-      inviteeRecognized: invitee.isCaladdinUser && invitee.hasCalendarConnected,
-      inviteeConflicts,
     });
   }
 
