@@ -67,4 +67,27 @@ describe('exchangeAuthorizationCode', () => {
       exchangeAuthorizationCode('auth-code', 'https://wrong.example.com/auth/callback'),
     ).rejects.toThrow(/redirect_uri_mismatch/);
   });
+
+  it('refreshes access tokens', async () => {
+    vi.spyOn(https, 'request').mockImplementation((_opts, cb) => {
+      const res = new EventEmitter() as EventEmitter & { statusCode: number };
+      res.statusCode = 200;
+      setTimeout(() => {
+        cb?.(res as never);
+        res.emit('data', Buffer.from(JSON.stringify({
+          access_token: 'new-at',
+          expires_in: 3600,
+        })));
+        res.emit('end');
+      }, 0);
+      const req = new EventEmitter() as EventEmitter & { write: () => void; end: () => void };
+      req.write = vi.fn();
+      req.end = vi.fn();
+      return req as never;
+    });
+
+    const { refreshAccessToken } = await import('../../src/services/google_token_exchange.js');
+    const out = await refreshAccessToken('refresh-token');
+    expect(out.access_token).toBe('new-at');
+  });
 });

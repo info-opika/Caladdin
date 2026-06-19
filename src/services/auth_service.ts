@@ -3,7 +3,11 @@ import { createHmac, timingSafeEqual } from 'crypto';
 import { config } from '../config.js';
 import { getGoogleTokens, saveGoogleTokens } from '../db/tokens.js';
 import { logger } from '../logger.js';
-import { exchangeAuthorizationCode } from './google_token_exchange.js';
+import {
+  exchangeAuthorizationCode,
+  isAccessTokenFresh,
+  refreshAccessToken,
+} from './google_token_exchange.js';
 
 const SCOPES = [
   'https://www.googleapis.com/auth/calendar',
@@ -60,35 +64,42 @@ export async function exchangeCodeForTokens(code: string): Promise<{
   return exchangeAuthorizationCode(code, config.googleRedirectUri.trim());
 }
 
-/** Returns a refreshed OAuth2 client for direct GCal API calls (recurring events, etc.). */
+/** Returns an OAuth2 client with a fresh access token (refresh via node:https, not gaxios). */
 export async function getOAuth2AuthForUser(userId: string) {
   const stored = await getGoogleTokens(userId);
   if (!stored?.access_token) return null;
 
-  const auth = createOAuth2Client();
-  auth.setCredentials({
-    access_token: stored.access_token,
-    refresh_token: stored.refresh_token ?? undefined,
-    expiry_date: stored.expiry ? new Date(stored.expiry).getTime() : undefined,
-  });
+  let accessToken = stored.access_token;
+  let refreshToken = stored.refresh_token;
+  let expiryMs = stored.expiry ? new Date(stored.expiry).getTime() : null;
 
-  auth.on('tokens', async (tokens) => {
-    if (tokens.access_token) {
-      await saveGoogleTokens(userId, {
-        access_token: tokens.access_token,
-        refresh_token: tokens.refresh_token ?? stored.refresh_token,
-        expiry: tokens.expiry_date ? new Date(tokens.expiry_date) : null,
-      }).catch((e) => logger.warn('Token refresh save failed', { error: String(e) }));
+  if (!isAccessTokenFresh(stored.expiry)) {
+    if (!stored.refresh_token) {
+      logger.warn('OAuth token refresh failed', { userId, error: 'missing refresh_token' });
+      return null;
     }
-  });
-
-  try {
-    await auth.getAccessToken();
-  } catch (e) {
-    logger.warn('OAuth token refresh failed', { userId, error: String(e) });
-    return null;
+    try {
+      const refreshed = await refreshAccessToken(stored.refresh_token);
+      accessToken = refreshed.access_token;
+      refreshToken = refreshed.refresh_token ?? stored.refresh_token;
+      expiryMs = refreshed.expiry_date ?? null;
+      await saveGoogleTokens(userId, {
+        access_token: accessToken,
+        refresh_token: refreshToken,
+        expiry: expiryMs ? new Date(expiryMs) : null,
+      });
+    } catch (e) {
+      logger.warn('OAuth token refresh failed', { userId, error: String(e) });
+      return null;
+    }
   }
 
+  const auth = createOAuth2Client();
+  auth.setCredentials({
+    access_token: accessToken,
+    refresh_token: refreshToken ?? undefined,
+    expiry_date: expiryMs ?? undefined,
+  });
   return auth;
 }
 
@@ -102,9 +113,10 @@ export async function persistTokensForUser(
   userId: string,
   tokens: { access_token: string; refresh_token?: string | null; expiry_date?: number | null },
 ): Promise<void> {
+  const existing = await getGoogleTokens(userId);
   await saveGoogleTokens(userId, {
     access_token: tokens.access_token,
-    refresh_token: tokens.refresh_token,
+    refresh_token: tokens.refresh_token ?? existing?.refresh_token ?? null,
     expiry: tokens.expiry_date ? new Date(tokens.expiry_date) : null,
   });
 }

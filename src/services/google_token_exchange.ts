@@ -63,23 +63,12 @@ function postTokenForm(body: string, timeoutMs = 25_000): Promise<{ status: numb
   });
 }
 
-/** Exchange an OAuth authorization code using Node https (avoids gaxios premature-close on errors). */
-export async function exchangeAuthorizationCode(
-  code: string,
-  redirectUri: string,
+async function requestGoogleTokens(
+  params: URLSearchParams,
+  logContext: Record<string, unknown>,
 ): Promise<GoogleTokenPayload> {
   const clientId = config.googleClientId.trim();
-  const clientSecret = config.googleClientSecret.trim();
-  const normalizedRedirect = redirectUri.trim();
-
-  const body = new URLSearchParams({
-    code,
-    client_id: clientId,
-    client_secret: clientSecret,
-    redirect_uri: normalizedRedirect,
-    grant_type: 'authorization_code',
-  }).toString();
-
+  const body = params.toString();
   let lastError: unknown;
 
   for (let attempt = 1; attempt <= 4; attempt += 1) {
@@ -92,7 +81,8 @@ export async function exchangeAuthorizationCode(
         logger.error('Google token exchange returned non-JSON', {
           status,
           bodyPreview: text.slice(0, 400),
-          redirectUri: normalizedRedirect,
+          clientIdPrefix: clientId.slice(0, 12),
+          ...logContext,
         });
         throw new Error(`Google token exchange returned invalid response (${status})`);
       }
@@ -102,8 +92,8 @@ export async function exchangeAuthorizationCode(
           status,
           error: parsed.error,
           error_description: parsed.error_description,
-          redirectUri: normalizedRedirect,
           clientIdPrefix: clientId.slice(0, 12),
+          ...logContext,
         });
         throw new Error(
           `Google OAuth error: ${parsed.error ?? `http_${status}`}${
@@ -128,12 +118,52 @@ export async function exchangeAuthorizationCode(
       if (isConfig || attempt >= 4 || !isRetryableNetworkError(err)) {
         throw err;
       }
-      logger.warn('Google token exchange network retry', { attempt, error: msg });
+      logger.warn('Google token exchange network retry', { attempt, error: msg, ...logContext });
       await sleep(attempt * 600);
     }
   }
 
   throw lastError;
+}
+
+/** Exchange an OAuth authorization code using Node https (avoids gaxios premature-close on Render). */
+export async function exchangeAuthorizationCode(
+  code: string,
+  redirectUri: string,
+): Promise<GoogleTokenPayload> {
+  const normalizedRedirect = redirectUri.trim();
+  return requestGoogleTokens(
+    new URLSearchParams({
+      code,
+      client_id: config.googleClientId.trim(),
+      client_secret: config.googleClientSecret.trim(),
+      redirect_uri: normalizedRedirect,
+      grant_type: 'authorization_code',
+    }),
+    { grantType: 'authorization_code', redirectUri: normalizedRedirect },
+  );
+}
+
+/** Refresh an access token using Node https (same gaxios workaround as code exchange). */
+export async function refreshAccessToken(refreshToken: string): Promise<GoogleTokenPayload> {
+  return requestGoogleTokens(
+    new URLSearchParams({
+      refresh_token: refreshToken.trim(),
+      client_id: config.googleClientId.trim(),
+      client_secret: config.googleClientSecret.trim(),
+      grant_type: 'refresh_token',
+    }),
+    { grantType: 'refresh_token' },
+  );
+}
+
+const REFRESH_BUFFER_MS = 5 * 60 * 1000;
+
+/** True when stored expiry is far enough in the future to skip a refresh call. */
+export function isAccessTokenFresh(expiry: string | Date | null | undefined): boolean {
+  if (!expiry) return false;
+  const ms = expiry instanceof Date ? expiry.getTime() : new Date(expiry).getTime();
+  return ms > Date.now() + REFRESH_BUFFER_MS;
 }
 
 /** Reachability + credential sanity check (invalid code → expect invalid_grant, not network error). */

@@ -3,7 +3,11 @@ import type { calendar_v3 } from 'googleapis';
 import { randomBytes } from 'crypto';
 import { config } from '../config.js';
 import { signOAuthState, verifyOAuthState } from './auth_service.js';
-import { exchangeAuthorizationCode } from './google_token_exchange.js';
+import {
+  exchangeAuthorizationCode,
+  isAccessTokenFresh,
+  refreshAccessToken,
+} from './google_token_exchange.js';
 import type { InviteCalendarGrantRow } from '../db/invite_calendar_grants.js';
 import { logger } from '../logger.js';
 
@@ -78,19 +82,35 @@ export async function getInviteeCalendarClient(
 ): Promise<calendar_v3.Calendar | null> {
   if (!grant.oauth_access_token || grant.status !== 'active') return null;
 
+  let accessToken = grant.oauth_access_token;
+  let refreshToken = grant.oauth_refresh_token;
+  let expiryMs = grant.oauth_expiry ? new Date(grant.oauth_expiry).getTime() : null;
+
+  if (!isAccessTokenFresh(grant.oauth_expiry)) {
+    if (!grant.oauth_refresh_token) {
+      logger.warn('Invitee grant token refresh failed', {
+        grantId: grant.id,
+        error: 'missing refresh_token',
+      });
+      return null;
+    }
+    try {
+      const refreshed = await refreshAccessToken(grant.oauth_refresh_token);
+      accessToken = refreshed.access_token;
+      refreshToken = refreshed.refresh_token ?? grant.oauth_refresh_token;
+      expiryMs = refreshed.expiry_date ?? null;
+    } catch (e) {
+      logger.warn('Invitee grant token refresh failed', { grantId: grant.id, error: String(e) });
+      return null;
+    }
+  }
+
   const auth = createInviteeOAuth2Client();
   auth.setCredentials({
-    access_token: grant.oauth_access_token,
-    refresh_token: grant.oauth_refresh_token ?? undefined,
-    expiry_date: grant.oauth_expiry ? new Date(grant.oauth_expiry).getTime() : undefined,
+    access_token: accessToken,
+    refresh_token: refreshToken ?? undefined,
+    expiry_date: expiryMs ?? undefined,
   });
-
-  try {
-    await auth.getAccessToken();
-  } catch (e) {
-    logger.warn('Invitee grant token refresh failed', { grantId: grant.id, error: String(e) });
-    return null;
-  }
 
   return google.calendar({ version: 'v3', auth });
 }
