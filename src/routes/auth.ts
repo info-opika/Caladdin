@@ -128,6 +128,13 @@ authRouter.get('/callback', async (req: Request, res: Response) => {
       error: message,
       stack: err instanceof Error ? err.stack : undefined,
     });
+    const transient = /Premature close|ECONNRESET|ETIMEDOUT|socket hang up|fetch failed/i.test(message);
+    if (transient) {
+      res.status(503).send(
+        'Google sign-in timed out. Go back to the home page and try signing in again — do not refresh this page.',
+      );
+      return;
+    }
     res.status(500).send('Calendar connection failed. Please try again.');
   }
 });

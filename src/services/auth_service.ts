@@ -51,18 +51,46 @@ function timingSafeEqualStr(a: string, b: string): boolean {
   return timingSafeEqual(ba, bb);
 }
 
+function isTransientGoogleFetchError(err: unknown): boolean {
+  const msg = err instanceof Error ? err.message : String(err);
+  return /Premature close|ECONNRESET|ETIMEDOUT|socket hang up|fetch failed|ENOTFOUND|EAI_AGAIN/i.test(msg);
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 export async function exchangeCodeForTokens(code: string): Promise<{
   access_token: string;
   refresh_token?: string | null;
   expiry_date?: number | null;
 }> {
   const client = createOAuth2Client();
-  const { tokens } = await client.getToken(code);
-  return {
-    access_token: tokens.access_token!,
-    refresh_token: tokens.refresh_token,
-    expiry_date: tokens.expiry_date,
-  };
+  let lastError: unknown;
+
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    try {
+      const { tokens } = await client.getToken(code);
+      return {
+        access_token: tokens.access_token!,
+        refresh_token: tokens.refresh_token,
+        expiry_date: tokens.expiry_date,
+      };
+    } catch (err) {
+      lastError = err;
+      if (attempt < 3 && isTransientGoogleFetchError(err)) {
+        logger.warn('Google token exchange failed; retrying', {
+          attempt,
+          error: err instanceof Error ? err.message : String(err),
+        });
+        await sleep(attempt * 400);
+        continue;
+      }
+      throw err;
+    }
+  }
+
+  throw lastError;
 }
 
 /** Returns a refreshed OAuth2 client for direct GCal API calls (recurring events, etc.). */
