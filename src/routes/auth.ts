@@ -87,13 +87,27 @@ authRouter.get('/callback', async (req: Request, res: Response) => {
     const user = await upsertUser({ email: info.email, display_name: info.name });
     await persistTokensForUser(user.id, tokens);
     await ensureDefaultPolicy(user.id);
-    await clearPendingEmailConfirmation(user.id);
+    try {
+      await clearPendingEmailConfirmation(user.id);
+    } catch (clearErr) {
+      logger.warn('clearPendingEmailConfirmation failed during sign-in', {
+        userId: user.id,
+        error: clearErr instanceof Error ? clearErr.message : String(clearErr),
+      });
+    }
 
     const cal = await getOAuthClientForUser(user.id);
     if (cal) {
-      const weekStart = startOfWeek(new Date());
-      const endOfNextWeek = addDays(weekStart, 14);
-      await importEventsFromGCal(cal, user.id, weekStart.toISOString(), endOfNextWeek.toISOString());
+      try {
+        const weekStart = startOfWeek(new Date());
+        const endOfNextWeek = addDays(weekStart, 14);
+        await importEventsFromGCal(cal, user.id, weekStart.toISOString(), endOfNextWeek.toISOString());
+      } catch (importErr) {
+        logger.warn('Initial calendar import failed during sign-in', {
+          userId: user.id,
+          error: importErr instanceof Error ? importErr.message : String(importErr),
+        });
+      }
     }
 
     if (stateMeta.ref === 'scheduling' && stateMeta.token) {
@@ -109,8 +123,10 @@ authRouter.get('/callback', async (req: Request, res: Response) => {
     setCsrfCookie(res, generateCsrfToken());
     res.redirect('/?welcome=1');
   } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
     logger.error('OAuth callback failed', {
-      error: err instanceof Error ? err.message : String(err),
+      error: message,
+      stack: err instanceof Error ? err.stack : undefined,
     });
     res.status(500).send('Calendar connection failed. Please try again.');
   }
