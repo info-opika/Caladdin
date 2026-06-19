@@ -9,6 +9,7 @@ import {
   persistTokensForUser,
   getOAuthClientForUser,
 } from '../services/auth_service.js';
+import { config } from '../config.js';
 import { upsertUser, ensureDefaultPolicy } from '../db/users.js';
 import { createSession, setSessionCookie, clearSessionCookie, destroySession, requireSession } from '../middleware/session.js';
 import { generateCsrfToken, setCsrfCookie, clearCsrfCookie } from '../middleware/csrf.js';
@@ -128,10 +129,33 @@ authRouter.get('/callback', async (req: Request, res: Response) => {
       error: message,
       stack: err instanceof Error ? err.stack : undefined,
     });
-    const transient = /Premature close|ECONNRESET|ETIMEDOUT|socket hang up|fetch failed/i.test(message);
+
+    if (message.includes('redirect_uri_mismatch')) {
+      const base = config.baseUrl.replace(/\/$/, '');
+      res.status(500).send(
+        `OAuth redirect URI mismatch. In Render, set CALADDIN_BASE_URL=${base} and GOOGLE_REDIRECT_URI=${base}/auth/callback, and register the same callback in Google Cloud Console.`,
+      );
+      return;
+    }
+    if (message.includes('invalid_client')) {
+      res.status(500).send(
+        'Google OAuth client misconfigured. Check GOOGLE_OAUTH_CLIENT_ID and GOOGLE_OAUTH_CLIENT_SECRET in Render (no extra spaces or quotes).',
+      );
+      return;
+    }
+    if (message.includes('invalid_grant')) {
+      res.status(400).send(
+        'This sign-in link expired. Go back to the home page and start sign-in again — do not refresh the callback URL.',
+      );
+      return;
+    }
+
+    const transient = /Premature close|ECONNRESET|ETIMEDOUT|socket hang up|fetch failed|timed out/i.test(
+      message,
+    );
     if (transient) {
       res.status(503).send(
-        'Google sign-in timed out. Go back to the home page and try signing in again — do not refresh this page.',
+        'Could not reach Google to finish sign-in. Go back to the home page and try again.',
       );
       return;
     }

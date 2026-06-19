@@ -3,6 +3,7 @@ import type { calendar_v3 } from 'googleapis';
 import { randomBytes } from 'crypto';
 import { config } from '../config.js';
 import { signOAuthState, verifyOAuthState } from './auth_service.js';
+import { exchangeAuthorizationCode } from './google_token_exchange.js';
 import type { InviteCalendarGrantRow } from '../db/invite_calendar_grants.js';
 import { logger } from '../logger.js';
 
@@ -65,16 +66,11 @@ export async function exchangeInviteeGrantCode(code: string): Promise<{
   refresh_token?: string | null;
   expiry_date?: number | null;
 }> {
-  const client = createInviteeOAuth2Client();
-  const { tokens } = await client.getToken(code);
+  const tokens = await exchangeAuthorizationCode(code, inviteeGrantRedirectUri());
   if (!tokens.access_token) {
     throw new Error('missing_access_token');
   }
-  return {
-    access_token: tokens.access_token,
-    refresh_token: tokens.refresh_token,
-    expiry_date: tokens.expiry_date,
-  };
+  return tokens;
 }
 
 export async function getInviteeCalendarClient(

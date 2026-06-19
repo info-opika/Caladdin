@@ -37,3 +37,16 @@ jobsRouter.post('/session-expiry', async (_req: Request, res: Response) => {
     res.status(500).json({ error: 'Internal server error' });
   }
 });
+
+jobsRouter.get('/oauth-probe', async (_req: Request, res: Response) => {
+  const { probeGoogleTokenEndpoint } = await import('../services/google_token_exchange.js');
+  const { config } = await import('../config.js');
+  const probe = await probeGoogleTokenEndpoint();
+  res.json({
+    ok: probe.ok,
+    detail: probe.detail,
+    redirectUri: config.googleRedirectUri,
+    baseUrl: config.baseUrl,
+    clientIdPrefix: config.googleClientId.trim().slice(0, 20),
+  });
+});

@@ -3,6 +3,7 @@ import { createHmac, timingSafeEqual } from 'crypto';
 import { config } from '../config.js';
 import { getGoogleTokens, saveGoogleTokens } from '../db/tokens.js';
 import { logger } from '../logger.js';
+import { exchangeAuthorizationCode } from './google_token_exchange.js';
 
 const SCOPES = [
   'https://www.googleapis.com/auth/calendar',
@@ -12,9 +13,9 @@ const SCOPES = [
 
 export function createOAuth2Client() {
   return new google.auth.OAuth2(
-    config.googleClientId,
-    config.googleClientSecret,
-    config.googleRedirectUri,
+    config.googleClientId.trim(),
+    config.googleClientSecret.trim(),
+    config.googleRedirectUri.trim(),
   );
 }
 
@@ -51,46 +52,12 @@ function timingSafeEqualStr(a: string, b: string): boolean {
   return timingSafeEqual(ba, bb);
 }
 
-function isTransientGoogleFetchError(err: unknown): boolean {
-  const msg = err instanceof Error ? err.message : String(err);
-  return /Premature close|ECONNRESET|ETIMEDOUT|socket hang up|fetch failed|ENOTFOUND|EAI_AGAIN/i.test(msg);
-}
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
 export async function exchangeCodeForTokens(code: string): Promise<{
   access_token: string;
   refresh_token?: string | null;
   expiry_date?: number | null;
 }> {
-  const client = createOAuth2Client();
-  let lastError: unknown;
-
-  for (let attempt = 1; attempt <= 3; attempt += 1) {
-    try {
-      const { tokens } = await client.getToken(code);
-      return {
-        access_token: tokens.access_token!,
-        refresh_token: tokens.refresh_token,
-        expiry_date: tokens.expiry_date,
-      };
-    } catch (err) {
-      lastError = err;
-      if (attempt < 3 && isTransientGoogleFetchError(err)) {
-        logger.warn('Google token exchange failed; retrying', {
-          attempt,
-          error: err instanceof Error ? err.message : String(err),
-        });
-        await sleep(attempt * 400);
-        continue;
-      }
-      throw err;
-    }
-  }
-
-  throw lastError;
+  return exchangeAuthorizationCode(code, config.googleRedirectUri.trim());
 }
 
 /** Returns a refreshed OAuth2 client for direct GCal API calls (recurring events, etc.). */

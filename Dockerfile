@@ -1,6 +1,8 @@
 # Multi-stage build: Node 22 Alpine, non-root runtime user
 FROM node:22-alpine AS builder
 
+RUN apk add --no-cache ca-certificates
+
 WORKDIR /app
 
 COPY package.json package-lock.json ./
@@ -14,6 +16,8 @@ COPY scripts ./scripts
 RUN npm run build
 
 FROM node:22-alpine AS runner
+
+RUN apk add --no-cache ca-certificates
 
 WORKDIR /app
 
