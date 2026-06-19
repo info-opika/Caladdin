@@ -76,6 +76,10 @@ vi.mock('../../src/db/platform_invites.js', () => ({
   }),
 }));
 
+vi.mock('../../src/db/conversation-context.js', () => ({
+  clearPendingEmailConfirmation: vi.fn().mockResolvedValue(undefined),
+}));
+
 import { authRouter } from '../../src/routes/auth.js';
 import { importEventsFromGCalWithToken } from '../../src/services/calendar_api.js';
 import { addDays, startOfWeek } from '../../src/core/date-utils.js';
@@ -85,6 +89,11 @@ function app() {
   x.use(cookieParser());
   x.use('/auth', authRouter);
   return x;
+}
+
+/** Wait for schedulePostSignInWork() fire-and-forget tasks in tests. */
+async function flushPostSignInWork(): Promise<void> {
+  await new Promise<void>((resolve) => setImmediate(resolve));
 }
 
 describe('OAuth MVP callback flow', () => {
@@ -110,6 +119,7 @@ describe('OAuth MVP callback flow', () => {
 
   it('imports 14 days of calendar events on callback', async () => {
     await request(app()).get('/auth/callback').query({ code: 'c1', state: buildState() });
+    await flushPostSignInWork();
     expect(importEventsFromGCalWithToken).toHaveBeenCalledTimes(1);
     expect(st.importCalls).toHaveLength(1);
     const { start, end } = st.importCalls[0]!;
@@ -154,6 +164,7 @@ describe('OAuth MVP callback flow', () => {
     await request(app())
       .get('/auth/callback')
       .query({ code: 'c', state: buildState({ ref: 'scheduling', token: sessionToken }) });
+    await flushPostSignInWork();
     expect(st.usageEvents).toContainEqual({
       userId: st.userId,
       type: 'post_accept_signup',
@@ -165,6 +176,7 @@ describe('OAuth MVP callback flow', () => {
     await request(app())
       .get('/auth/callback')
       .query({ code: 'c', state: buildState({ token: 'tok-only' }) });
+    await flushPostSignInWork();
     expect(st.usageEvents.find((e) => e.type === 'post_accept_signup')).toBeUndefined();
   });
 
@@ -173,6 +185,7 @@ describe('OAuth MVP callback flow', () => {
     await request(app())
       .get('/auth/callback')
       .query({ code: 'c', state: buildState({ invite: inviteToken }) });
+    await flushPostSignInWork();
     expect(st.inviteAccepted).toEqual([{ token: inviteToken, userId: st.userId }]);
     expect(st.usageEvents).toContainEqual({
       userId: st.userId,
@@ -208,5 +221,15 @@ describe('OAuth MVP callback flow', () => {
     const res = await request(app()).get('/auth/callback').query({ code: 'c', state: buildState() });
     expect(res.status).toBe(500);
     expect(res.text).toMatch(/Calendar connection failed/i);
+  });
+
+  it('redirects to /?auth=expired when authorization code was already used', async () => {
+    const { exchangeCodeForTokens } = await import('../../src/services/auth_service.js');
+    vi.mocked(exchangeCodeForTokens).mockRejectedValueOnce(
+      new Error('Google OAuth error: invalid_grant — Bad Request'),
+    );
+    const res = await request(app()).get('/auth/callback').query({ code: 'c', state: buildState() });
+    expect(res.status).toBe(302);
+    expect(res.headers.location).toBe('/?auth=expired');
   });
 });

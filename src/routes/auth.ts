@@ -45,6 +45,48 @@ function parseOAuthState(state: string): Record<string, string> {
   }
 }
 
+/** Non-blocking work after session is established — keeps OAuth callback fast. */
+function schedulePostSignInWork(
+  userId: string,
+  accessToken: string,
+  stateMeta: Record<string, string>,
+): void {
+  void (async () => {
+    try {
+      await clearPendingEmailConfirmation(userId);
+    } catch (clearErr) {
+      logger.warn('clearPendingEmailConfirmation failed during sign-in', {
+        userId,
+        error: clearErr instanceof Error ? clearErr.message : String(clearErr),
+      });
+    }
+
+    try {
+      const weekStart = startOfWeek(new Date());
+      const endOfNextWeek = addDays(weekStart, 14);
+      await importEventsFromGCalWithToken(
+        accessToken,
+        userId,
+        weekStart.toISOString(),
+        endOfNextWeek.toISOString(),
+      );
+    } catch (importErr) {
+      logger.warn('Initial calendar import failed during sign-in', {
+        userId,
+        error: importErr instanceof Error ? importErr.message : String(importErr),
+      });
+    }
+
+    if (stateMeta.ref === 'scheduling' && stateMeta.token) {
+      await recordUsageEvent(userId, 'post_accept_signup', { sessionToken: stateMeta.token });
+    }
+    if (stateMeta.invite) {
+      await markPlatformInviteAccepted(stateMeta.invite, userId);
+      await recordUsageEvent(userId, 'platform_invite_signup', { inviteToken: stateMeta.invite });
+    }
+  })();
+}
+
 authRouter.get('/start', (req: Request, res: Response) => {
   const ref = req.query.ref as string | undefined;
   const token = req.query.token as string | undefined;
@@ -85,44 +127,15 @@ authRouter.get('/callback', async (req: Request, res: Response) => {
     }
 
     const user = await upsertUser({ email: info.email, display_name: info.name });
-    await persistTokensForUser(user.id, tokens);
-    await ensureDefaultPolicy(user.id);
-    try {
-      await clearPendingEmailConfirmation(user.id);
-    } catch (clearErr) {
-      logger.warn('clearPendingEmailConfirmation failed during sign-in', {
-        userId: user.id,
-        error: clearErr instanceof Error ? clearErr.message : String(clearErr),
-      });
-    }
-
-    try {
-      const weekStart = startOfWeek(new Date());
-      const endOfNextWeek = addDays(weekStart, 14);
-      await importEventsFromGCalWithToken(
-        tokens.access_token,
-        user.id,
-        weekStart.toISOString(),
-        endOfNextWeek.toISOString(),
-      );
-    } catch (importErr) {
-      logger.warn('Initial calendar import failed during sign-in', {
-        userId: user.id,
-        error: importErr instanceof Error ? importErr.message : String(importErr),
-      });
-    }
-
-    if (stateMeta.ref === 'scheduling' && stateMeta.token) {
-      await recordUsageEvent(user.id, 'post_accept_signup', { sessionToken: stateMeta.token });
-    }
-    if (stateMeta.invite) {
-      await markPlatformInviteAccepted(stateMeta.invite, user.id);
-      await recordUsageEvent(user.id, 'platform_invite_signup', { inviteToken: stateMeta.invite });
-    }
+    await Promise.all([
+      persistTokensForUser(user.id, tokens),
+      ensureDefaultPolicy(user.id),
+    ]);
 
     const sessionToken = await createSession(user.id, user.email);
     setSessionCookie(res, sessionToken);
     setCsrfCookie(res, generateCsrfToken());
+    schedulePostSignInWork(user.id, tokens.access_token, stateMeta);
     res.redirect('/?welcome=1');
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
@@ -145,9 +158,7 @@ authRouter.get('/callback', async (req: Request, res: Response) => {
       return;
     }
     if (message.includes('invalid_grant')) {
-      res.status(400).send(
-        'This sign-in link expired. Go back to the home page and start sign-in again — do not refresh the callback URL.',
-      );
+      res.redirect('/?auth=expired');
       return;
     }
 

@@ -24,7 +24,7 @@ type GoogleTokenJson = {
   error_description?: string;
 };
 
-function postTokenForm(body: string, timeoutMs = 25_000): Promise<{ status: number; text: string }> {
+function postTokenForm(body: string, timeoutMs = 12_000): Promise<{ status: number; text: string }> {
   return googleHttpsRequest({
     hostname: TOKEN_HOST,
     path: TOKEN_PATH,
@@ -43,7 +43,7 @@ async function requestGoogleTokens(
   const body = params.toString();
   let lastError: unknown;
 
-  for (let attempt = 1; attempt <= 4; attempt += 1) {
+  for (let attempt = 1; attempt <= 2; attempt += 1) {
     try {
       const { status, text } = await postTokenForm(body);
       let parsed: GoogleTokenJson;
@@ -60,7 +60,8 @@ async function requestGoogleTokens(
       }
 
       if (status >= 400 || parsed.error) {
-        logger.error('Google token exchange rejected', {
+        const logFn = parsed.error === 'invalid_grant' ? logger.warn.bind(logger) : logger.error.bind(logger);
+        logFn('Google token exchange rejected', {
           status,
           error: parsed.error,
           error_description: parsed.error_description,
@@ -87,11 +88,11 @@ async function requestGoogleTokens(
       lastError = err;
       const msg = err instanceof Error ? err.message : String(err);
       const isConfig = msg.startsWith('Google OAuth error:');
-      if (isConfig || attempt >= 4 || !isRetryableNetworkError(err)) {
+      if (isConfig || attempt >= 2 || !isRetryableNetworkError(err)) {
         throw err;
       }
       logger.warn('Google token exchange network retry', { attempt, error: msg, ...logContext });
-      await sleep(attempt * 600);
+      await sleep(attempt * 250);
     }
   }
 

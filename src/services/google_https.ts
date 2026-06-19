@@ -45,7 +45,7 @@ export function googleHttpsRequest(
         path: opts.path,
         method: opts.method,
         headers,
-        timeout: opts.timeoutMs ?? 25_000,
+        timeout: opts.timeoutMs ?? 12_000,
       },
       (res) => {
         const chunks: Buffer[] = [];
@@ -66,18 +66,26 @@ export function googleHttpsRequest(
   });
 }
 
+export type GoogleHttpsRetryOptions = {
+  maxAttempts?: number;
+  backoffMs?: number;
+};
+
 export async function googleHttpsRequestWithRetry(
   opts: GoogleHttpsRequestOptions,
   logContext: Record<string, unknown> = {},
+  retryOpts: GoogleHttpsRetryOptions = {},
 ): Promise<{ status: number; text: string }> {
+  const maxAttempts = retryOpts.maxAttempts ?? 2;
+  const backoffMs = retryOpts.backoffMs ?? 250;
   let lastError: unknown;
 
-  for (let attempt = 1; attempt <= 4; attempt += 1) {
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
     try {
       return await googleHttpsRequest(opts);
     } catch (err) {
       lastError = err;
-      if (attempt >= 4 || !isRetryableNetworkError(err)) {
+      if (attempt >= maxAttempts || !isRetryableNetworkError(err)) {
         throw err;
       }
       logger.warn('Google HTTPS network retry', {
@@ -87,7 +95,7 @@ export async function googleHttpsRequestWithRetry(
         path: opts.path,
         ...logContext,
       });
-      await sleep(attempt * 600);
+      await sleep(attempt * backoffMs);
     }
   }
 
