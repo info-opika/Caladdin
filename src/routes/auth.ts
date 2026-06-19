@@ -7,7 +7,6 @@ import {
   exchangeCodeForTokens,
   getGoogleUserInfo,
   persistTokensForUser,
-  getOAuthClientForUser,
 } from '../services/auth_service.js';
 import { config } from '../config.js';
 import { upsertUser, ensureDefaultPolicy } from '../db/users.js';
@@ -20,7 +19,7 @@ import {
   isExistingPilotUser,
   isKillSwitchActive,
 } from '../pilot/pilot_controls.js';
-import { importEventsFromGCal } from '../services/calendar_api.js';
+import { importEventsFromGCalWithToken } from '../services/calendar_api.js';
 import { startOfWeek, addDays } from '../core/date-utils.js';
 import { recordUsageEvent } from '../db/usage_events.js';
 import { getPlatformInviteByToken, markPlatformInviteAccepted } from '../db/platform_invites.js';
@@ -97,18 +96,20 @@ authRouter.get('/callback', async (req: Request, res: Response) => {
       });
     }
 
-    const cal = await getOAuthClientForUser(user.id);
-    if (cal) {
-      try {
-        const weekStart = startOfWeek(new Date());
-        const endOfNextWeek = addDays(weekStart, 14);
-        await importEventsFromGCal(cal, user.id, weekStart.toISOString(), endOfNextWeek.toISOString());
-      } catch (importErr) {
-        logger.warn('Initial calendar import failed during sign-in', {
-          userId: user.id,
-          error: importErr instanceof Error ? importErr.message : String(importErr),
-        });
-      }
+    try {
+      const weekStart = startOfWeek(new Date());
+      const endOfNextWeek = addDays(weekStart, 14);
+      await importEventsFromGCalWithToken(
+        tokens.access_token,
+        user.id,
+        weekStart.toISOString(),
+        endOfNextWeek.toISOString(),
+      );
+    } catch (importErr) {
+      logger.warn('Initial calendar import failed during sign-in', {
+        userId: user.id,
+        error: importErr instanceof Error ? importErr.message : String(importErr),
+      });
     }
 
     if (stateMeta.ref === 'scheduling' && stateMeta.token) {

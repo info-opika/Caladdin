@@ -8,6 +8,7 @@ import {
   isAccessTokenFresh,
   refreshAccessToken,
 } from './google_token_exchange.js';
+import { fetchGoogleUserInfo } from './google_https.js';
 
 const SCOPES = [
   'https://www.googleapis.com/auth/calendar',
@@ -122,11 +123,7 @@ export async function persistTokensForUser(
 }
 
 export async function getGoogleUserInfo(accessToken: string): Promise<{ email: string; name?: string }> {
-  const auth = createOAuth2Client();
-  auth.setCredentials({ access_token: accessToken });
-  const oauth2 = google.oauth2({ version: 'v2', auth });
-  const { data } = await oauth2.userinfo.get();
-  return { email: data.email!, name: data.name ?? undefined };
+  return fetchGoogleUserInfo(accessToken);
 }
 
 export function getAuthService() {

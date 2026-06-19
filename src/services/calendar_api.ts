@@ -4,6 +4,7 @@ import { insertEvent, updateEvent, listEvents, cancelEvent as dbCancelEvent } fr
 import { CalendarEvent } from '../core/adts.js';
 import { formatZonedDateTime, gcalErrorMessage, normalizeGCalRange } from '../core/date-utils.js';
 import { logger } from '../logger.js';
+import { listGCalEventsViaHttps } from './google_https.js';
 
 function gcalAttendees(participants: string[] | undefined) {
   return (participants ?? []).map((email) => ({ email }));
@@ -268,8 +269,31 @@ export async function importEventsFromGCal(
     singleEvents: true,
     orderBy: 'startTime',
   });
+  return persistImportedGCalItems(userId, res.data.items ?? []);
+}
+
+/** Sign-in import via node:https (avoids gaxios premature-close on Render). */
+export async function importEventsFromGCalWithToken(
+  accessToken: string,
+  userId: string,
+  timeMin: string,
+  timeMax: string,
+): Promise<number> {
+  const items = await listGCalEventsViaHttps(accessToken, timeMin, timeMax);
+  return persistImportedGCalItems(userId, items);
+}
+
+async function persistImportedGCalItems(
+  userId: string,
+  items: Array<{
+    id?: string | null;
+    summary?: string | null;
+    start?: { dateTime?: string | null } | null;
+    end?: { dateTime?: string | null } | null;
+  }>,
+): Promise<number> {
   let count = 0;
-  for (const item of res.data.items ?? []) {
+  for (const item of items) {
     if (!item.start?.dateTime || !item.end?.dateTime) continue;
     await insertEvent(userId, {
       title: item.summary ?? 'Busy',

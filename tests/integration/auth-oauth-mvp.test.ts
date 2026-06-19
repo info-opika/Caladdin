@@ -29,7 +29,6 @@ vi.mock('../../src/services/auth_service.js', async (importOriginal) => {
     exchangeCodeForTokens: vi.fn().mockResolvedValue({ access_token: 'at', refresh_token: 'rt' }),
     getGoogleUserInfo: vi.fn().mockResolvedValue({ email: 'newuser@example.com', name: 'New User' }),
     persistTokensForUser: vi.fn().mockResolvedValue(undefined),
-    getOAuthClientForUser: vi.fn().mockResolvedValue({ calendar: true }),
     getAuthUrl: vi.fn((state: string) => `https://accounts.google.com/o/oauth2/auth?state=${encodeURIComponent(state)}`),
   };
 });
@@ -59,7 +58,7 @@ vi.mock('../../src/db/users.js', () => ({
 }));
 
 vi.mock('../../src/services/calendar_api.js', () => ({
-  importEventsFromGCal: vi.fn(async (_cal: unknown, _userId: string, start: string, end: string) => {
+  importEventsFromGCalWithToken: vi.fn(async (_token: string, _userId: string, start: string, end: string) => {
     st.importCalls.push({ start, end });
   }),
 }));
@@ -78,7 +77,7 @@ vi.mock('../../src/db/platform_invites.js', () => ({
 }));
 
 import { authRouter } from '../../src/routes/auth.js';
-import { importEventsFromGCal } from '../../src/services/calendar_api.js';
+import { importEventsFromGCalWithToken } from '../../src/services/calendar_api.js';
 import { addDays, startOfWeek } from '../../src/core/date-utils.js';
 
 function app() {
@@ -111,7 +110,7 @@ describe('OAuth MVP callback flow', () => {
 
   it('imports 14 days of calendar events on callback', async () => {
     await request(app()).get('/auth/callback').query({ code: 'c1', state: buildState() });
-    expect(importEventsFromGCal).toHaveBeenCalledTimes(1);
+    expect(importEventsFromGCalWithToken).toHaveBeenCalledTimes(1);
     expect(st.importCalls).toHaveLength(1);
     const { start, end } = st.importCalls[0]!;
     const weekStart = startOfWeek(new Date());

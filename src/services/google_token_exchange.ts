@@ -1,6 +1,11 @@
-import https from 'node:https';
 import { config } from '../config.js';
 import { logger } from '../logger.js';
+import {
+  googleHttpsRequest,
+  googleHttpsRequestWithRetry,
+  isRetryableNetworkError,
+  sleep,
+} from './google_https.js';
 
 const TOKEN_HOST = 'oauth2.googleapis.com';
 const TOKEN_PATH = '/token';
@@ -19,47 +24,14 @@ type GoogleTokenJson = {
   error_description?: string;
 };
 
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-function isRetryableNetworkError(err: unknown): boolean {
-  const msg = err instanceof Error ? err.message : String(err);
-  return /Premature close|ECONNRESET|ETIMEDOUT|timed out|socket hang up|EAI_AGAIN|ENOTFOUND|fetch failed/i.test(
-    msg,
-  );
-}
-
 function postTokenForm(body: string, timeoutMs = 25_000): Promise<{ status: number; text: string }> {
-  return new Promise((resolve, reject) => {
-    const req = https.request(
-      {
-        hostname: TOKEN_HOST,
-        path: TOKEN_PATH,
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-          'Content-Length': Buffer.byteLength(body),
-          Accept: 'application/json',
-        },
-        timeout: timeoutMs,
-      },
-      (res) => {
-        const chunks: Buffer[] = [];
-        res.on('data', (chunk: Buffer) => chunks.push(chunk));
-        res.on('end', () => {
-          resolve({ status: res.statusCode ?? 0, text: Buffer.concat(chunks).toString('utf8') });
-        });
-        res.on('error', reject);
-      },
-    );
-
-    req.on('error', reject);
-    req.on('timeout', () => {
-      req.destroy(new Error('Google token request timed out'));
-    });
-    req.write(body);
-    req.end();
+  return googleHttpsRequest({
+    hostname: TOKEN_HOST,
+    path: TOKEN_PATH,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body,
+    timeoutMs,
   });
 }
 
@@ -179,7 +151,17 @@ export async function probeGoogleTokenEndpoint(): Promise<{
       redirect_uri: config.googleRedirectUri.trim(),
       grant_type: 'authorization_code',
     }).toString();
-    const { status, text } = await postTokenForm(body, 10_000);
+    const { status, text } = await googleHttpsRequestWithRetry(
+      {
+        hostname: TOKEN_HOST,
+        path: TOKEN_PATH,
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body,
+        timeoutMs: 10_000,
+      },
+      { operation: 'token_probe' },
+    );
     const parsed = JSON.parse(text) as GoogleTokenJson;
     if (parsed.error === 'invalid_grant' || parsed.error === 'invalid_client') {
       return { ok: true, detail: `reachable (${parsed.error})` };
