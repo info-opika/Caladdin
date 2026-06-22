@@ -9,6 +9,7 @@ import {
   cancelConfirmedSession,
   rescheduleConfirmedSession,
   replaceSessionOfferedSlots,
+  appendDismissedSlots,
   GCAL_CLAIMING_SENTINEL,
   type SchedulingSessionRow,
 } from '../db/scheduling_sessions.js';
@@ -34,7 +35,12 @@ import { listBusyFromGCal } from '../services/calendar_api.js';
 import { findMutualSlots } from '../services/mutual_slot_engine.js';
 import { migratePolicy } from '../core/adts.js';
 import { getSupabase } from '../db/client.js';
-import { formatSlotButtonLabel, formatSlotLabel } from '../services/schedule_formatting.js';
+import {
+  formatSlotButtonLabelForInvitee,
+  formatSlotHostTimeLine,
+  formatSlotLabel,
+  zonesDiffer,
+} from '../services/schedule_formatting.js';
 import { markGrantInviteeConflicts } from '../services/invitee_slot_conflicts.js';
 
 const router = Router();
@@ -132,24 +138,64 @@ function renderExpired(): string {
 
 type SlotButtonMeta = { inviteeConflict?: boolean };
 
+function slotPairsEqual(
+  a: Array<{ start: string; end: string }>,
+  b: Array<{ start: string; end: string }>,
+): boolean {
+  if (a.length !== b.length) return false;
+  return a.every((s, i) => s.start === b[i]?.start && s.end === b[i]?.end);
+}
+
+function buildExcludeSlots(session: SchedulingSessionRow): Array<{ start: string; end: string }> {
+  const all = [...(session.dismissed_slots ?? []), ...(session.offered_slots ?? [])];
+  const seen = new Set<string>();
+  return all.filter((s) => {
+    const key = `${s.start}|${s.end}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
 function renderSlotButtonHtml(
   slot: { start: string; end: string },
   index: number,
-  tz: string,
+  hostTz: string,
   meta?: SlotButtonMeta,
+  inviteeTz?: string,
 ): string {
-  const label = formatSlotButtonLabel(slot, tz);
+  const displayTz = inviteeTz ?? hostTz;
+  const label = formatSlotButtonLabelForInvitee(slot, displayTz);
+  const hostLine = zonesDiffer(displayTz, hostTz) ? formatSlotHostTimeLine(slot, hostTz) : '';
+  const dataAttrs = `data-index="${index}" data-start="${escapeHtml(slot.start)}" data-end="${escapeHtml(slot.end)}"`;
   if (meta?.inviteeConflict) {
     return `
-    <button type="button" class="slot-btn choose-btn is-busy" data-index="${index}" disabled aria-label="${escapeHtml(label)} — You are busy at this hour">
+    <button type="button" class="slot-btn choose-btn is-busy" ${dataAttrs} disabled aria-label="${escapeHtml(label)} — You are busy at this hour">
       <span class="slot-btn-time">${escapeHtml(label)}</span>
+      ${hostLine ? `<span class="slot-btn-host-time">${escapeHtml(hostLine)}</span>` : ''}
       <span class="slot-btn-busy-note">You&apos;re busy at this hour</span>
     </button>`;
   }
   return `
-    <button type="button" class="slot-btn choose-btn" data-index="${index}" aria-label="Select ${escapeHtml(label)}">
-      ${escapeHtml(label)}
+    <button type="button" class="slot-btn choose-btn" ${dataAttrs} aria-label="Select ${escapeHtml(label)}">
+      <span class="slot-btn-time">${escapeHtml(label)}</span>
+      ${hostLine ? `<span class="slot-btn-host-time">${escapeHtml(hostLine)}</span>` : ''}
     </button>`;
+}
+
+function renderSlotGridHtml(
+  slots: Array<{ start: string; end: string }>,
+  hostTz: string,
+  slotMeta: SlotButtonMeta[] = [],
+  inviteeTz?: string,
+): string {
+  const buttons = slots
+    .slice(0, 2)
+    .map((s, i) => renderSlotButtonHtml(s, i, hostTz, slotMeta[i], inviteeTz));
+  if (buttons.length === 2) {
+    return `${buttons[0]}<p class="slot-or-divider" aria-hidden="true">or</p>${buttons[1]}`;
+  }
+  return buttons.join('');
 }
 
 function bookingRootAttrs(session: SchedulingSessionRow, grantConnected: boolean, tz: string): string {
@@ -237,15 +283,18 @@ function renderPage(
     ? `${escapeHtml(host)} is inviting you to a meeting.`
     : 'You\u2019re invited to a meeting.';
 
-  const slotButtons = slots
-    .slice(0, 2)
-    .map((s, i) => renderSlotButtonHtml(s, i, tz, slotMeta[i]))
-    .join('');
+  const slotButtons = renderSlotGridHtml(slots, tz, slotMeta);
+
+  const hostToggle = `
+    <button type="button" id="toggle-host-time" class="slot-host-toggle" hidden>
+      Show host&apos;s time
+    </button>`;
 
   return bookingShell(`
     <p class="invite-host-line">${hostLine}</p>
     <div id="booking-status" class="booking-status" role="status"></div>
     <div class="slot-grid">${slotButtons}</div>
+    ${hostToggle}
     <button type="button" id="find-next-slot" class="btn-secondary">Find next common slot</button>
     <form id="preferred-time-form" class="preferred-time-form">
       <label for="preferred-time" class="visually-hidden">Preferred time</label>
@@ -472,8 +521,29 @@ router.post('/s/:token/select', async (req: Request, res: Response) => {
     return;
   }
 
-  const slotIndex = req.body.slotIndex as 0 | 1;
-  const selected = session.offered_slots[slotIndex];
+  const hostTz = session.host_timezone ?? 'America/Chicago';
+  const inviteeTz =
+    typeof req.body.inviteeTimezone === 'string' && req.body.inviteeTimezone.trim()
+      ? req.body.inviteeTimezone.trim()
+      : hostTz;
+
+  let slotIndex = req.body.slotIndex as 0 | 1 | undefined;
+  let selected = slotIndex != null ? session.offered_slots[slotIndex] : undefined;
+
+  if (req.body.start && req.body.end) {
+    const start = String(req.body.start);
+    const end = String(req.body.end);
+    const idx = session.offered_slots.findIndex((s) => s.start === start && s.end === end);
+    if (idx < 0) {
+      res.status(400).json({ error: 'invalid_slot' });
+      return;
+    }
+    slotIndex = idx as 0 | 1;
+    selected = session.offered_slots[slotIndex];
+  } else if (slotIndex == null) {
+    res.status(400).json({ error: 'slot_required' });
+    return;
+  }
 
   if (session.status === 'confirmed' && session.selected_slot && session.google_event_id) {
     const same =
@@ -487,7 +557,18 @@ router.post('/s/:token/select', async (req: Request, res: Response) => {
     return;
   }
 
-  if (session.status !== 'pending' || !selected) {
+  if (session.status !== 'pending' || !selected || slotIndex == null) {
+    res.status(409).json({ error: 'unavailable' });
+    return;
+  }
+
+  const fresh = await getSchedulingSessionByToken(token);
+  if (!fresh || fresh.status !== 'pending') {
+    res.status(409).json({ error: 'unavailable' });
+    return;
+  }
+  selected = fresh.offered_slots[slotIndex];
+  if (!selected || selected.start !== session.offered_slots[slotIndex]?.start) {
     res.status(409).json({ error: 'unavailable' });
     return;
   }
@@ -558,7 +639,8 @@ router.post('/s/:token/select', async (req: Request, res: Response) => {
 
     await revokeGrantForSession(session.id).catch(() => {});
 
-    res.json({ ok: true, actions: selectActionPayload(token) });
+    const slotLabel = formatSlotButtonLabelForInvitee(selected, inviteeTz);
+    res.json({ ok: true, actions: selectActionPayload(token), slotLabel });
   } catch {
     await revertSessionClaim(token);
     res.status(502).json({ error: 'gcal_failed' });
@@ -748,15 +830,53 @@ async function buildNextSlotsPayload(
   source: string,
   grant?: InviteCalendarGrantRow | null,
   grantActive = false,
+  inviteeTimezone?: string,
 ) {
-  const tz = session.host_timezone ?? 'America/Chicago';
+  const hostTz = session.host_timezone ?? 'America/Chicago';
+  const inviteeTz = inviteeTimezone?.trim() || hostTz;
   const offered = slots.slice(0, 2);
-  const slotLabels = offered.map((slot) => formatSlotButtonLabel(slot, tz));
+  const slotLabels = offered.map((slot) => formatSlotButtonLabelForInvitee(slot, inviteeTz));
+  const hostSlotLabels = zonesDiffer(inviteeTz, hostTz)
+    ? offered.map((slot) => formatSlotHostTimeLine(slot, hostTz))
+    : undefined;
   let slotMeta: Array<{ inviteeConflict: boolean }> | undefined;
   if (grantActive && grant) {
     slotMeta = await markGrantInviteeConflicts(session, grant, offered);
   }
-  return { ok: true, slots: offered, slotLabels, slotMeta, timezone: tz, source };
+  return {
+    ok: true,
+    slots: offered,
+    slotLabels,
+    hostSlotLabels,
+    slotMeta,
+    timezone: hostTz,
+    hostTimezone: hostTz,
+    inviteeTimezone: inviteeTz,
+    source,
+  };
+}
+
+async function persistAndLoadNextSlots(
+  token: string,
+  session: SchedulingSessionRow,
+  next: Array<{ start: string; end: string }>,
+): Promise<{ ok: true; session: SchedulingSessionRow } | { ok: false; error: string }> {
+  if (slotPairsEqual(next, session.offered_slots ?? [])) {
+    return { ok: false, error: 'no_more_slots' };
+  }
+  const dismissedOk = await appendDismissedSlots(token, session.offered_slots ?? []);
+  if (!dismissedOk) {
+    return { ok: false, error: 'slot_persist_failed' };
+  }
+  const saved = await replaceSessionOfferedSlots(token, next);
+  if (!saved) {
+    return { ok: false, error: 'slot_persist_failed' };
+  }
+  const refreshed = await getSchedulingSessionByToken(token);
+  if (!refreshed) {
+    return { ok: false, error: 'slot_persist_failed' };
+  }
+  return { ok: true, session: refreshed };
 }
 
 router.post('/s/:token/next-slots', async (req: Request, res: Response) => {
@@ -767,6 +887,10 @@ router.post('/s/:token/next-slots', async (req: Request, res: Response) => {
     return;
   }
 
+  const inviteeTimezone =
+    typeof req.body?.inviteeTimezone === 'string' ? req.body.inviteeTimezone : undefined;
+  const excludeSlots = buildExcludeSlots(session);
+
   const grant = await getGrantBySessionId(session.id);
   const grantActive = Boolean(
     grant?.status === 'active' &&
@@ -776,12 +900,37 @@ router.post('/s/:token/next-slots', async (req: Request, res: Response) => {
 
   if (grantActive && grant) {
     const { computeMutualSlotsForSession } = await import('./invite_grant_auth.js');
-    const slots = await computeMutualSlotsForSession(session, grant);
+    const slots = await computeMutualSlotsForSession(session, grant, excludeSlots);
     if (slots.length >= 2) {
-      await replaceSessionOfferedSlots(token, slots);
-      res.json(await buildNextSlotsPayload(session, slots, 'mutual', grant, true));
+      const persisted = await persistAndLoadNextSlots(token, session, slots);
+      if (!persisted.ok) {
+        const status = persisted.error === 'no_more_slots' ? 409 : 500;
+        res.status(status).json({
+          error: persisted.error,
+          message:
+            persisted.error === 'no_more_slots'
+              ? 'No more mutual times in your window — try widening dates or propose a time.'
+              : undefined,
+        });
+        return;
+      }
+      res.json(
+        await buildNextSlotsPayload(
+          persisted.session,
+          persisted.session.offered_slots,
+          'mutual',
+          grant,
+          true,
+          inviteeTimezone,
+        ),
+      );
       return;
     }
+    res.status(409).json({
+      error: 'no_more_slots',
+      message: 'No more mutual times in your window — try widening dates or propose a time.',
+    });
+    return;
   }
 
   const tz = session.host_timezone ?? 'America/Chicago';
@@ -808,7 +957,7 @@ router.post('/s/:token/next-slots', async (req: Request, res: Response) => {
     timezone: tz,
     dayStartHour: dayStart,
     dayEndHour: dayEnd,
-    excludeSlots: session.offered_slots ?? [],
+    excludeSlots,
   });
 
   if (slots.length < 1) {
@@ -817,8 +966,22 @@ router.post('/s/:token/next-slots', async (req: Request, res: Response) => {
   }
 
   const next = slots.slice(0, 2);
-  await replaceSessionOfferedSlots(token, next);
-  res.json(await buildNextSlotsPayload(session, next, grantActive ? 'host_fallback' : 'host', grant, grantActive));
+  const persisted = await persistAndLoadNextSlots(token, session, next);
+  if (!persisted.ok) {
+    const status = persisted.error === 'no_more_slots' ? 409 : 500;
+    res.status(status).json({ error: persisted.error });
+    return;
+  }
+  res.json(
+    await buildNextSlotsPayload(
+      persisted.session,
+      persisted.session.offered_slots,
+      'host',
+      grant,
+      false,
+      inviteeTimezone,
+    ),
+  );
 });
 
 export default router;

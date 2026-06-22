@@ -81,13 +81,13 @@ describe('GET /api/calendar/week', () => {
       ],
     });
 
-    const res = await request(app()).get('/api/calendar/week?start=2026-06-16T12:00:00.000Z');
+    const res = await request(app()).get('/api/calendar/week?start=2026-06-22');
     expect(res.status).toBe(200);
     expect(res.body.events).toHaveLength(2);
     expect(res.body.events[0].source).toBe('caladdin_block');
     expect(mockListWeekEventsWithSource).toHaveBeenCalledWith(
       mockSession.userId,
-      '2026-06-16T12:00:00.000Z',
+      '2026-06-22',
     );
   });
 

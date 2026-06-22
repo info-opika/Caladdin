@@ -11,6 +11,13 @@ function startOfWeekMonday(date) {
   return d;
 }
 
+function formatWeekStartDate(date) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
 function addDays(date, n) {
   const d = new Date(date);
   d.setDate(d.getDate() + n);
@@ -70,7 +77,7 @@ export function createCalendarWeek({ container, fetchWeek }) {
     container.querySelectorAll('.calendar-week-nav').forEach((btn) => {
       btn.addEventListener('click', () => {
         const dir = btn.dataset.dir;
-        weekStart = addDays(weekStart, dir === 'prev' ? -7 : 7);
+        weekStart = startOfWeekMonday(addDays(weekStart, dir === 'prev' ? -7 : 7));
         void refresh();
       });
     });
@@ -82,8 +89,6 @@ export function createCalendarWeek({ container, fetchWeek }) {
     const emptyEl = container.querySelector('.calendar-week-empty');
     if (!grid) return;
 
-    const start = new Date(data.start);
-    weekStart = startOfWeekMonday(start);
     const end = addDays(weekStart, 6);
     if (titleEl) {
       titleEl.textContent = `${formatDayHeader(weekStart)} – ${formatDayHeader(end)}`;
@@ -136,7 +141,7 @@ export function createCalendarWeek({ container, fetchWeek }) {
     loading = true;
     container.classList.add('is-loading');
     try {
-      const data = await fetchWeek(weekStart.toISOString());
+      const data = await fetchWeek(formatWeekStartDate(weekStart));
       renderWeek(data);
     } catch {
       const emptyEl = container.querySelector('.calendar-week-empty');

@@ -21,6 +21,11 @@ describe('selectToolsForUtterance', () => {
     expect(tools).toContain('check_specific_slot');
   });
 
+  it('selects book tools for create-an-event phrasing', () => {
+    const tools = selectToolsForUtterance("Create an event named 'Sync' at 3pm", []);
+    expect(tools).toContain('create_event');
+  });
+
   it('includes undo when history mentions a recent write', () => {
     const tools = selectToolsForUtterance('what about tomorrow', [
       { role: 'assistant', content: 'I booked your focus block.' },

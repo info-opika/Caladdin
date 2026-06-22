@@ -25,6 +25,29 @@ export function startOfWeek(d: Date): Date {
   return r;
 }
 
+/** Parse week anchor from `YYYY-MM-DD` (local) or ISO datetime without TZ drift on Mondays. */
+export function parseWeekStartParam(startParam: string): Date {
+  const dateOnly = /^(\d{4})-(\d{2})-(\d{2})$/.exec(startParam.trim());
+  if (dateOnly) {
+    const year = Number(dateOnly[1]);
+    const month = Number(dateOnly[2]);
+    const day = Number(dateOnly[3]);
+    return startOfWeek(new Date(year, month - 1, day));
+  }
+  const parsed = new Date(startParam);
+  if (Number.isNaN(parsed.getTime())) {
+    throw new Error('Invalid week start');
+  }
+  return startOfWeek(parsed);
+}
+
+export function formatWeekStartDate(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
 export function setHours(d: Date, h: number): Date {
   const r = new Date(d);
   r.setHours(h);

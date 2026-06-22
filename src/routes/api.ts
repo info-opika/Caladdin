@@ -18,6 +18,7 @@ import { listBusyFromGCal } from '../services/calendar_api.js';
 import { getCachedBusyFromGCal } from '../services/freebusy-cache.js';
 import { lookupInviteeAvailability } from '../services/invitee_lookup.js';
 import { checkSpecificSlot } from '../services/mutual_slot_engine.js';
+import { parseWeekStartParam } from '../core/date-utils.js';
 
 export const apiRouter = Router();
 
@@ -254,9 +255,10 @@ apiRouter.get('/calendar/week', requireSession, async (req: Request, res: Respon
   const session = (req as Request & { session: { userId: string } }).session;
   const startParam = typeof req.query.start === 'string' ? req.query.start : undefined;
   if (startParam) {
-    const parsed = new Date(startParam);
-    if (Number.isNaN(parsed.getTime())) {
-      res.status(400).json({ error: 'Invalid start parameter — use an ISO 8601 date' });
+    try {
+      parseWeekStartParam(startParam);
+    } catch {
+      res.status(400).json({ error: 'Invalid start parameter — use YYYY-MM-DD or ISO 8601 date' });
       return;
     }
   }

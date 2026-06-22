@@ -1,6 +1,6 @@
 import { getSupabase } from './client.js';
 import { CalendarEvent, type CalendarEventSource, type WeekCalendarEvent } from '../core/adts.js';
-import { addDays, startOfWeek } from '../core/date-utils.js';
+import { addDays, parseWeekStartParam, startOfWeek } from '../core/date-utils.js';
 
 export function inferCalendarEventSource(event: CalendarEvent): CalendarEventSource {
   if (event.tier <= 1 || event.title.startsWith('[Protected]')) {
@@ -90,9 +90,7 @@ export async function listWeekEventsWithSource(
   userId: string,
   weekStartIso?: string,
 ): Promise<{ start: string; end: string; events: WeekCalendarEvent[] }> {
-  const weekStart = weekStartIso
-    ? startOfWeek(new Date(weekStartIso))
-    : startOfWeek(new Date());
+  const weekStart = weekStartIso ? parseWeekStartParam(weekStartIso) : startOfWeek(new Date());
   const weekEnd = addDays(weekStart, 7);
   const start = weekStart.toISOString();
   const end = weekEnd.toISOString();

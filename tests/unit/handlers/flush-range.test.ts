@@ -43,7 +43,12 @@ describe('handleFlushRange', () => {
     expect(mockDeleteEventByTitle).toHaveBeenCalled();
   });
 
-  it('requires calendar for single delete', async () => {
+  it('deletes from database when Google client is unavailable', async () => {
+    mockDeleteEventByTitle.mockResolvedValue({
+      deleted: true,
+      title: 'Dentist',
+      message: 'Removed "Dentist" from your calendar.',
+    });
     const parsed = ParsedIntentSchema.parse({
       intent: 'FLUSH_RANGE',
       confidence: 0.9,
@@ -52,8 +57,9 @@ describe('handleFlushRange', () => {
       rawUtterance: 'delete dentist',
     });
     const result = await handleFlushRange(parsed, ctx, null);
-    expect(result.success).toBe(false);
-    expect(result.messageToUser).toMatch(/not connected/i);
+    expect(result.success).toBe(true);
+    expect(result.messageToUser).toMatch(/Dentist/i);
+    expect(mockDeleteEventByTitle).toHaveBeenCalledWith(null, 'user-1', 'Dentist', 'delete dentist');
   });
 
   it('cancels tier>0 events in range', async () => {

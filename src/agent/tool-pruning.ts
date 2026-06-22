@@ -1,5 +1,13 @@
 import type { AgentMessage } from './types.js';
 import type { ToolName } from './tools/schemas.js';
+import {
+  assistantAskedConfirmation,
+  isAffirmation,
+  isBlockIntent,
+  isBookIntent,
+  isCancelIntent,
+  utteranceSignals,
+} from './intent-signals.js';
 
 export const CORE_TOOL_NAMES: ToolName[] = [
   'get_calendar_summary',
@@ -52,11 +60,6 @@ const WRITE_TOOL_NAMES = new Set<ToolName>([
   'undo_last_action',
 ]);
 
-function utteranceSignals(utterance: string, history: AgentMessage[]): string {
-  const parts = [...history.map((m) => m.content), utterance];
-  return parts.join(' ').toLowerCase();
-}
-
 function hadRecentWrite(history: AgentMessage[]): boolean {
   return history.some(
     (m) =>
@@ -74,13 +77,16 @@ export function selectToolsForUtterance(utterance: string, history: AgentMessage
   const text = utteranceSignals(utterance, history);
 
   let subset: ToolName[];
-  if (/\b(block|protect|shield|recurring)\b/.test(text)) {
+  if (isBlockIntent(text)) {
     subset = BLOCK_TOOLS;
   } else if (/\b(invite|send|grant|proposed)\b/.test(text)) {
     subset = INVITE_TOOLS;
-  } else if (/\b(book|schedule|create event)\b/.test(text)) {
+  } else if (
+    isBookIntent(text) ||
+    (isAffirmation(utterance) && isBookIntent(text) && assistantAskedConfirmation(history))
+  ) {
     subset = BOOK_TOOLS;
-  } else if (/\b(cancel|delete|flush)\b/.test(text)) {
+  } else if (isCancelIntent(text)) {
     subset = CANCEL_TOOLS;
   } else if (/\b(what'?s on|summary|tomorrow|today|calendar|agenda|meetings?)\b/.test(text)) {
     subset = SUMMARY_TOOLS;

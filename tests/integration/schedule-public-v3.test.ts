@@ -139,7 +139,8 @@ describe('schedule-public v3 invitee HTML', () => {
     expect(res.text).toContain('Find next common slot');
     expect(res.text).toContain('Type a preferred time');
     expect(res.text).toContain('Share your availability for this meeting only');
-    expect((res.text.match(/class="slot-btn/g) || []).length).toBe(2);
+    expect((res.text.match(/class="slot-btn choose-btn/g) || []).length).toBe(2);
+    expect(res.text).toContain('slot-or-divider');
     expect(res.text).toContain('data-timezone="America/Chicago"');
 
     expect(res.text).not.toContain('booking.css');

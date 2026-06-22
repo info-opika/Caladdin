@@ -5,7 +5,9 @@ import request from 'supertest';
 const mockGetSession = vi.fn();
 const mockGetGrant = vi.fn();
 const mockReplaceSlots = vi.fn();
+const mockAppendDismissed = vi.fn();
 const mockMarkGrant = vi.fn();
+const mockComputeMutual = vi.fn();
 
 vi.mock('../../src/db/scheduling_sessions.js', () => ({
   GCAL_CLAIMING_SENTINEL: '__CALADDIN_GCAL_CLAIMING__',
@@ -17,6 +19,7 @@ vi.mock('../../src/db/scheduling_sessions.js', () => ({
   cancelConfirmedSession: vi.fn(),
   rescheduleConfirmedSession: vi.fn(),
   replaceSessionOfferedSlots: (...a: unknown[]) => mockReplaceSlots(...a),
+  appendDismissedSlots: (...a: unknown[]) => mockAppendDismissed(...a),
 }));
 
 vi.mock('../../src/db/invite_calendar_grants.js', () => ({
@@ -89,7 +92,7 @@ vi.mock('../../src/db/client.js', () => ({
 }));
 
 vi.mock('../../src/routes/invite_grant_auth.js', () => ({
-  computeMutualSlotsForSession: vi.fn().mockResolvedValue([]),
+  computeMutualSlotsForSession: (...a: unknown[]) => mockComputeMutual(...a),
 }));
 
 vi.mock('../../src/services/calendar_api.js', () => ({
@@ -115,8 +118,13 @@ function app() {
 describe('schedule-public invitee grant conflicts', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockReplaceSlots.mockResolvedValue(undefined);
+    mockReplaceSlots.mockResolvedValue(true);
+    mockAppendDismissed.mockResolvedValue(true);
     mockMarkGrant.mockResolvedValue([{ inviteeConflict: true }, { inviteeConflict: false }]);
+    mockComputeMutual.mockResolvedValue([
+      { start: '2026-06-03T10:00:00-05:00', end: '2026-06-03T11:00:00-05:00' },
+      { start: '2026-06-03T14:00:00-05:00', end: '2026-06-03T15:00:00-05:00' },
+    ]);
   });
 
   it('renders busy slot state when grant is active and invitee conflicts', async () => {
@@ -153,17 +161,25 @@ describe('schedule-public invitee grant conflicts', () => {
 
   it('next-slots returns slotLabels and slotMeta when grant is active', async () => {
     const future = new Date(Date.now() + 86400_000).toISOString();
-    mockGetSession.mockResolvedValue({
+    const nextSlots = [
+      { start: '2026-06-03T10:00:00-05:00', end: '2026-06-03T11:00:00-05:00' },
+      { start: '2026-06-03T14:00:00-05:00', end: '2026-06-03T15:00:00-05:00' },
+    ];
+    const base = {
       id: 's1',
       token: 'tok123',
       host_user_id: '22222222-2222-4222-8222-222222222222',
       host_timezone: 'America/Chicago',
       invitee_email: 'guest1@example.test',
       duration_minutes: 60,
-      offered_slots: [],
-      status: 'pending',
+      offered_slots: [] as Array<{ start: string; end: string }>,
+      dismissed_slots: [] as Array<{ start: string; end: string }>,
+      status: 'pending' as const,
       expires_at: future,
-    });
+    };
+    mockGetSession
+      .mockResolvedValueOnce(base)
+      .mockResolvedValueOnce({ ...base, offered_slots: nextSlots });
     mockGetGrant.mockResolvedValue({
       id: 'g1',
       status: 'active',

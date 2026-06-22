@@ -71,7 +71,7 @@ function grantSearchWindow(
 async function computeMutualSlotsForSession(
   session: SchedulingSessionRow,
   grant: InviteCalendarGrantRow,
-  excludeOffered = true,
+  excludeSlots: Array<{ start: string; end: string }> = [],
 ): Promise<Array<{ start: string; end: string }>> {
   const tz = session.host_timezone ?? 'America/Chicago';
   const policy = migratePolicy(await getPolicy(session.host_user_id));
@@ -99,7 +99,7 @@ async function computeMutualSlotsForSession(
     timezone: tz,
     dayStartHour: dayStart,
     dayEndHour: dayEnd,
-    excludeSlots: excludeOffered ? session.offered_slots ?? [] : [],
+    excludeSlots,
   });
 }
 

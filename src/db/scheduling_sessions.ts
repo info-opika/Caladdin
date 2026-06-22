@@ -52,6 +52,7 @@ export interface SchedulingSessionRow {
   invitee_label: string | null;
   duration_minutes: number;
   offered_slots: CandidateSlot[];
+  dismissed_slots: CandidateSlot[];
   selected_slot: CandidateSlot | null;
   google_event_id: string | null;
   proposed_alternatives: unknown[];
@@ -78,6 +79,7 @@ function rowFromDb(data: Record<string, unknown>): SchedulingSessionRow {
     invitee_label: (data.invitee_label as string) ?? null,
     duration_minutes: (data.duration_minutes as number) ?? 30,
     offered_slots: offered ?? [],
+    dismissed_slots: (data.dismissed_slots as CandidateSlot[] | undefined) ?? [],
     selected_slot: (data.selected_slot as CandidateSlot) ?? null,
     google_event_id: (data.google_event_id as string) ?? null,
     proposed_alternatives: (data.proposed_alternatives as unknown[]) ?? [],
@@ -301,6 +303,39 @@ export async function appendProposedAlternative(
 export async function updateSessionStatus(token: string, status: string): Promise<void> {
   const { error } = await getSupabase().from('scheduling_sessions').update({ status }).eq('token', token);
   if (error) throw error;
+}
+
+export async function appendDismissedSlots(
+  token: string,
+  slots: Array<{ start: string; end: string }>,
+): Promise<boolean> {
+  if (slots.length === 0) return true;
+  const session = await getSchedulingSessionByToken(token);
+  if (!session) return false;
+
+  const existing = session.dismissed_slots ?? [];
+  const merged = [...existing];
+  for (const slot of slots) {
+    const duplicate = merged.some((s) => s.start === slot.start && s.end === slot.end);
+    if (!duplicate) {
+      merged.push({
+        start: slot.start,
+        end: slot.end,
+        adjacentEventCount: 0,
+        energyScore: 0.5,
+        createsFragment: false,
+      });
+    }
+  }
+
+  const { data, error } = await getSupabase()
+    .from('scheduling_sessions')
+    .update({ dismissed_slots: merged, updated_at: new Date().toISOString() })
+    .eq('token', token)
+    .eq('status', 'pending')
+    .select('id')
+    .maybeSingle();
+  return !error && Boolean(data);
 }
 
 export async function replaceSessionOfferedSlots(

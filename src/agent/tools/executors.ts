@@ -657,17 +657,22 @@ export async function executeCancelEventsInRange(
     return failure(parsed.error.message);
   }
 
+  const eventTitle =
+    parsed.data.eventTitle?.trim() ||
+    ctx.conversationContext?.lastEvent?.title ||
+    undefined;
+
   const intent = ParsedIntentSchema.parse({
     intent: 'FLUSH_RANGE',
     confidence: 1,
     params: {
       rangeStart: parsed.data.rangeStart,
       rangeEnd: parsed.data.rangeEnd,
-      eventTitle: parsed.data.eventTitle,
+      eventTitle,
     },
     mappingMethod: 'direct',
-    rawUtterance: parsed.data.eventTitle
-      ? `cancel ${parsed.data.eventTitle}`
+    rawUtterance: eventTitle
+      ? `delete ${eventTitle}`
       : 'cancel events in range',
   });
 

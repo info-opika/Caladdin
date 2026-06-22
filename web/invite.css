@@ -124,6 +124,46 @@ body.invite-page {
   background: var(--color-bg-muted, #f3f4f6);
 }
 
+.slot-btn-host-time {
+  display: none;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  opacity: 0.85;
+  margin-top: var(--space-1);
+}
+
+.show-host-time .slot-btn-host-time {
+  display: block;
+}
+
+.slot-or-divider {
+  margin: 0;
+  text-align: center;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-text-muted);
+}
+
+.slot-host-toggle {
+  display: block;
+  margin: calc(-1 * var(--space-2)) 0 var(--space-4);
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--color-accent);
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.slot-host-toggle[hidden] {
+  display: none;
+}
+
 .slot-btn-time {
   display: block;
   text-decoration: line-through;

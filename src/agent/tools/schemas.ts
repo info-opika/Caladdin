@@ -144,7 +144,7 @@ const TOOL_DESCRIPTIONS: Record<ToolName, string> = {
   get_calendar_summary: 'Read-only summary of calendar events for a day or week.',
   update_preferences: 'Update scheduling preferences (timezone, hours, duration).',
   modify_event: 'Modify an existing event (time, title, or attendee).',
-  cancel_events_in_range: 'Cancel events in a date range or by title.',
+  cancel_events_in_range: 'Cancel or delete calendar events by title or date range.',
   undo_last_action: 'Undo the most recent reversible calendar action.',
 };
 

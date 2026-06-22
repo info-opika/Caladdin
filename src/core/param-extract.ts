@@ -161,6 +161,14 @@ export function extractEventReference(utterance: string): string | undefined {
   const removeMatch = utterance.match(/\b(?:remove|delete|cancel)\s+(?:the\s+)?(.+?)\s+event\b/i);
   if (removeMatch?.[1]?.trim()) return removeMatch[1].trim();
 
+  const bareDelete = utterance.match(
+    /\b(?:remove|delete|cancel)\s+(?:the\s+)?(?:event\s+)?(.+?)(?:\s+(?:from|on|off)\s+(?:my\s+)?calendar)?[.!?]*$/i,
+  );
+  if (bareDelete?.[1]?.trim()) {
+    const candidate = bareDelete[1].trim().replace(/\s+(?:event|meeting|appointment)$/i, '').trim();
+    if (candidate && !/^(it|that|this)$/i.test(candidate)) return candidate;
+  }
+
   const m = utterance.match(/(?:the event|event)\s+['"]([^'"]+)['"]/i);
   if (m?.[1]?.trim()) return m[1].trim();
   return undefined;

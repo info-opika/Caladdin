@@ -11,11 +11,14 @@ const mockGetAuth = vi.fn();
 const mockListBusy = vi.fn();
 const mockFindMutualSlots = vi.fn();
 const mockComputeMutual = vi.fn();
+const mockReplaceSlots = vi.fn();
+const mockAppendDismissed = vi.fn();
 
 vi.mock('../../src/db/scheduling_sessions.js', () => ({
   GCAL_CLAIMING_SENTINEL: '__CALADDIN_GCAL_CLAIMING__',
   getSchedulingSessionByToken: (...a: unknown[]) => mockGetSession(...a),
-  replaceSessionOfferedSlots: vi.fn().mockResolvedValue(undefined),
+  replaceSessionOfferedSlots: (...a: unknown[]) => mockReplaceSlots(...a),
+  appendDismissedSlots: (...a: unknown[]) => mockAppendDismissed(...a),
   claimSessionSlotForGcal: vi.fn(),
   finalizeSessionAfterGcal: vi.fn(),
   revertSessionClaim: vi.fn(),
@@ -37,9 +40,13 @@ vi.mock('../../src/services/calendar_api.js', () => ({
   listBusyFromGCal: (...a: unknown[]) => mockListBusy(...a),
 }));
 
-vi.mock('../../src/services/mutual_slot_engine.js', () => ({
-  findMutualSlots: (...a: unknown[]) => mockFindMutualSlots(...a),
-}));
+vi.mock('../../src/services/mutual_slot_engine.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../src/services/mutual_slot_engine.js')>();
+  return {
+    ...actual,
+    findMutualSlots: (...a: unknown[]) => mockFindMutualSlots(...a),
+  };
+});
 
 vi.mock('../../src/routes/invite_grant_auth.js', () => ({
   computeMutualSlotsForSession: (...a: unknown[]) => mockComputeMutual(...a),
@@ -71,7 +78,7 @@ function app() {
   return x;
 }
 
-function openSession(): SchedulingSessionRow {
+function openSession(overrides: Partial<SchedulingSessionRow> = {}): SchedulingSessionRow {
   return {
     id: 'sess-next',
     token: 'tok-next',
@@ -82,6 +89,7 @@ function openSession(): SchedulingSessionRow {
     invitee_label: null,
     duration_minutes: 60,
     offered_slots: [],
+    dismissed_slots: [],
     selected_slot: null,
     google_event_id: null,
     proposed_alternatives: [],
@@ -89,6 +97,7 @@ function openSession(): SchedulingSessionRow {
     expires_at: new Date(Date.now() + 86400000).toISOString(),
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
+    ...overrides,
   };
 }
 
@@ -108,35 +117,88 @@ function activeGrant(): InviteCalendarGrantRow {
   };
 }
 
+const mutualPair = [
+  { start: '2026-06-12T10:00:00-05:00', end: '2026-06-12T11:00:00-05:00' },
+  { start: '2026-06-13T14:00:00-05:00', end: '2026-06-13T15:00:00-05:00' },
+];
+
 describe('POST /s/:token/next-slots mutual paths', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockGetSession.mockResolvedValue(openSession());
     mockGetAuth.mockResolvedValue({ request: vi.fn() });
     mockListBusy.mockResolvedValue([]);
+    mockAppendDismissed.mockResolvedValue(true);
+    mockReplaceSlots.mockResolvedValue(true);
     mockFindMutualSlots.mockReturnValue([
       { start: '2026-06-10T10:00:00-05:00', end: '2026-06-10T11:00:00-05:00' },
       { start: '2026-06-11T14:00:00-05:00', end: '2026-06-11T15:00:00-05:00' },
     ]);
-    mockComputeMutual.mockResolvedValue([
-      { start: '2026-06-12T10:00:00-05:00', end: '2026-06-12T11:00:00-05:00' },
-      { start: '2026-06-13T14:00:00-05:00', end: '2026-06-13T15:00:00-05:00' },
-    ]);
+    mockComputeMutual.mockResolvedValue(mutualPair);
+    mockGetSession.mockImplementation(async () => {
+      return openSession({
+        offered_slots: mutualPair.map((s) => ({
+          ...s,
+          adjacentEventCount: 0,
+          energyScore: 0.5,
+          createsFragment: false,
+        })),
+      });
+    });
   });
 
   it('returns mutual slots when invite grant is active', async () => {
     mockGetGrant.mockResolvedValue(activeGrant());
-    const res = await request(app()).post('/s/tok-next/next-slots');
+    mockGetSession
+      .mockResolvedValueOnce(openSession())
+      .mockResolvedValueOnce(
+        openSession({
+          offered_slots: mutualPair.map((s) => ({
+            ...s,
+            adjacentEventCount: 0,
+            energyScore: 0.5,
+            createsFragment: false,
+          })),
+        }),
+      );
+    const res = await request(app())
+      .post('/s/tok-next/next-slots')
+      .send({ inviteeTimezone: 'Asia/Kolkata' });
     expect(res.status).toBe(200);
     expect(res.body.ok).toBe(true);
     expect(res.body.source).toBe('mutual');
     expect(res.body.slots).toHaveLength(2);
+    expect(res.body.inviteeTimezone).toBe('Asia/Kolkata');
     expect(mockComputeMutual).toHaveBeenCalled();
+    expect(mockAppendDismissed).toHaveBeenCalled();
+    expect(mockReplaceSlots).toHaveBeenCalled();
     expect(mockFindMutualSlots).not.toHaveBeenCalled();
   });
 
   it('falls back to host-only slots when grant is missing', async () => {
     mockGetGrant.mockResolvedValue(null);
+    mockGetSession
+      .mockResolvedValueOnce(openSession())
+      .mockResolvedValueOnce(
+        openSession({
+          offered_slots: [
+            {
+              start: '2026-06-10T10:00:00-05:00',
+              end: '2026-06-10T11:00:00-05:00',
+              adjacentEventCount: 0,
+              energyScore: 0.5,
+              createsFragment: false,
+            },
+            {
+              start: '2026-06-11T14:00:00-05:00',
+              end: '2026-06-11T15:00:00-05:00',
+              adjacentEventCount: 0,
+              energyScore: 0.5,
+              createsFragment: false,
+            },
+          ],
+        }),
+      );
     const res = await request(app()).post('/s/tok-next/next-slots');
     expect(res.status).toBe(200);
     expect(res.body.ok).toBe(true);
@@ -147,12 +209,48 @@ describe('POST /s/:token/next-slots mutual paths', () => {
     );
   });
 
-  it('returns host_fallback when grant exists but mutual compute yields too few slots', async () => {
+  it('returns 409 when grant exists but mutual compute yields too few slots', async () => {
     mockGetGrant.mockResolvedValue(activeGrant());
     mockComputeMutual.mockResolvedValue([]);
     const res = await request(app()).post('/s/tok-next/next-slots');
-    expect(res.status).toBe(200);
-    expect(res.body.source).toBe('host_fallback');
-    expect(mockFindMutualSlots).toHaveBeenCalled();
+    expect(res.status).toBe(409);
+    expect(res.body.error).toBe('no_more_slots');
+    expect(mockFindMutualSlots).not.toHaveBeenCalled();
+  });
+
+  it('returns 409 when computed slots match current offered pair', async () => {
+    mockGetGrant.mockResolvedValue(null);
+    const current = [
+      {
+        start: '2026-06-10T10:00:00-05:00',
+        end: '2026-06-10T11:00:00-05:00',
+        adjacentEventCount: 0,
+        energyScore: 0.5,
+        createsFragment: false,
+      },
+      {
+        start: '2026-06-11T14:00:00-05:00',
+        end: '2026-06-11T15:00:00-05:00',
+        adjacentEventCount: 0,
+        energyScore: 0.5,
+        createsFragment: false,
+      },
+    ];
+    mockGetSession.mockResolvedValue(openSession({ offered_slots: current }));
+    mockFindMutualSlots.mockReturnValue([
+      { start: '2026-06-10T10:00:00-05:00', end: '2026-06-10T11:00:00-05:00' },
+      { start: '2026-06-11T14:00:00-05:00', end: '2026-06-11T15:00:00-05:00' },
+    ]);
+    const res = await request(app()).post('/s/tok-next/next-slots');
+    expect(res.status).toBe(409);
+    expect(res.body.error).toBe('no_more_slots');
+  });
+
+  it('returns 500 when replaceSessionOfferedSlots fails', async () => {
+    mockGetGrant.mockResolvedValue(null);
+    mockReplaceSlots.mockResolvedValue(false);
+    const res = await request(app()).post('/s/tok-next/next-slots');
+    expect(res.status).toBe(500);
+    expect(res.body.error).toBe('slot_persist_failed');
   });
 });

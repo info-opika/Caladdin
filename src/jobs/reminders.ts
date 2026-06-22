@@ -1,5 +1,6 @@
 import { DateTime } from 'luxon';
 import { getSchedulingSessionById } from '../db/scheduling_sessions.js';
+import { formatTimezoneLabel } from '../services/schedule_formatting.js';
 import { getBookingResponseForSession } from '../db/booking_responses.js';
 import {
   listDueReminders,
@@ -53,7 +54,9 @@ export function buildReminderEmailHtml(opts: {
 
 function formatSlotTime(iso: string, tz: string): string {
   const start = DateTime.fromISO(iso, { zone: tz });
-  return start.isValid ? start.toFormat('cccc, MMM d · h:mm a ZZZZ') : iso;
+  if (!start.isValid) return iso;
+  const tzLabel = formatTimezoneLabel(tz, start.toJSDate());
+  return `${start.toFormat('cccc, MMM d')} · ${start.toFormat('h:mm a')} ${tzLabel}`;
 }
 
 async function resolveGuestDetails(session: {

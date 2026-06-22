@@ -99,6 +99,8 @@ describe('param-extract', () => {
 
   it('extracts event title from remove utterance', () => {
     expect(extractEventReference('Remove the Test for Caladdin event please')).toBe('Test for Caladdin');
+    expect(extractEventReference('delete Timezone Tester from my calendar')).toBe('Timezone Tester');
+    expect(extractEventReference('cancel the event "Team Sync"')).toBe('Team Sync');
     expect(isDeleteUtterance('Remove the Test for Caladdin event please')).toBe(true);
   });
 

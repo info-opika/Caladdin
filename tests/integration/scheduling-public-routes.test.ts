@@ -120,7 +120,9 @@ function baseSession(over: Partial<SchedulingSessionRow> = {}): SchedulingSessio
     invitee_email: 'guest1@example.test',
     invitee_label: null,
     duration_minutes: 60,
+    host_name: 'Host',
     offered_slots: [slot(10), slot(14)],
+    dismissed_slots: [],
     selected_slot: null,
     google_event_id: null,
     proposed_alternatives: [],
@@ -184,9 +186,9 @@ describe('Public scheduling routes', () => {
     expect(res.text).toContain('is inviting you to a meeting');
     expect(res.text).toContain('Find next common slot');
     expect(res.text).toContain('Type a preferred time');
-    expect((res.text.match(/class="slot-btn/g) || []).length).toBe(2);
+    expect((res.text.match(/class="slot-btn choose-btn/g) || []).length).toBe(2);
+    expect(res.text).toContain('slot-or-divider');
     expect(res.text).toContain('Share your availability for this meeting only');
-    expect(res.text).not.toContain('Caladdin');
     expect(res.text).not.toContain('Suggest another time');
   });
 
@@ -350,6 +352,30 @@ describe('Public scheduling routes', () => {
     });
     expect(res.status).toBe(404);
     expect(res.body.error).toBe('not_found');
+  });
+
+  it('POST /s/:token/select accepts start/end ISO and returns slotLabel', async () => {
+    const sel = slot(14);
+    store.row = baseSession({ offered_slots: [slot(10), sel] });
+    const res = await request(app()).post('/s/tok123/select').send({
+      start: sel.start,
+      end: sel.end,
+      inviteeTimezone: 'Asia/Kolkata',
+    });
+    expect(res.status).toBe(200);
+    expect(res.body.ok).toBe(true);
+    expect(res.body.slotLabel).toMatch(/IST/);
+    expect(mockClaim).toHaveBeenCalledWith(expect.objectContaining({ slotIndex: 1 }));
+  });
+
+  it('POST /s/:token/select rejects start/end not in offered slots', async () => {
+    const res = await request(app()).post('/s/tok123/select').send({
+      start: '2026-06-09T10:00:00-05:00',
+      end: '2026-06-09T11:00:00-05:00',
+    });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('invalid_slot');
+    expect(mockClaim).not.toHaveBeenCalled();
   });
 
   it('GET /s/:token/calendar returns 403 when host disabled shareAvailabilityOnInvite (B07)', async () => {

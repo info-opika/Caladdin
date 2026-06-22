@@ -74,8 +74,8 @@ let listeningEl = null;
 let hasMessages = false;
 let calendarWeek = null;
 
-async function fetchCalendarWeek(startIso) {
-  const params = new URLSearchParams({ start: startIso });
+async function fetchCalendarWeek(weekStartDate) {
+  const params = new URLSearchParams({ start: weekStartDate });
   const { res, data } = await api(`/api/calendar/week?${params}`);
   if (!res.ok) throw new Error(data?.error ?? 'Could not load calendar');
   return data;

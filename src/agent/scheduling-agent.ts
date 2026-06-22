@@ -7,7 +7,13 @@ import { CORE_TOOL_NAMES, selectToolsForUtterance } from './tool-pruning.js';
 import { checkWrongTool } from './tool-call-guard.js';
 import { validateHonestReply } from './honesty-validator.js';
 import { stripLlmReasoningLeak } from './reply-sanitizer.js';
-import { assembleAgentContext } from './agent-context-assembler.js';
+import { assembleAgentContext, deriveSessionKnowledge } from './agent-context-assembler.js';
+import {
+  assistantAskedConfirmation,
+  isAffirmation,
+  isBookIntent,
+  utteranceSignals,
+} from './intent-signals.js';
 import { runAgentPrefilter } from './agent-prefilter.js';
 import { getPendingFrame } from '../db/conversation-context.js';
 import {
@@ -192,6 +198,7 @@ async function runAgentLoop(
   const tools = buildOpenAiToolDefinitions(toolNames);
 
   const pendingIntent = await getPendingFrame(params.userId).catch(() => null);
+  const knowledge = deriveSessionKnowledge(history, userMessage, pendingIntent);
   const contextAssembly = assembleAgentContext({
     userUtterance: userMessage,
     chatHistory: history,
@@ -215,6 +222,7 @@ async function runAgentLoop(
   let maxFallbackAttempts: number | undefined;
   let rounds = 0;
   let lastReply = '';
+  let noToolRetry = false;
   const startedAt = Date.now();
 
   while (rounds < maxRounds) {
@@ -245,7 +253,31 @@ async function runAgentLoop(
     lastReply = res.text;
 
     if (res.finishReason !== 'tool_calls' || res.toolCalls.length === 0) {
-      const honest = stripLlmReasoningLeak(validateHonestReply(lastReply, toolCalls));
+      const shouldForceTool =
+        !noToolRetry &&
+        knowledge.readyToAct &&
+        (knowledge.intentCategory === 'book meeting' ||
+          (isAffirmation(userMessage) &&
+            isBookIntent(utteranceSignals(userMessage, history)) &&
+            assistantAskedConfirmation(history)));
+
+      if (shouldForceTool) {
+        noToolRetry = true;
+        messages.push({
+          role: 'user',
+          content:
+            'You have enough information and active scheduling tools (including create_event). Call the correct write tool now — do not claim tools are missing, do not ask again, and do not suggest manual calendar entry.',
+        });
+        rounds -= 1;
+        continue;
+      }
+
+      const honest = stripLlmReasoningLeak(
+        validateHonestReply(lastReply, toolCalls, {
+          readyToAct: knowledge.readyToAct,
+          activeTools: toolNames,
+        }),
+      );
       return {
         reply: honest,
         toolCalls,
@@ -299,7 +331,10 @@ async function runAgentLoop(
         continue;
       }
 
-      const wrongCheck = checkWrongTool(userMessage, call.function.name);
+      const wrongCheck = checkWrongTool(userMessage, call.function.name, [
+        ...history,
+        { role: 'user', content: userMessage },
+      ]);
       if (wrongCheck.wrong && !wrongToolRetried) {
         wrongToolRetried = true;
         messages.push({
@@ -339,6 +374,7 @@ async function runAgentLoop(
     validateHonestReply(
       lastReply || 'I need a bit more information to continue.',
       toolCalls,
+      { readyToAct: knowledge.readyToAct, activeTools: toolNames },
     ),
   );
 

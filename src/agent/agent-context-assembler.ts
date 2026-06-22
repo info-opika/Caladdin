@@ -2,6 +2,14 @@ import { DateTime } from 'luxon';
 import type { ConversationContext, PendingIntentTemplate } from '../db/conversation-context.js';
 import type { UserPolicyProfile } from '../core/adts.js';
 import { inferBlockLabelFromTurns } from './agent-label-inference.js';
+import {
+  assistantAskedConfirmation,
+  extractEventTitle,
+  hasBookableTime,
+  isAffirmation,
+  isBlockIntent,
+  isBookIntent,
+} from './intent-signals.js';
 import type { AgentContext, AgentMessage } from './types.js';
 
 export type AgentContextAssemblyInput = {
@@ -74,11 +82,11 @@ function inferIntentCategory(combined: string): string {
   if (/\b(cancel|delete|remove)\b/.test(lower) && /\b(meeting|event|appointment)\b/.test(lower)) {
     return 'cancel event';
   }
+  if (isBookIntent(combined)) {
+    return 'book meeting';
+  }
   if (/\b(what.?s on|show|list|when am i|free|busy|calendar|do i have)\b/.test(lower)) {
     return 'calendar query';
-  }
-  if (/\b(book|schedule|set up|arrange)\b/.test(lower)) {
-    return 'book meeting';
   }
   return 'scheduling (general)';
 }
@@ -171,8 +179,11 @@ export function deriveSessionKnowledge(
   const emails = extractEmails(combined);
   if (emails.length > 0) known.push(`invitee: ${emails.join(', ')}`);
 
+  const eventTitle = extractEventTitle(combined);
+  if (eventTitle) known.push(`event title: "${eventTitle}"`);
+
   const label = inferBlockLabelFromTurns(userTurns);
-  if (label) known.push(`label/title: "${label}"`);
+  if (label && !eventTitle) known.push(`label/title: "${label}"`);
   else if (/block|protect|recurring/i.test(combined)) missing.push('block label');
 
   const lastAssistant = [...history].reverse().find((m) => m.role === 'assistant');
@@ -180,13 +191,15 @@ export function deriveSessionKnowledge(
     known.push(`last assistant asked: "${lastAssistant.content.slice(0, 120)}${lastAssistant.content.length > 120 ? '…' : ''}"`);
   }
 
-  const isBlockIntent = /recurring|block|protect|personal time|focus/i.test(combined);
+  const isBlockIntentFlag = isBlockIntent(combined);
   const isInviteIntent = emails.length > 0 || /\binvite\b/i.test(combined);
   const isQueryIntent = /\b(what.?s on|show my|calendar for|do i have)\b/i.test(combined);
-  const isBookIntent = /\b(book|schedule)\b/i.test(combined) && !isBlockIntent;
+  const isBookIntentFlag = isBookIntent(combined);
+  const userConfirmed =
+    isAffirmation(userUtterance) && assistantAskedConfirmation(history) && isBookIntentFlag;
 
   let readyToAct = false;
-  if (isBlockIntent) {
+  if (isBlockIntentFlag) {
     readyToAct = Boolean(timeRange && label);
     if (!recurrence && readyToAct) missing.push('weekdays (default Mon–Fri if unspecified)');
   } else if (isInviteIntent) {
@@ -194,10 +207,13 @@ export function deriveSessionKnowledge(
     if (!timeRange && !/\bslot|time|am|pm\b/i.test(combined)) missing.push('proposed time(s) or duration');
   } else if (isQueryIntent) {
     readyToAct = true;
-  } else if (isBookIntent) {
-    readyToAct = Boolean(timeRange || /\btomorrow|today|monday|tuesday|wednesday|thursday|friday\b/i.test(combined));
-    if (!label && !/\bmeeting\b/i.test(combined)) missing.push('meeting title');
-    if (!timeRange) missing.push('date/time');
+  } else if (isBookIntentFlag) {
+    const title = eventTitle ?? label;
+    readyToAct = Boolean(title && hasBookableTime(combined));
+    if (!title) missing.push('meeting title');
+    if (!hasBookableTime(combined)) missing.push('date/time');
+  } else if (userConfirmed) {
+    readyToAct = true;
   } else if (pendingIntent && pendingIntent.missingFields.length === 0) {
     readyToAct = true;
   }
@@ -272,7 +288,8 @@ function buildMultiTurnInstructions(): string {
     '- Never re-ask for information already stated in prior user messages or listed under "Already established".',
     '- When enough fields are present, call the right tool immediately; do not ask for confirmation unless there is a real conflict.',
     '- When something is still missing, ask exactly ONE focused clarifying question.',
-    '- Short follow-up replies (e.g. a label, a time, "every day") usually answer your previous question — interpret them in that context.',
+    '- Short follow-up replies (e.g. a label, a time, "yes please", "every day") usually answer your previous question — interpret them in that context.',
+    '- If the user says "yes" / "please" / "go ahead" after you proposed a booking, call create_event immediately — never claim you lack tools.',
     '- Use the user timezone for all spoken times; convert to ISO 8601 with offset in tool arguments.',
   ].join('\n');
 }
@@ -286,6 +303,7 @@ function buildFewShotExamples(): string {
     '- Reschedule: "Move my 3pm with Alex to Thursday" → use last event context if provided, else get_calendar_summary then modify_event.',
     '- Invite: "Invite jane@co.com Tuesday 2pm for sync" → lookup_user then send_invite with proposedSlots.',
     '- Book: "Schedule 30 min with Sam Friday at 10" → create_event once title/time are clear.',
+    '- Book: "Create an event named \'Sync\' at 6 PM" → create_event immediately (no confirmation).',
   ].join('\n');
 }
 
@@ -321,6 +339,13 @@ export function assembleAgentContext(input: AgentContextAssemblyInput): AgentCon
     const hints: string[] = ['[Scheduling context for this turn]'];
     if (knowledge.readyToAct) {
       hints.push('You have enough information from this conversation to act — use tools rather than asking again.');
+    }
+    if (
+      isAffirmation(userUtterance) &&
+      assistantAskedConfirmation(chatHistory) &&
+      isBookIntent(allUserTurns(chatHistory, userUtterance).join(' '))
+    ) {
+      hints.push('User confirmed your proposal — call create_event now with title and start from prior turns.');
     }
     if (knowledge.known.length > 0) {
       hints.push(`Remember: ${knowledge.known.slice(0, 5).join('; ')}`);
