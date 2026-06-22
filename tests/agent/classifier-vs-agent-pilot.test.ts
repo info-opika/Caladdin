@@ -55,6 +55,7 @@ vi.mock('../../src/db/conversation-context.js', () => ({
 
 vi.mock('../../src/db/users.js', () => ({
   upsertPolicy: vi.fn().mockResolvedValue(undefined),
+  getUserByEmail: vi.fn().mockResolvedValue(null),
 }));
 
 vi.mock('../../src/services/auth_service.js', () => ({

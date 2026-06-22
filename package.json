@@ -21,7 +21,7 @@
     "db:status": "supabase migration list",
     "db:pull": "supabase db pull",
     "db:reset": "supabase db reset",
-    "db:apply": "node scripts/apply-migrations.mjs",
+    "db:apply": "supabase db push",
     "render:secrets": "node scripts/generate-secrets.mjs"
   },
   "dependencies": {
