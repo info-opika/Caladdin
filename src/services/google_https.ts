@@ -211,3 +211,55 @@ export async function listGCalEventsViaHttps(
 
   return parsed.items ?? [];
 }
+
+type GCalFreeBusyJson = {
+  calendars?: Record<string, { busy?: Array<{ start?: string; end?: string }> }>;
+  error?: { message?: string; code?: number };
+};
+
+/** Query free/busy via node:https (avoids gaxios premature-close on Render). */
+export async function queryFreeBusyViaHttps(
+  accessToken: string,
+  timeMin: string,
+  timeMax: string,
+  calendarIds: string[] = ['primary'],
+): Promise<Array<{ start: string; end: string }>> {
+  const body = JSON.stringify({
+    timeMin,
+    timeMax,
+    items: calendarIds.map((id) => ({ id })),
+  });
+
+  const { status, text } = await googleHttpsRequestWithRetry(
+    {
+      hostname: 'www.googleapis.com',
+      path: '/calendar/v3/freeBusy',
+      method: 'POST',
+      accessToken: accessToken.trim(),
+      headers: { 'Content-Type': 'application/json' },
+      body,
+    },
+    { operation: 'calendar.freebusy.query' },
+  );
+
+  let parsed: GCalFreeBusyJson;
+  try {
+    parsed = JSON.parse(text) as GCalFreeBusyJson;
+  } catch {
+    logger.error('Google freebusy returned non-JSON', {
+      status,
+      bodyPreview: text.slice(0, 400),
+    });
+    throw new Error(`Google freebusy returned invalid response (${status})`);
+  }
+
+  if (status >= 400 || parsed.error) {
+    logger.error('Google freebusy rejected', { status, error: parsed.error });
+    throw new Error(`Google freebusy error: ${parsed.error?.message ?? `http_${status}`}`);
+  }
+
+  const busy = parsed.calendars?.primary?.busy ?? [];
+  return busy
+    .filter((b): b is { start: string; end: string } => Boolean(b.start && b.end))
+    .map((b) => ({ start: b.start, end: b.end }));
+}

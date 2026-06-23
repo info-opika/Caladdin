@@ -86,7 +86,7 @@ async function computeMutualSlotsForSession(
   if (!hostCal || !inviteeCal) return [];
 
   const [hostBusy, inviteeBusy] = await Promise.all([
-    listBusyFromGCal(hostCal, windowStart, windowEnd),
+    listBusyFromGCal(hostCal, windowStart, windowEnd, session.host_user_id),
     listBusyFromGCal(inviteeCal, windowStart, windowEnd),
   ]);
 

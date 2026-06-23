@@ -65,6 +65,13 @@ export async function exchangeCodeForTokens(code: string): Promise<{
   return exchangeAuthorizationCode(code, config.googleRedirectUri.trim());
 }
 
+/** Fresh access token for Google Calendar reads (refresh via node:https, not gaxios). */
+export async function getAccessTokenForUser(userId: string): Promise<string | null> {
+  const auth = await getOAuth2AuthForUser(userId);
+  const token = auth?.credentials?.access_token;
+  return typeof token === 'string' && token.trim() ? token.trim() : null;
+}
+
 /** Returns an OAuth2 client with a fresh access token (refresh via node:https, not gaxios). */
 export async function getOAuth2AuthForUser(userId: string) {
   const stored = await getGoogleTokens(userId);

@@ -947,7 +947,7 @@ router.post('/s/:token/next-slots', async (req: Request, res: Response) => {
     return;
   }
 
-  const hostBusy = await listBusyFromGCal(hostCal, windowStart, windowEnd);
+  const hostBusy = await listBusyFromGCal(hostCal, windowStart, windowEnd, session.host_user_id);
   const slots = findMutualSlots({
     hostBusy,
     inviteeBusy: [],

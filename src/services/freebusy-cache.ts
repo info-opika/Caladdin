@@ -41,7 +41,7 @@ export async function getCachedBusyFromGCal(
   const pending = inflight.get(key);
   if (pending) return pending;
 
-  const fetchPromise = listBusyFromGCal(cal, timeMin, timeMax)
+  const fetchPromise = listBusyFromGCal(cal, timeMin, timeMax, calendarUserId)
     .then((busy) => {
       cache.set(key, { expiresAt: Date.now() + ttlMs, busy });
       return busy;

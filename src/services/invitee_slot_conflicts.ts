@@ -53,6 +53,7 @@ export async function checkInviteeConflictsForSlots(
   slots: Array<{ start: string; end: string }>,
   opts?: {
     hostCal?: calendar_v3.Calendar | null;
+    hostUserId?: string;
     timezone?: string;
   },
 ): Promise<SlotWithConflicts[]> {
@@ -73,7 +74,7 @@ export async function checkInviteeConflictsForSlots(
 
   let hostBusy: Array<{ start: string; end: string }> = [];
   if (opts?.hostCal) {
-    hostBusy = await listBusyFromGCal(opts.hostCal, bounds.start, bounds.end);
+    hostBusy = await listBusyFromGCal(opts.hostCal, bounds.start, bounds.end, opts.hostUserId);
   }
 
   const inviteeCal = await getOAuthClientForUser(invitee.userId);
@@ -85,7 +86,7 @@ export async function checkInviteeConflictsForSlots(
     }));
   }
 
-  const inviteeBusy = await listBusyFromGCal(inviteeCal, bounds.start, bounds.end);
+  const inviteeBusy = await listBusyFromGCal(inviteeCal, bounds.start, bounds.end, invitee.userId);
   return markSlotsWithBusyConflicts(slots, hostBusy, inviteeBusy, tz);
 }
 
@@ -109,7 +110,7 @@ export async function markGrantInviteeConflicts(
   }
 
   const [hostBusy, inviteeBusy] = await Promise.all([
-    listBusyFromGCal(hostCal, bounds.start, bounds.end),
+    listBusyFromGCal(hostCal, bounds.start, bounds.end, session.host_user_id),
     listBusyFromGCal(inviteeCal, bounds.start, bounds.end),
   ]);
 

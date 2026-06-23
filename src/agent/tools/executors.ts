@@ -142,7 +142,7 @@ export async function executeCheckSpecificSlot(
     return failure('Google Calendar is not connected');
   }
 
-  const hostBusy = await listBusyFromGCal(ctx.cal, candidateStart, candidateEnd);
+  const hostBusy = await listBusyFromGCal(ctx.cal, candidateStart, candidateEnd, ctx.userId);
 
   let inviteeBusy: Array<{ start: string; end: string }> | undefined;
   let mutualChecked = false;
@@ -550,7 +550,7 @@ export async function executeGetCalendarSummary(
     7,
   );
 
-  const { events, error } = await listEventsFromGCalSafe(ctx.cal, timeMin, timeMax);
+  const { events, error } = await listEventsFromGCalSafe(ctx.cal, timeMin, timeMax, ctx.userId);
   if (error) {
     return failure(error);
   }

@@ -223,7 +223,7 @@ apiRouter.post('/calendar/check-slot', requireSession, async (req: Request, res:
       return;
     }
 
-    const hostBusy = await listBusyFromGCal(hostCal, candidateStart, candidateEnd);
+    const hostBusy = await listBusyFromGCal(hostCal, candidateStart, candidateEnd, session.userId);
 
     let inviteeBusy: Array<{ start: string; end: string }> | undefined;
     if (inviteeEmail) {

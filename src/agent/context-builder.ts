@@ -66,7 +66,7 @@ async function buildContextBlock(params: {
 
   if (params.cal) {
     const { timeMin, timeMax } = normalizeGCalRange(undefined, undefined, 7);
-    const { events } = await listEventsFromGCalSafe(params.cal, timeMin, timeMax);
+    const { events } = await listEventsFromGCalSafe(params.cal, timeMin, timeMax, params.userId);
     if (events.length === 0) {
       lines.push('This week: no events on Google Calendar.');
     } else {

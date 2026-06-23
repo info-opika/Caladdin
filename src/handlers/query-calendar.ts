@@ -24,7 +24,7 @@ export async function handleQueryCalendar(
     };
   }
 
-  const { events, error } = await listEventsFromGCalSafe(cal, timeMin, timeMax);
+  const { events, error } = await listEventsFromGCalSafe(cal, timeMin, timeMax, ctx.userId);
 
   if (error) {
     return {

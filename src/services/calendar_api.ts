@@ -4,7 +4,53 @@ import { insertEvent, updateEvent, listEvents, cancelEvent as dbCancelEvent } fr
 import { CalendarEvent } from '../core/adts.js';
 import { formatZonedDateTime, gcalErrorMessage, normalizeGCalRange } from '../core/date-utils.js';
 import { logger } from '../logger.js';
-import { listGCalEventsViaHttps } from './google_https.js';
+import { getAccessTokenForUser } from './auth_service.js';
+import type { OAuth2Client } from 'google-auth-library';
+import { listGCalEventsViaHttps, queryFreeBusyViaHttps, type GCalEventItem } from './google_https.js';
+
+type GCalEventRow = { title: string; start: string; end: string; gcalEventId: string };
+
+function accessTokenFromCalendar(cal: calendar_v3.Calendar): string | null {
+  const auth = (cal as unknown as { context?: { _options?: { auth?: OAuth2Client } } }).context?._options
+    ?.auth;
+  const token = auth?.credentials?.access_token;
+  return typeof token === 'string' && token.trim() ? token.trim() : null;
+}
+
+async function resolveGCalAccessToken(
+  cal: calendar_v3.Calendar,
+  userId?: string,
+): Promise<string | null> {
+  if (userId) {
+    try {
+      const token = await getAccessTokenForUser(userId);
+      if (token) return token;
+    } catch (e) {
+      logger.warn('GCal access token lookup failed; falling back to client credentials', {
+        userId,
+        error: String(e),
+      });
+    }
+  }
+  return accessTokenFromCalendar(cal);
+}
+
+function mapGCalItemsToEventRows(items: GCalEventItem[]): GCalEventRow[] {
+  return items
+    .filter((item) => item.status !== 'cancelled')
+    .map((item) => {
+      const start = item.start?.dateTime ?? (item.start?.date ? `${item.start.date}T00:00:00.000Z` : null);
+      const end = item.end?.dateTime ?? (item.end?.date ? `${item.end.date}T00:00:00.000Z` : null);
+      if (!start || !end) return null;
+      return {
+        title: item.summary ?? 'Busy',
+        start,
+        end,
+        gcalEventId: item.id ?? '',
+      };
+    })
+    .filter((e): e is GCalEventRow => e !== null);
+}
 
 function gcalAttendees(participants: string[] | undefined) {
   return (participants ?? []).map((email) => ({ email }));
@@ -111,7 +157,7 @@ export async function deleteEventByTitle(
 
   if (cal) {
     const { timeMin, timeMax } = normalizeGCalRange(undefined, undefined, 90);
-    const { events, error } = await listEventsFromGCalSafe(cal, timeMin, timeMax);
+    const { events, error } = await listEventsFromGCalSafe(cal, timeMin, timeMax, userId);
 
     if (error) {
       return {
@@ -219,8 +265,14 @@ export async function listBusyFromGCal(
   cal: calendar_v3.Calendar,
   timeMin: string,
   timeMax: string,
+  userId?: string,
 ): Promise<Array<{ start: string; end: string }>> {
   try {
+    const accessToken = await resolveGCalAccessToken(cal, userId);
+    if (accessToken) {
+      return await queryFreeBusyViaHttps(accessToken, timeMin, timeMax);
+    }
+
     const res = await cal.freebusy.query({
       requestBody: {
         timeMin,
@@ -240,39 +292,35 @@ export async function listEventsFromGCal(
   cal: calendar_v3.Calendar,
   timeMin: string,
   timeMax: string,
-): Promise<Array<{ title: string; start: string; end: string; gcalEventId: string }>> {
+  userId?: string,
+  maxResults = 50,
+): Promise<GCalEventRow[]> {
+  const accessToken = await resolveGCalAccessToken(cal, userId);
+  if (accessToken) {
+    const items = await listGCalEventsViaHttps(accessToken, timeMin, timeMax, maxResults);
+    return mapGCalItemsToEventRows(items);
+  }
+
   const res = await cal.events.list({
     calendarId: 'primary',
     timeMin,
     timeMax,
     singleEvents: true,
     orderBy: 'startTime',
-    maxResults: 50,
+    maxResults,
   });
 
-  return (res.data.items ?? [])
-    .filter((item) => item.status !== 'cancelled')
-    .map((item) => {
-      const start = item.start?.dateTime ?? (item.start?.date ? `${item.start.date}T00:00:00.000Z` : null);
-      const end = item.end?.dateTime ?? (item.end?.date ? `${item.end.date}T00:00:00.000Z` : null);
-      if (!start || !end) return null;
-      return {
-        title: item.summary ?? 'Busy',
-        start,
-        end,
-        gcalEventId: item.id ?? '',
-      };
-    })
-    .filter((e): e is NonNullable<typeof e> => e !== null);
+  return mapGCalItemsToEventRows((res.data.items ?? []) as GCalEventItem[]);
 }
 
 export async function listEventsFromGCalSafe(
   cal: calendar_v3.Calendar,
   timeMin: string,
   timeMax: string,
-): Promise<{ events: Array<{ title: string; start: string; end: string; gcalEventId: string }>; error?: string }> {
+  userId?: string,
+): Promise<{ events: GCalEventRow[]; error?: string }> {
   try {
-    const events = await listEventsFromGCal(cal, timeMin, timeMax);
+    const events = await listEventsFromGCal(cal, timeMin, timeMax, userId);
     return { events };
   } catch (e) {
     const error = gcalErrorMessage(e);
