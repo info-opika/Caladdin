@@ -6,6 +6,15 @@ import { isCalendarRelated } from '../services/llm.js';
 import { WARM_REDIRECT_MESSAGE } from '../core/adts.js';
 import { executeAgentTool } from './tools/registry.js';
 import { tryAssembleRecurringBlockFromTurns } from './recurring-block-assembler.js';
+import {
+  clearAgentSchedulingTask,
+  getAgentSchedulingTask,
+  isSchedulingFollowUp,
+  isSchedulingTaskReady,
+  syncAgentSchedulingState,
+  tryExecuteSchedulingTask,
+} from './agent-scheduling-state.js';
+import { isCalendarQueryTurn } from './agent-label-inference.js';
 import type { AgentContext, AgentMessage, SchedulingAgentResult } from './types.js';
 
 export type AgentPrefilterOutcome =
@@ -16,6 +25,20 @@ function formatEventTimeLabel(iso: string, timezone: string): string {
   const dt = DateTime.fromISO(iso, { setZone: true });
   if (!dt.isValid) return iso;
   return dt.setZone(timezone).toFormat('ccc M/d h:mm a');
+}
+
+function formatCalendarCountReply(
+  result: Awaited<ReturnType<typeof executeAgentTool>>,
+  dayLabel: string,
+): string {
+  if (!result.ok) {
+    return result.error ?? 'I could not read your calendar right now.';
+  }
+  const data = result.data as { events?: Array<{ title: string }> };
+  const count = data.events?.length ?? 0;
+  if (count === 0) return `You have no meetings ${dayLabel}.`;
+  if (count === 1) return `You have 1 meeting ${dayLabel}.`;
+  return `You have ${count} meetings ${dayLabel}.`;
 }
 
 function formatCalendarSummaryReply(
@@ -45,7 +68,7 @@ function queryParamsToRange(
 ): { rangeStart?: string; rangeEnd?: string } {
   if (!query) return {};
   const now = DateTime.now().setZone(timezone);
-  if (query.day === 'today' || query.queryType === 'today') {
+  if (query.day === 'today' || query.queryType === 'today' || query.queryType === 'count') {
     return {
       rangeStart: now.startOf('day').toISO() ?? undefined,
       rangeEnd: now.endOf('day').toISO() ?? undefined,
@@ -118,10 +141,6 @@ export async function runAgentPrefilter(
   const tz = agentCtx.timezone;
   const sessionActive = history.length > 0;
 
-  if (!isCalendarRelated(utterance, { activeAgentSession: sessionActive })) {
-    return prefilterResult('off_topic', WARM_REDIRECT_MESSAGE, [], model);
-  }
-
   const userTurns = [
     ...history.filter((m) => m.role === 'user').map((m) => m.content),
     utterance,
@@ -129,9 +148,24 @@ export async function runAgentPrefilter(
   const combinedUtterance = userTurns.join(' ');
 
   const queryHit = tryMatchQueryCalendar(utterance);
-  if (queryHit && (queryHit.queryType === 'today' || queryHit.queryType === 'tomorrow' || queryHit.weekRangeKind)) {
+  if (
+    queryHit &&
+    (queryHit.queryType === 'today' ||
+      queryHit.queryType === 'tomorrow' ||
+      queryHit.queryType === 'count' ||
+      queryHit.weekRangeKind)
+  ) {
     const range = queryParamsToRange(queryHit, tz);
     const result = await executeAgentTool('get_calendar_summary', range, agentCtx);
+    if (queryHit.queryType === 'count') {
+      const dayLabel = queryHit.day === 'tomorrow' ? 'tomorrow' : 'today';
+      return prefilterResult(
+        'query',
+        formatCalendarCountReply(result, dayLabel),
+        [{ name: 'get_calendar_summary', input: range, result }],
+        model,
+      );
+    }
     return prefilterResult(
       'query',
       formatCalendarSummaryReply(result, tz),
@@ -140,7 +174,32 @@ export async function runAgentPrefilter(
     );
   }
 
-  const assembled = tryAssembleRecurringBlockFromTurns(userTurns, tz);
+  const pendingTask = await getAgentSchedulingTask(agentCtx.userId).catch(() => null);
+  const schedulingFollowUp = isSchedulingFollowUp(utterance, pendingTask, history);
+
+  if (!isCalendarRelated(utterance, { activeAgentSession: sessionActive || schedulingFollowUp })) {
+    return prefilterResult('off_topic', WARM_REDIRECT_MESSAGE, [], model);
+  }
+
+  if (schedulingFollowUp && !isCalendarQueryTurn(utterance)) {
+    const merged = await syncAgentSchedulingState(agentCtx.userId, userTurns, tz);
+    if (merged) {
+      if (isSchedulingTaskReady(merged)) {
+        const executed = await tryExecuteSchedulingTask(merged, agentCtx);
+        if (executed) {
+          await clearAgentSchedulingTask(agentCtx.userId);
+          return prefilterResult('scheduling_execute', executed.reply, executed.toolCalls, model);
+        }
+      }
+      // Task in progress — defer to agent loop; never fall through to scheduling-link prefilter.
+      return { bypassed: false };
+    }
+  }
+
+  const assembled =
+    schedulingFollowUp && !isCalendarQueryTurn(utterance)
+      ? null
+      : tryAssembleRecurringBlockFromTurns(userTurns, tz);
   if (assembled) {
     const result = await executeAgentTool('create_recurring_block', assembled, agentCtx);
     const reply = result.ok
@@ -174,8 +233,12 @@ export async function runAgentPrefilter(
     return prefilterResult('protect_block', reply, [{ name: 'create_recurring_block', input, result }], model);
   }
 
+  const explicitLinkOnly =
+    /\b(send|share|create|forward|email)\b[\s\S]{0,100}\b(link|scheduling\s+link|booking\s+link|invite\s+link)\b/i.test(
+      utterance,
+    ) || /\bfind\s+time\b/i.test(utterance);
   const linkHit = tryMatchSchedulingLink(utterance);
-  if (linkHit?.inviteeEmail) {
+  if (linkHit?.inviteeEmail && (!schedulingFollowUp || explicitLinkOnly)) {
     const duration = extractDurationMinutes(utterance);
     const input = {
       inviteeEmail: linkHit.inviteeEmail,

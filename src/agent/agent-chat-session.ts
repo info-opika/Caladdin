@@ -16,6 +16,20 @@ type AgentChatFrame = {
 const memorySessions = new Map<string, { turns: StoredTurn[]; expiresAt: number }>();
 let useInMemorySessions = false;
 
+/** Write-through cache so chat history survives Supabase hiccups during a session. */
+function readMemorySession(userId: string): StoredTurn[] | null {
+  const entry = memorySessions.get(userId);
+  if (!entry || entry.expiresAt < Date.now()) {
+    memorySessions.delete(userId);
+    return null;
+  }
+  return entry.turns;
+}
+
+function writeMemorySession(userId: string, turns: StoredTurn[]): void {
+  memorySessions.set(userId, { turns, expiresAt: Date.now() + sessionTtlMs() });
+}
+
 export function _setAgentChatSessionStorageForTests(inMemory: boolean): void {
   useInMemorySessions = inMemory;
   if (inMemory) memorySessions.clear();
@@ -43,8 +57,8 @@ function frameToTurns(frame: Record<string, unknown>): StoredTurn[] | null {
 }
 
 async function clearAgentChatFrame(userId: string): Promise<void> {
+  memorySessions.delete(userId);
   if (useInMemorySessions) {
-    memorySessions.delete(userId);
     return;
   }
   const { data, error } = await getSupabase()
@@ -60,13 +74,13 @@ async function clearAgentChatFrame(userId: string): Promise<void> {
 }
 
 export async function getAgentChatHistory(userId: string): Promise<AgentMessage[]> {
+  const cached = readMemorySession(userId);
+  if (cached) {
+    return cached.map((t) => ({ role: t.role, content: t.content }));
+  }
+
   if (useInMemorySessions) {
-    const entry = memorySessions.get(userId);
-    if (!entry || entry.expiresAt < Date.now()) {
-      memorySessions.delete(userId);
-      return [];
-    }
-    return entry.turns.map((t) => ({ role: t.role, content: t.content }));
+    return [];
   }
 
   const { data, error } = await getSupabase()
@@ -76,11 +90,12 @@ export async function getAgentChatHistory(userId: string): Promise<AgentMessage[
     .gt('expires_at', new Date().toISOString())
     .order('created_at', { ascending: false });
 
-  if (error) throw error;
+  if (error) return [];
 
   for (const row of data ?? []) {
     const turns = frameToTurns(row.frame as Record<string, unknown>);
     if (turns) {
+      writeMemorySession(userId, turns);
       return turns.map((t) => ({ role: t.role, content: t.content }));
     }
   }
@@ -106,8 +121,9 @@ export async function appendAgentChatTurn(
 
   const expiresAt = Date.now() + sessionTtlMs();
 
+  writeMemorySession(userId, turns);
+
   if (useInMemorySessions) {
-    memorySessions.set(userId, { turns, expiresAt });
     return;
   }
 
@@ -122,7 +138,10 @@ export async function appendAgentChatTurn(
     frame,
     expires_at: new Date(expiresAt).toISOString(),
   });
-  if (error) throw error;
+  if (error) {
+    // Memory cache already updated — history remains available for this process.
+    return;
+  }
 }
 
 export async function clearAgentChatSession(userId: string): Promise<void> {

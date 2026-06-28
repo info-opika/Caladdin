@@ -1,5 +1,5 @@
 export type QueryCalendarParams = {
-  queryType: 'today' | 'tomorrow' | 'next' | 'availability' | 'week_range';
+  queryType: 'today' | 'tomorrow' | 'next' | 'availability' | 'week_range' | 'count';
   day?: 'today' | 'tomorrow';
   timeText?: string;
   availabilityDay?: 'today' | 'tomorrow';

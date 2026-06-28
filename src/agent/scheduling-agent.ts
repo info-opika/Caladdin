@@ -17,6 +17,11 @@ import {
 import { runAgentPrefilter } from './agent-prefilter.js';
 import { getPendingFrame } from '../db/conversation-context.js';
 import {
+  clearAgentSchedulingTask,
+  getAgentSchedulingTask,
+  syncAgentSchedulingState,
+} from './agent-scheduling-state.js';
+import {
   appendAgentChatTurn,
   clearAgentChatSession,
   getAgentChatHistory,
@@ -181,7 +186,7 @@ async function runAgentLoop(
     ? config.agentEscalationModel
     : (options.model ?? config.agentModel);
   const maxRounds = options.maxRounds ?? MAX_AGENT_ROUNDS;
-  const sessionId = `caladdin:${params.userId}:${params.requestId}`;
+  const sessionId = `caladdin:${params.userId}:agent`;
 
   const agentCtx: AgentContext = {
     userId: built.userId,
@@ -198,13 +203,15 @@ async function runAgentLoop(
   const tools = buildOpenAiToolDefinitions(toolNames);
 
   const pendingIntent = await getPendingFrame(params.userId).catch(() => null);
-  const knowledge = deriveSessionKnowledge(history, userMessage, pendingIntent);
+  const schedulingTask = await getAgentSchedulingTask(params.userId).catch(() => null);
+  const knowledge = deriveSessionKnowledge(history, userMessage, pendingIntent, schedulingTask);
   const contextAssembly = assembleAgentContext({
     userUtterance: userMessage,
     chatHistory: history,
     agentContext: agentCtx,
     baseContextBlock: built.systemContextBlock,
     pendingIntent,
+    schedulingTask,
   });
   const system = buildSystemPrompt(contextAssembly.enrichedContextBlock, toolNames);
 
@@ -409,22 +416,32 @@ export function shouldClearAgentChatSession(result: SchedulingAgentResult): bool
   const successful = result.toolCalls.filter((t) => t.result.ok);
   if (successful.length === 0) return false;
   if (successful.every((t) => isAlreadyProtectedToolResult(t.result.data))) return false;
-  return successful.some((t) => !isAlreadyProtectedToolResult(t.result.data));
+  return successful.some(
+    (t) =>
+      !isAlreadyProtectedToolResult(t.result.data) &&
+      ['create_event', 'send_invite', 'create_recurring_block', 'modify_event', 'cancel_events_in_range'].includes(
+        t.name,
+      ),
+  );
 }
 
 async function persistAgentSession(
   userId: string,
   userMessage: string,
   result: SchedulingAgentResult,
+  userTurns: string[],
+  timezone: string,
 ): Promise<void> {
   if (shouldClearAgentChatSession(result)) {
     await clearAgentChatSession(userId).catch(() => undefined);
+    await clearAgentSchedulingTask(userId).catch(() => undefined);
     return;
   }
   if (!result.reply.trim() || result.reply === WARM_REDIRECT_MESSAGE) {
     return;
   }
   await appendAgentChatTurn(userId, userMessage, result.reply).catch(() => undefined);
+  await syncAgentSchedulingState(userId, userTurns, timezone).catch(() => undefined);
 }
 
 export async function runSchedulingAgent(
@@ -448,9 +465,16 @@ export async function runSchedulingAgent(
   const chatHistory =
     history.length > 0 ? history : await getAgentChatHistory(params.userId);
 
+  const userTurns = [
+    ...chatHistory.filter((m) => m.role === 'user').map((m) => m.content),
+    userMessage,
+  ];
+
+  await syncAgentSchedulingState(params.userId, userTurns, built.timezone).catch(() => undefined);
+
   const prefilter = await runAgentPrefilter(userMessage, agentCtx, model, chatHistory);
   if (prefilter.bypassed) {
-    await persistAgentSession(params.userId, userMessage, prefilter);
+    await persistAgentSession(params.userId, userMessage, prefilter, userTurns, built.timezone);
     return {
       reply: prefilter.reply,
       toolCalls: prefilter.toolCalls,
@@ -471,12 +495,12 @@ export async function runSchedulingAgent(
     if (exhausted && (weakReply || failedTools)) {
       const escalated = await runAgentLoop(userMessage, params, chatHistory, options, built, true);
       if (escalated.reply.trim()) {
-        await persistAgentSession(params.userId, userMessage, escalated);
+        await persistAgentSession(params.userId, userMessage, escalated, userTurns, built.timezone);
         return escalated;
       }
     }
 
-    await persistAgentSession(params.userId, userMessage, primary);
+    await persistAgentSession(params.userId, userMessage, primary, userTurns, built.timezone);
     return primary;
   } catch {
     return llmUnavailableResult(model);

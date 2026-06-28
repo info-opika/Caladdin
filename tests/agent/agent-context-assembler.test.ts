@@ -3,6 +3,7 @@ import {
   assembleAgentContext,
   deriveSessionKnowledge,
 } from '../../src/agent/agent-context-assembler.js';
+import { mergeSchedulingTask } from '../../src/agent/agent-scheduling-state.js';
 import type { AgentContext, AgentMessage } from '../../src/agent/types.js';
 import type { UserPolicyProfile } from '../../src/core/adts.js';
 
@@ -82,6 +83,11 @@ describe('assembleAgentContext', () => {
   });
 
   it('marks invite intent complete when email is present and includes pending frame', () => {
+    const schedulingTask = mergeSchedulingTask(
+      null,
+      ['Invite alex@example.com for a sync Tuesday at 2pm'],
+      'America/Chicago',
+    );
     const result = assembleAgentContext({
       userUtterance: 'Invite alex@example.com for a sync Tuesday at 2pm',
       chatHistory: [],
@@ -101,11 +107,40 @@ describe('assembleAgentContext', () => {
         createdAt: new Date().toISOString(),
         expiresAt: new Date(Date.now() + 600_000).toISOString(),
       },
+      schedulingTask,
     });
 
     expect(result.enrichedContextBlock).toContain('Pending intent: SEND_INVITE');
-    expect(result.enrichedContextBlock).toContain('invitee: alex@example.com');
+    expect(result.enrichedContextBlock).not.toContain('aniket@opika.co');
+    expect(result.enrichedContextBlock).toContain('alex@example.com');
+    expect(result.enrichedContextBlock).toContain('Structured task state');
+    expect(result.enrichedContextBlock).toContain('do NOT re-ask');
     expect(result.enrichedContextBlock).toContain('lookup_user');
     expect(result.enrichedContextBlock).toContain('Last intent: SEND_INVITE');
+  });
+
+  it('injects persisted invitee on follow-up day turn', () => {
+    const history: AgentMessage[] = [
+      { role: 'user', content: 'Invite aniket@opika.co to a meeting' },
+      { role: 'assistant', content: 'What day and time?' },
+    ];
+    const schedulingTask = mergeSchedulingTask(
+      { taskType: 'invite', inviteeEmail: 'aniket@opika.co', updatedAt: new Date().toISOString() },
+      ['Invite aniket@opika.co to a meeting', 'monday at 10 pm ist'],
+      'America/Chicago',
+    );
+
+    const result = assembleAgentContext({
+      userUtterance: 'monday at 10 pm ist',
+      chatHistory: history,
+      agentContext: mockAgentContext(),
+      baseContextBlock: 'Calendar connected: yes',
+      schedulingTask,
+    });
+
+    expect(result.enrichedContextBlock).toContain('aniket@opika.co');
+    expect(result.enrichedContextBlock).toContain('monday');
+    expect(result.enrichedContextBlock).toContain('10 pm ist');
+    expect(result.userMessagePrefix).toContain('aniket@opika.co');
   });
 });

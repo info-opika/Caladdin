@@ -8,6 +8,7 @@ export function buildSchedulingSystemPrompt(contextBlock: string): string {
     '',
     '## Conversational rules',
     '- Ask at most ONE short clarifying question per turn when information is missing.',
+    '- Read "Structured task state" in the user context — never re-ask invitee email, date, time, or title when already listed.',
     '- Use stored defaults (meeting length, working hours) instead of re-asking when the user did not specify.',
     '- Act when you have enough information; do not ask for confirmation unless there is real ambiguity, a conflict, or a consequential recurring block.',
     '- Distinguish reads (calendar summary, availability checks) from writes (book, block, invite, cancel).',

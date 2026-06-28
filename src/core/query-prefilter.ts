@@ -72,6 +72,10 @@ const CANONICAL: Record<string, QueryCalendarParams> = {
   'show my calendar today': { queryType: 'today', day: 'today' },
   'show my meetings today': { queryType: 'today', day: 'today' },
   'what meetings do i have today': { queryType: 'today', day: 'today' },
+  'what is on my calendar': { queryType: 'today', day: 'today' },
+  'whats on my calendar': { queryType: 'today', day: 'today' },
+  'how many meetings today': { queryType: 'count', day: 'today' },
+  'how many meetings do i have today': { queryType: 'count', day: 'today' },
   // Tomorrow / schedule wording
   'whats on my calendar tomorrow': { queryType: 'tomorrow', day: 'tomorrow' },
   'what is on my calendar tomorrow': { queryType: 'tomorrow', day: 'tomorrow' },
@@ -147,7 +151,23 @@ const TODAY_TRAIL = (n: string) =>
   n.includes('what have i got');
 
 function matchTodayFamily(n: string): boolean {
+  if (/\bhow many\b/.test(n) && /\b(meetings?|events?|appointments?|calls?)\b/.test(n) && /\btoday\b/.test(n)) {
+    return true;
+  }
   return /\btoday\b/.test(n) && TODAY_TRAIL(n);
+}
+
+function matchGeneralCalendarFamily(n: string): boolean {
+  if (/\b(today|tomorrow|this week|next week|monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/.test(n)) {
+    return false;
+  }
+  return (
+    n === 'what is on my calendar' ||
+    n === 'whats on my calendar' ||
+    n === 'show my calendar' ||
+    n === 'what is on my cal' ||
+    n === 'whats on my cal'
+  );
 }
 
 const TOMORROW_EXTRAS = (n: string) =>
@@ -236,10 +256,16 @@ function tryMatchQueryFamilies(utterance: string, n: string): QueryCalendarParam
     return { queryType: 'next', ...(personFilter ? { personFilter } : {}) };
   }
   if (matchTodayFamily(n)) {
+    if (/\bhow many\b/.test(n)) {
+      return { queryType: 'count', day: 'today' };
+    }
     return { queryType: 'today', day: 'today' };
   }
   if (matchTomorrowFamily(n)) {
     return { queryType: 'tomorrow', day: 'tomorrow' };
+  }
+  if (matchGeneralCalendarFamily(n)) {
+    return { queryType: 'today', day: 'today' };
   }
   return null;
 }

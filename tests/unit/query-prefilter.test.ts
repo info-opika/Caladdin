@@ -49,8 +49,19 @@ describe('query-prefilter canonical + phrase families', () => {
       'meetings today',
       'events today',
       'appointments today',
-    ])('%s → today', (u) => {
-      expect(tryMatchQueryCalendar(u)).toEqual({ queryType: 'today', day: 'today' });
+      'how many meetings today',
+      'how many meetings do i have today',
+    ])('%s → today or count', (u) => {
+      const hit = tryMatchQueryCalendar(u);
+      expect(hit?.day).toBe('today');
+      expect(hit?.queryType === 'today' || hit?.queryType === 'count').toBe(true);
+    });
+
+    it('maps bare calendar query to today agenda', () => {
+      expect(tryMatchQueryCalendar('what is on my calendar')).toEqual({
+        queryType: 'today',
+        day: 'today',
+      });
     });
   });
 

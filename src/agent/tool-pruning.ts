@@ -8,6 +8,7 @@ import {
   isCancelIntent,
   utteranceSignals,
 } from './intent-signals.js';
+import { isSchedulingFollowUp } from './agent-scheduling-state.js';
 
 export const CORE_TOOL_NAMES: ToolName[] = [
   'get_calendar_summary',
@@ -77,12 +78,18 @@ export function selectToolsForUtterance(utterance: string, history: AgentMessage
   const text = utteranceSignals(utterance, history);
 
   let subset: ToolName[];
-  if (isBlockIntent(text)) {
+  const inviteSignals = /\b(invite|send|grant|proposed)\b/.test(text) || /@[a-z0-9.-]+\.[a-z]{2,}/i.test(text);
+  const schedulingContinuation =
+    history.length > 0 &&
+    (isSchedulingFollowUp(utterance, null, history) || isAffirmation(utterance));
+
+  if (isBlockIntent(text) && !schedulingContinuation) {
     subset = BLOCK_TOOLS;
-  } else if (/\b(invite|send|grant|proposed)\b/.test(text)) {
+  } else if (inviteSignals || (schedulingContinuation && inviteSignals)) {
     subset = INVITE_TOOLS;
   } else if (
     isBookIntent(text) ||
+    schedulingContinuation ||
     (isAffirmation(utterance) && isBookIntent(text) && assistantAskedConfirmation(history))
   ) {
     subset = BOOK_TOOLS;

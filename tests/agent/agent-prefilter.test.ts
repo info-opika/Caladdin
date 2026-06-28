@@ -81,6 +81,46 @@ describe('runAgentPrefilter', () => {
     }
   });
 
+  it('bypasses LLM for bare calendar query defaulting to today', async () => {
+    mockExecute.mockResolvedValue({ ok: true, data: { events: [] } });
+
+    const out = await runAgentPrefilter('what is on my calendar', CTX, 'auto:caladdin-agent');
+    expect(out.bypassed).toBe(true);
+    if (out.bypassed) {
+      expect(out.prefilter).toBe('query');
+      expect(mockExecute).toHaveBeenCalledWith('get_calendar_summary', expect.any(Object), CTX);
+    }
+  });
+
+  it('bypasses LLM for meeting count today', async () => {
+    mockExecute.mockResolvedValue({
+      ok: true,
+      data: { events: [{ title: 'A' }, { title: 'B' }] },
+    });
+
+    const out = await runAgentPrefilter('how many meetings today', CTX, 'auto:caladdin-agent');
+    expect(out.bypassed).toBe(true);
+    if (out.bypassed) {
+      expect(out.reply).toContain('2 meetings');
+    }
+  });
+
+  it('executes completed scheduling task without LLM on day follow-up', async () => {
+    mockExecute
+      .mockResolvedValueOnce({ ok: true, data: { recognized: false } })
+      .mockResolvedValueOnce({ ok: true, data: { message: 'Invite sent.' } });
+
+    const history = [
+      { role: 'user' as const, content: 'Invite aniket@opika.co Monday at 10 pm ist for sync' },
+      { role: 'assistant' as const, content: 'What day works?' },
+    ];
+    const out = await runAgentPrefilter('monday', CTX, 'auto:smart', history);
+    expect(out.bypassed).toBe(true);
+    if (out.bypassed) {
+      expect(['scheduling_execute', 'protect_block']).toContain(out.prefilter);
+    }
+  });
+
   it('assembles recurring block from merged session turns', async () => {
     mockExecute.mockResolvedValue({ ok: true, data: { message: 'Block created.' } });
     const history = [
@@ -103,5 +143,17 @@ describe('runAgentPrefilter', () => {
         CTX,
       );
     }
+  });
+
+  it('skips scheduling link when invite flow is in progress without link phrasing', async () => {
+    mockExecute.mockResolvedValue({ ok: true, data: { events: [] } });
+
+    const out = await runAgentPrefilter(
+      'Schedule a meeting with aniket@opika.co',
+      CTX,
+      'auto:caladdin-agent',
+    );
+    expect(out.bypassed).toBe(false);
+    expect(mockExecute).not.toHaveBeenCalledWith('send_invite', expect.anything(), CTX);
   });
 });

@@ -1,5 +1,11 @@
 import { DateTime } from 'luxon';
 import type { ConversationContext, PendingIntentTemplate } from '../db/conversation-context.js';
+import {
+  buildSchedulingTaskContextLines,
+  isSchedulingTaskReady,
+  schedulingTaskMissingFields,
+  type AgentSchedulingTask,
+} from './agent-scheduling-state.js';
 import type { UserPolicyProfile } from '../core/adts.js';
 import { inferBlockLabelFromTurns } from './agent-label-inference.js';
 import {
@@ -19,6 +25,7 @@ export type AgentContextAssemblyInput = {
   /** Static block from context-builder (calendar summary, policy snapshot). */
   baseContextBlock: string;
   pendingIntent?: PendingIntentTemplate | null;
+  schedulingTask?: AgentSchedulingTask | null;
 };
 
 export type AgentContextAssembly = {
@@ -148,6 +155,7 @@ export function deriveSessionKnowledge(
   history: AgentMessage[],
   userUtterance: string,
   pendingIntent?: PendingIntentTemplate | null,
+  schedulingTask?: AgentSchedulingTask | null,
 ): SessionKnowledge {
   const userTurns = allUserTurns(history, userUtterance);
   const combined = userTurns.join(' ');
@@ -164,6 +172,22 @@ export function deriveSessionKnowledge(
     }
     for (const f of pendingIntent.missingFields) {
       if (!known.some((k) => k.startsWith(`${f}:`))) missing.push(f);
+    }
+  }
+
+  if (schedulingTask) {
+    if (schedulingTask.inviteeEmail) known.push(`invitee: ${schedulingTask.inviteeEmail}`);
+    if (schedulingTask.meetingTitle) known.push(`meeting title: "${schedulingTask.meetingTitle}"`);
+    if (schedulingTask.dateText) known.push(`date: ${schedulingTask.dateText}`);
+    if (schedulingTask.timeText) {
+      const tz = schedulingTask.sourceTimeZone ? ` (${schedulingTask.sourceTimeZone})` : '';
+      known.push(`time: ${schedulingTask.timeText}${tz}`);
+    }
+    if (schedulingTask.durationMinutes) {
+      known.push(`duration: ${schedulingTask.durationMinutes} min`);
+    }
+    for (const f of schedulingTaskMissingFields(schedulingTask)) {
+      if (!missing.includes(f)) missing.push(f);
     }
   }
 
@@ -203,8 +227,11 @@ export function deriveSessionKnowledge(
     readyToAct = Boolean(timeRange && label);
     if (!recurrence && readyToAct) missing.push('weekdays (default Mon–Fri if unspecified)');
   } else if (isInviteIntent) {
-    readyToAct = emails.length > 0;
-    if (!timeRange && !/\bslot|time|am|pm\b/i.test(combined)) missing.push('proposed time(s) or duration');
+    readyToAct = Boolean(schedulingTask && isSchedulingTaskReady(schedulingTask));
+    if (!timeRange && !/\bslot|time|am|pm\b/i.test(combined) && !schedulingTask?.timeText) {
+      missing.push('proposed time(s) or duration');
+    }
+    if (!schedulingTask?.inviteeEmail && emails.length === 0) missing.push('invitee email');
   } else if (isQueryIntent) {
     readyToAct = true;
   } else if (isBookIntentFlag) {
@@ -215,6 +242,8 @@ export function deriveSessionKnowledge(
   } else if (userConfirmed) {
     readyToAct = true;
   } else if (pendingIntent && pendingIntent.missingFields.length === 0) {
+    readyToAct = true;
+  } else if (schedulingTask && isSchedulingTaskReady(schedulingTask)) {
     readyToAct = true;
   }
 
@@ -285,10 +314,10 @@ function buildMultiTurnInstructions(): string {
   return [
     '## Multi-turn scheduling intelligence',
     '- Treat chat history plus this turn as one continuous request — merge facts across turns.',
-    '- Never re-ask for information already stated in prior user messages or listed under "Already established".',
+    '- Read "Structured task state" and "Already established" before replying — never re-ask for fields listed there (invitee email, date, time, title).',
     '- When enough fields are present, call the right tool immediately; do not ask for confirmation unless there is a real conflict.',
     '- When something is still missing, ask exactly ONE focused clarifying question.',
-    '- Short follow-up replies (e.g. a label, a time, "yes please", "every day") usually answer your previous question — interpret them in that context.',
+    '- Short follow-up replies (e.g. a label, a time, "yes please", "every day", "monday", "10 pm ist") answer your previous question — interpret them in that context.',
     '- If the user says "yes" / "please" / "go ahead" after you proposed a booking, call create_event immediately — never claim you lack tools.',
     '- Use the user timezone for all spoken times; convert to ISO 8601 with offset in tool arguments.',
   ].join('\n');
@@ -312,10 +341,16 @@ function buildFewShotExamples(): string {
  * multi-turn session state, and intent guidance across all scheduling scenarios.
  */
 export function assembleAgentContext(input: AgentContextAssemblyInput): AgentContextAssembly {
-  const { userUtterance, chatHistory, agentContext, baseContextBlock, pendingIntent } = input;
+  const { userUtterance, chatHistory, agentContext, baseContextBlock, pendingIntent, schedulingTask } =
+    input;
   const { policy, timezone, conversationContext } = agentContext;
 
-  const knowledge = deriveSessionKnowledge(chatHistory, userUtterance, pendingIntent);
+  const knowledge = deriveSessionKnowledge(
+    chatHistory,
+    userUtterance,
+    pendingIntent,
+    schedulingTask,
+  );
 
   const systemParts = [
     '## Live scheduling context',
@@ -327,6 +362,8 @@ export function assembleAgentContext(input: AgentContextAssemblyInput): AgentCon
     ...(buildConversationContextLines(conversationContext).length > 0 ? [''] : []),
     ...buildPendingIntentLines(pendingIntent),
     ...(buildPendingIntentLines(pendingIntent).length > 0 ? [''] : []),
+    ...buildSchedulingTaskContextLines(schedulingTask),
+    ...(buildSchedulingTaskContextLines(schedulingTask).length > 0 ? [''] : []),
     buildMultiTurnInstructions(),
     '',
     buildFewShotExamples(),
