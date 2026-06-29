@@ -319,6 +319,8 @@ function hasSchedulingLinkSignal(raw: string, n: string): boolean {
   const t = n.toLowerCase();
   const r = raw.toLowerCase();
   if (/\bfind\s+time\s+(with|for)\b/.test(t)) return true;
+  if (/\bfind\s+\d+\s+slots?\s+(?:for|with)\b/.test(t)) return true;
+  if (/\bfind\s+(?:two|2)\s+slots?\s+(?:for|with)\b/.test(t)) return true;
   if (/\bfind\s+(?:an?\s+)?opening\s+(?:with|for)\b/.test(t)) return true;
   if (/\bwhen\s+can\s+i\s+meet\b/.test(t)) return true;
   if (

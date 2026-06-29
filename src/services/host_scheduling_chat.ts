@@ -15,8 +15,9 @@ export function isHostProposalListQuery(text: string): boolean {
   );
 }
 
-const ACCEPT_RE = /^\s*accept\s+(?:scheduling\s+)?proposal\s+(\d+)\s+([a-f0-9]{32})\s*$/i;
-const IGNORE_RE = /^\s*ignore\s+(?:scheduling\s+)?proposal\s+(\d+)\s+([a-f0-9]{32})\s*$/i;
+const SESSION_TOKEN_RE = '([a-f0-9-]{32,64})';
+const ACCEPT_RE = new RegExp(`^\\s*accept\\s+(?:scheduling\\s+)?proposal\\s+(\\d+)\\s+${SESSION_TOKEN_RE}\\s*$`, 'i');
+const IGNORE_RE = new RegExp(`^\\s*ignore\\s+(?:scheduling\\s+)?proposal\\s+(\\d+)\\s+${SESSION_TOKEN_RE}\\s*$`, 'i');
 
 export function parseHostProposalCommand(text: string): { kind: 'accept' | 'ignore'; index: number; token: string } | null {
   const a = text.match(ACCEPT_RE);

@@ -1,7 +1,10 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { DateTime } from 'luxon';
 import { getPublicEventTypeByUsernameSlug } from '../db/event_types.js';
-import { pickRoundRobinHost } from '../db/event_type_members.js';
+import {
+  advanceRoundRobinHost,
+  peekRoundRobinHost,
+} from '../db/event_type_members.js';
 import { ensureDefaultPolicy } from '../db/users.js';
 import { generatePublicBookingSlots } from '../core/slot-scoring.js';
 import { getOAuthClientForUser, getAuthService } from '../services/auth_service.js';
@@ -34,8 +37,18 @@ function formatSlotLabel(slot: { start: string; end: string }, tz: string): stri
 
 async function resolveHostUserId(eventType: { id: string; userId: string; schedulingMode?: string }) {
   return eventType.schedulingMode === 'round_robin'
-    ? await pickRoundRobinHost(eventType.id, eventType.userId)
+    ? await peekRoundRobinHost(eventType.id, eventType.userId)
     : eventType.userId;
+}
+
+function parseDaysAhead(raw: unknown, fallback = 30): number {
+  return Math.min(parseInt(String(raw ?? fallback), 10) || fallback, 60);
+}
+
+function parseSlotStart(body: Record<string, unknown>): string | undefined {
+  if (typeof body.slotStart === 'string') return body.slotStart;
+  if (typeof body.start === 'string') return body.start;
+  return undefined;
 }
 
 async function loadSlotsForEventType(
@@ -47,7 +60,7 @@ async function loadSlotsForEventType(
     schedulingMode?: string;
   },
   hostTimezone: string,
-  daysAhead = 14,
+  daysAhead = 30,
 ) {
   const hostUserId = await resolveHostUserId(eventType);
   const policy = await ensureDefaultPolicy(hostUserId);
@@ -122,7 +135,7 @@ bookPublicRouter.get('/:username/:slug/slots', async (req: Request, res: Respons
     }
 
     const { eventType, hostTimezone } = result;
-    const daysAhead = Math.min(parseInt(String(req.query.daysAhead ?? '14'), 10) || 14, 60);
+    const daysAhead = parseDaysAhead(req.query.daysAhead);
     const { hostUserId, slots } = await loadSlotsForEventType(eventType, hostTimezone, daysAhead);
 
     res.json({
@@ -171,8 +184,10 @@ bookPublicRouter.post('/:username/:slug/select', async (req: Request, res: Respo
       return;
     }
 
-    const slotStart = typeof req.body.slotStart === 'string' ? req.body.slotStart : undefined;
-    const { hostUserId, slots } = await loadSlotsForEventType(eventType, hostTimezone);
+    const body = req.body as Record<string, unknown>;
+    const slotStart = parseSlotStart(body);
+    const daysAhead = parseDaysAhead(body.daysAhead);
+    const { hostUserId, slots } = await loadSlotsForEventType(eventType, hostTimezone, daysAhead);
     const selected = slotStart ? slots.find((s) => s.start === slotStart) : null;
 
     if (!selected) {
@@ -197,6 +212,10 @@ bookPublicRouter.post('/:username/:slug/select', async (req: Request, res: Respo
       attendees: [guestEmail],
       description: eventType.description ?? undefined,
     });
+
+    if (eventType.schedulingMode === 'round_robin') {
+      await advanceRoundRobinHost(eventType.id, eventType.userId);
+    }
 
     await recordUsageEvent(null, 'public_booking_confirmed', {
       username,

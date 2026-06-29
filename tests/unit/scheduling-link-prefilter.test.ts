@@ -11,6 +11,11 @@ describe('tryMatchSchedulingLink', () => {
     expect(r).toEqual({ inviteeEmail: 'kanth.miriyala@gmail.com' });
   });
 
+  it('matches find N slots for invitee (OFFER_SPECIFIC smoke)', () => {
+    const r = tryMatchSchedulingLink('Find 2 slots for aniket@opika.co next week');
+    expect(r).toEqual({ inviteeEmail: 'aniket@opika.co' });
+  });
+
   it('returns null for calendar queries that mention an email', () => {
     expect(
       tryMatchSchedulingLink('what meetings do I have with kanth.miriyala@gmail.com next week')

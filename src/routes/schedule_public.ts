@@ -42,6 +42,7 @@ import {
   zonesDiffer,
 } from '../services/schedule_formatting.js';
 import { markGrantInviteeConflicts } from '../services/invitee_slot_conflicts.js';
+import { logger } from '../logger.js';
 
 const router = Router();
 
@@ -866,7 +867,7 @@ async function persistAndLoadNextSlots(
   }
   const dismissedOk = await appendDismissedSlots(token, session.offered_slots ?? []);
   if (!dismissedOk) {
-    return { ok: false, error: 'slot_persist_failed' };
+    logger.warn('appendDismissedSlots failed; proceeding with offered slot replace', { token });
   }
   const saved = await replaceSessionOfferedSlots(token, next);
   if (!saved) {

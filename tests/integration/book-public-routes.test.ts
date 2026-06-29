@@ -13,7 +13,8 @@ vi.mock('../../src/db/event_types.js', () => ({
 }));
 
 vi.mock('../../src/db/event_type_members.js', () => ({
-  pickRoundRobinHost: (...a: unknown[]) => mockPickHost(...a),
+  peekRoundRobinHost: (...a: unknown[]) => mockPickHost(...a),
+  advanceRoundRobinHost: vi.fn(),
 }));
 
 vi.mock('../../src/db/users.js', () => ({
@@ -153,6 +154,50 @@ describe('book public routes', () => {
       .set('Accept', 'application/json');
     expect(res.status).toBe(500);
     expect(res.body.error).toBe('database unavailable');
+  });
+
+  it('POST /book/:username/:slug/select accepts start alias for slotStart', async () => {
+    mockPublicLookup.mockResolvedValue({
+      eventType: sampleEventType,
+      hostName: 'Alex Host',
+      hostTimezone: 'America/New_York',
+    });
+    const slot = { start: '2026-06-10T14:00:00.000-05:00', end: '2026-06-10T14:45:00.000-05:00' };
+    mockGenerateSlots.mockResolvedValue([slot]);
+
+    const res = await request(app())
+      .post('/book/alex-host/strategy-session/select')
+      .send({
+        start: slot.start,
+        guest: { name: 'Guest', email: 'guest@example.com' },
+      });
+    expect(res.status).toBe(200);
+    expect(res.body.ok).toBe(true);
+  });
+
+  it('POST select passes daysAhead to slot generation', async () => {
+    mockPublicLookup.mockResolvedValue({
+      eventType: sampleEventType,
+      hostName: 'Alex Host',
+      hostTimezone: 'America/New_York',
+    });
+    const slot = { start: '2026-06-10T14:00:00.000-05:00', end: '2026-06-10T14:45:00.000-05:00' };
+    mockGenerateSlots.mockResolvedValue([slot]);
+
+    await request(app())
+      .post('/book/alex-host/strategy-session/select')
+      .send({
+        slotStart: slot.start,
+        daysAhead: 30,
+        guest: { name: 'Guest', email: 'guest@example.com' },
+      });
+    expect(mockGenerateSlots).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.any(Object),
+      expect.any(Number),
+      30,
+      expect.any(Object),
+    );
   });
 
   it('POST /book/:username/:slug/select books slot when calendar available', async () => {

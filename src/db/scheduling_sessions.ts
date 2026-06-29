@@ -200,7 +200,7 @@ export async function claimSessionSlotForGcal(opts: {
       status: 'pending',
     })
     .eq('token', opts.token)
-    .eq('status', 'pending')
+    .in('status', ['pending', 'open'])
     .is('google_event_id', null);
 
   return !updErr;
@@ -248,7 +248,7 @@ export async function patchProposedAlternative(
   alts[proposalIndex] = { ...alts[proposalIndex]!, ...patch };
   const { error } = await getSupabase()
     .from('scheduling_sessions')
-    .update({ proposed_alternatives: alts, updated_at: new Date().toISOString() })
+    .update({ proposed_alternatives: alts })
     .eq('token', token);
   if (error) throw error;
 }
@@ -264,9 +264,9 @@ export async function claimHostProposalForAccept(token: string, index: number): 
   alts[index] = { ...cur, status: 'accepting', google_event_id: PROPOSAL_ACCEPT_CLAIM_SENTINEL };
   const { error } = await getSupabase()
     .from('scheduling_sessions')
-    .update({ proposed_alternatives: alts, updated_at: new Date().toISOString() })
+    .update({ proposed_alternatives: alts })
     .eq('token', token)
-    .eq('status', 'pending');
+    .in('status', ['pending', 'open']);
   return !error;
 }
 
@@ -280,7 +280,7 @@ export async function revertHostProposalAcceptClaim(token: string, index: number
   alts[index] = { ...cur, status: 'pending', google_event_id: null };
   await getSupabase()
     .from('scheduling_sessions')
-    .update({ proposed_alternatives: alts, updated_at: new Date().toISOString() })
+    .update({ proposed_alternatives: alts })
     .eq('token', token);
 }
 
@@ -330,9 +330,9 @@ export async function appendDismissedSlots(
 
   const { data, error } = await getSupabase()
     .from('scheduling_sessions')
-    .update({ dismissed_slots: merged, updated_at: new Date().toISOString() })
+    .update({ dismissed_slots: merged })
     .eq('token', token)
-    .eq('status', 'pending')
+    .in('status', ['pending', 'open'])
     .select('id')
     .maybeSingle();
   return !error && Boolean(data);
@@ -351,11 +351,15 @@ export async function replaceSessionOfferedSlots(
   }));
   const { data, error } = await getSupabase()
     .from('scheduling_sessions')
-    .update({ offered_slots: offered, updated_at: new Date().toISOString() })
+    .update({ offered_slots: offered })
     .eq('token', token)
-    .eq('status', 'pending')
+    .in('status', ['pending', 'open'])
     .select('id')
     .maybeSingle();
+  if (error || !data) {
+    const { logger } = await import('../logger.js');
+    logger.warn('replaceSessionOfferedSlots failed', { token, error: error?.message ?? 'no row updated' });
+  }
   return !error && Boolean(data);
 }
 

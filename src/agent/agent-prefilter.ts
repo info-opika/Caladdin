@@ -15,6 +15,7 @@ import {
   tryExecuteSchedulingTask,
 } from './agent-scheduling-state.js';
 import { isCalendarQueryTurn } from './agent-label-inference.js';
+import { handleHostProposalCommand } from '../services/host_scheduling_chat.js';
 import type { AgentContext, AgentMessage, SchedulingAgentResult } from './types.js';
 
 export type AgentPrefilterOutcome =
@@ -131,6 +132,14 @@ function prefilterResult(
   };
 }
 
+/** OFFER_SPECIFIC phrasing — must send scheduling link, not defer to multi-turn book state. */
+function isOfferSpecificSlotRequest(utterance: string): boolean {
+  return (
+    /\bfind\s+\d+\s+slots?\s+(?:for|with)\b/i.test(utterance) ||
+    /\bfind\s+(?:two|2)\s+slots?\s+(?:for|with)\b/i.test(utterance)
+  );
+}
+
 /** Deterministic prefilters before LLM — protect block, query, invite link, off-topic. */
 export async function runAgentPrefilter(
   utterance: string,
@@ -174,6 +183,16 @@ export async function runAgentPrefilter(
     );
   }
 
+  const hostProposal = await handleHostProposalCommand(
+    utterance,
+    agentCtx.userId,
+    agentCtx.cal,
+    agentCtx.policy,
+  );
+  if (hostProposal) {
+    return prefilterResult('host_proposal', hostProposal.messageToUser, [], model);
+  }
+
   const pendingTask = await getAgentSchedulingTask(agentCtx.userId).catch(() => null);
   const schedulingFollowUp = isSchedulingFollowUp(utterance, pendingTask, history);
 
@@ -181,7 +200,7 @@ export async function runAgentPrefilter(
     return prefilterResult('off_topic', WARM_REDIRECT_MESSAGE, [], model);
   }
 
-  if (schedulingFollowUp && !isCalendarQueryTurn(utterance)) {
+  if (schedulingFollowUp && !isCalendarQueryTurn(utterance) && !isOfferSpecificSlotRequest(utterance)) {
     const merged = await syncAgentSchedulingState(agentCtx.userId, userTurns, tz);
     if (merged) {
       if (isSchedulingTaskReady(merged)) {
@@ -236,7 +255,9 @@ export async function runAgentPrefilter(
   const explicitLinkOnly =
     /\b(send|share|create|forward|email)\b[\s\S]{0,100}\b(link|scheduling\s+link|booking\s+link|invite\s+link)\b/i.test(
       utterance,
-    ) || /\bfind\s+time\b/i.test(utterance);
+    ) ||
+    /\bfind\s+time\b/i.test(utterance) ||
+    isOfferSpecificSlotRequest(utterance);
   const linkHit = tryMatchSchedulingLink(utterance);
   if (linkHit?.inviteeEmail && (!schedulingFollowUp || explicitLinkOnly)) {
     const duration = extractDurationMinutes(utterance);
@@ -246,8 +267,16 @@ export async function runAgentPrefilter(
     };
     const lookup = await executeAgentTool('lookup_user', { email: linkHit.inviteeEmail }, agentCtx);
     const invite = await executeAgentTool('send_invite', input, agentCtx);
+    const inviteMessage =
+      invite.ok &&
+      typeof invite.data === 'object' &&
+      invite.data !== null &&
+      'message' in invite.data &&
+      typeof (invite.data as { message: string }).message === 'string'
+        ? (invite.data as { message: string }).message
+        : null;
     const reply = invite.ok
-      ? `I sent a scheduling invite to ${linkHit.inviteeEmail}.`
+      ? (inviteMessage ?? `I sent a scheduling invite to ${linkHit.inviteeEmail}.`)
       : (invite.error ?? 'I could not send that invite.');
     return prefilterResult(
       'scheduling_link',

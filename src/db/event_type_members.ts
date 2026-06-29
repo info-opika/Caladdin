@@ -62,16 +62,19 @@ export async function setEventTypeMembers(
   return (data ?? []).map((row) => rowToMember(row as MemberRow));
 }
 
-/** Service role — resolve round-robin host for public booking. */
-export async function pickRoundRobinHost(eventTypeId: string, ownerUserId: string): Promise<string> {
+async function roundRobinPool(eventTypeId: string, ownerUserId: string): Promise<string[]> {
   const { data: members, error: membersError } = await getSupabase()
     .from('event_type_members')
     .select('user_id, position')
     .eq('event_type_id', eventTypeId)
     .order('position', { ascending: true });
   if (membersError) throw membersError;
+  return (members ?? []).map((m) => m.user_id as string);
+}
 
-  const pool = (members ?? []).map((m) => m.user_id as string);
+/** Service role — peek current round-robin host without advancing rotation. */
+export async function peekRoundRobinHost(eventTypeId: string, ownerUserId: string): Promise<string> {
+  const pool = await roundRobinPool(eventTypeId, ownerUserId);
   if (pool.length === 0) return ownerUserId;
 
   const { data: eventType, error: etError } = await getSupabase()
@@ -82,14 +85,34 @@ export async function pickRoundRobinHost(eventTypeId: string, ownerUserId: strin
   if (etError) throw etError;
 
   const index = (eventType.round_robin_index as number) ?? 0;
-  const hostId = pool[index % pool.length]!;
+  return pool[index % pool.length]!;
+}
+
+/** Service role — advance round-robin index after a confirmed booking. */
+export async function advanceRoundRobinHost(eventTypeId: string, ownerUserId: string): Promise<void> {
+  const pool = await roundRobinPool(eventTypeId, ownerUserId);
+  if (pool.length === 0) return;
+
+  const { data: eventType, error: etError } = await getSupabase()
+    .from('event_types')
+    .select('round_robin_index')
+    .eq('id', eventTypeId)
+    .single();
+  if (etError) throw etError;
+
+  const index = (eventType.round_robin_index as number) ?? 0;
   const nextIndex = (index + 1) % pool.length;
 
   await getSupabase()
     .from('event_types')
     .update({ round_robin_index: nextIndex, updated_at: new Date().toISOString() })
     .eq('id', eventTypeId);
+}
 
+/** Service role — resolve round-robin host for public booking. */
+export async function pickRoundRobinHost(eventTypeId: string, ownerUserId: string): Promise<string> {
+  const hostId = await peekRoundRobinHost(eventTypeId, ownerUserId);
+  await advanceRoundRobinHost(eventTypeId, ownerUserId);
   return hostId;
 }
 

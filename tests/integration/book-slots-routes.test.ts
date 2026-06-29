@@ -13,7 +13,8 @@ vi.mock('../../src/db/event_types.js', () => ({
 }));
 
 vi.mock('../../src/db/event_type_members.js', () => ({
-  pickRoundRobinHost: (...a: unknown[]) => mockPickHost(...a),
+  peekRoundRobinHost: (...a: unknown[]) => mockPickHost(...a),
+  advanceRoundRobinHost: vi.fn(),
 }));
 
 vi.mock('../../src/db/users.js', () => ({

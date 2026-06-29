@@ -156,4 +156,28 @@ describe('runAgentPrefilter', () => {
     expect(out.bypassed).toBe(false);
     expect(mockExecute).not.toHaveBeenCalledWith('send_invite', expect.anything(), CTX);
   });
+
+  it('bypasses LLM for find N slots OFFER_SPECIFIC request', async () => {
+    mockExecute
+      .mockResolvedValueOnce({ ok: true, data: { recognized: true } })
+      .mockResolvedValueOnce({
+        ok: true,
+        data: {
+          message: 'Share this link: http://localhost:3001/s/abc123',
+          schedulingLink: 'http://localhost:3001/s/abc123',
+        },
+      });
+
+    const out = await runAgentPrefilter(
+      'Find 2 slots for aniket@opika.co next week',
+      CTX,
+      'auto:caladdin-agent',
+    );
+    expect(out.bypassed).toBe(true);
+    if (out.bypassed) {
+      expect(out.prefilter).toBe('scheduling_link');
+      expect(out.reply).toContain('/s/');
+      expect(mockExecute).toHaveBeenCalledWith('send_invite', expect.any(Object), CTX);
+    }
+  });
 });
